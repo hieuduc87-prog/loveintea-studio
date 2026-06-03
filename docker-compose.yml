@@ -1,0 +1,19 @@
+services:
+  loveintea-studio:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3200:3200"
+    environment:
+      - NODE_ENV=production
+      - PORT=3200
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FB_PAGE_ID=${FB_PAGE_ID}
+      - FB_PAGE_ACCESS_TOKEN=${FB_PAGE_ACCESS_TOKEN}
+      - IG_BUSINESS_ACCOUNT_ID=${IG_BUSINESS_ACCOUNT_ID}
+    volumes:
+      - loveintea_data:/app/data
+
+volumes:
+  loveintea_data:
