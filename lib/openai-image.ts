@@ -1,10 +1,19 @@
+/**
+ * OpenAI Image Generation — LoveinTea Studio
+ *
+ * RULE: All content images MUST use gpt-image-1 edit mode with the product
+ * image as reference to keep the packaging/product shape 100% intact.
+ *
+ * Only use generate (no reference) for backgrounds/scenes with no product.
+ */
+
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 
 let _client: OpenAI | null = null;
 
-function getClient() {
+function getClient(): OpenAI {
   if (!_client) {
     const key = process.env.OPENAI_API_KEY;
     if (!key) throw new Error('OPENAI_API_KEY not set');
@@ -16,20 +25,28 @@ function getClient() {
 export type ImageSize = '1024x1024' | '1024x1536' | '1536x1024';
 
 /**
- * Edit an existing product image to create lifestyle scene.
- * Uses gpt-image-1 (GPT-image-2) edit mode with the product as reference.
- * Keeps product visible and intact.
+ * PRIMARY method — edit product image into lifestyle scene.
+ * Product packaging stays 100% intact.
+ * Uses gpt-image-1 (GPT-image-2 edit API).
  */
 export async function editProductImage(opts: {
-  productImagePath: string;  // absolute path to product PNG
+  productImagePath: string;
   prompt: string;
   size?: ImageSize;
 }): Promise<string> {
   const client = getClient();
   const { productImagePath, prompt, size = '1024x1536' } = opts;
 
+  if (!fs.existsSync(productImagePath)) {
+    throw new Error(`Product image not found: ${productImagePath}`);
+  }
+
   const imageBuffer = fs.readFileSync(productImagePath);
-  const imageFile = new File([imageBuffer], path.basename(productImagePath), { type: 'image/png' });
+  const imageFile = new File(
+    [imageBuffer],
+    path.basename(productImagePath),
+    { type: 'image/png' }
+  );
 
   const response = await client.images.edit({
     model: 'gpt-image-1',
@@ -42,7 +59,6 @@ export async function editProductImage(opts: {
   const imageData = response.data?.[0];
   if (!imageData) throw new Error('No image returned from OpenAI');
 
-  // Return base64 data URL or URL
   if (imageData.b64_json) {
     return `data:image/png;base64,${imageData.b64_json}`;
   }
@@ -50,8 +66,8 @@ export async function editProductImage(opts: {
 }
 
 /**
- * Generate a new image from scratch using gpt-image-1.
- * Used when no product reference is available.
+ * Fallback — generate scene WITHOUT product reference.
+ * Use only for pure lifestyle/atmospheric shots (no product needed).
  */
 export async function generateImage(opts: {
   prompt: string;
@@ -74,4 +90,23 @@ export async function generateImage(opts: {
     return `data:image/png;base64,${imageData.b64_json}`;
   }
   return imageData.url ?? '';
+}
+
+/**
+ * Save base64 image to local file in data/images/
+ * Returns the public URL path.
+ */
+export async function saveImageToFile(
+  base64DataUrl: string,
+  filename: string
+): Promise<string> {
+  const imagesDir = path.join(process.cwd(), 'public', 'generated');
+  fs.mkdirSync(imagesDir, { recursive: true });
+
+  const base64 = base64DataUrl.replace(/^data:image\/\w+;base64,/, '');
+  const buffer = Buffer.from(base64, 'base64');
+  const filePath = path.join(imagesDir, filename);
+  fs.writeFileSync(filePath, buffer);
+
+  return `/generated/${filename}`;
 }

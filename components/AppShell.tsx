@@ -1,20 +1,24 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import Image from 'next/image';
 import { BrandDnaView }       from './BrandDnaView';
 import { ContentWorkshopView } from './ContentWorkshopView';
 import { ImageStudioView }    from './ImageStudioView';
+import { ImageLibraryView }   from './ImageLibraryView';
+import { JobQueueView }       from './JobQueueView';
 import { ContentQueueView }   from './ContentQueueView';
 import { PublisherView }      from './PublisherView';
 import { BlogFactoryView }    from './BlogFactoryView';
 import { InboxView }          from './InboxView';
 import { AnalyticsView }      from './AnalyticsView';
-import Image from 'next/image';
 
 type TabId =
   | 'brand_dna'
   | 'content_workshop'
   | 'image_studio'
+  | 'image_library'
+  | 'job_queue'
   | 'content_queue'
   | 'publisher'
   | 'blog_factory'
@@ -25,6 +29,8 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'brand_dna',        label: 'Brand DNA',        icon: '🌿', group: 'Foundation' },
   { id: 'content_workshop', label: 'Content Workshop',  icon: '✍️', group: 'Create' },
   { id: 'image_studio',     label: 'Image Studio',      icon: '🖼️', group: 'Create' },
+  { id: 'image_library',   label: 'Image Library',     icon: '🗃️', group: 'Create' },
+  { id: 'job_queue',        label: 'Job Queue',         icon: '⚙️', group: 'Create' },
   { id: 'content_queue',    label: 'Content Queue',     icon: '📋', group: 'Publish' },
   { id: 'publisher',        label: 'Publisher',         icon: '📡', group: 'Publish' },
   { id: 'blog_factory',     label: 'Blog Factory',      icon: '📝', group: 'Publish' },
@@ -37,7 +43,9 @@ const GROUPS = ['Foundation', 'Create', 'Publish', 'Community', 'Insights'];
 const TAB_LABELS: Record<TabId, string> = {
   brand_dna:        'Brand DNA — Source of Truth',
   content_workshop: 'Content Workshop',
-  image_studio:     'Image Studio',
+  image_studio:     'Image Studio — GPT-image-1 Edit',
+  image_library:    'Image Library',
+  job_queue:        'Job Queue — Generation History',
   content_queue:    'Content Queue',
   publisher:        'Publisher — FB & IG',
   blog_factory:     'Blog Factory',
@@ -54,7 +62,6 @@ export function AppShell() {
     <div className="min-h-screen bg-gray-950 flex">
       {/* Sidebar */}
       <aside className="w-52 flex-shrink-0 border-r border-gray-800 bg-gray-900/50 flex flex-col sticky top-0 h-screen overflow-y-auto">
-        {/* Logo */}
         <div className="px-4 py-4 border-b border-gray-800 flex-shrink-0">
           <button onClick={() => changeTab('brand_dna')} className="flex items-center gap-2.5 w-full hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden bg-brand-600 flex-shrink-0">
@@ -67,7 +74,6 @@ export function AppShell() {
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 px-2 py-3 space-y-4 overflow-y-auto">
           {GROUPS.map(group => {
             const items = TABS.filter(t => t.group === group);
@@ -94,7 +100,6 @@ export function AppShell() {
           })}
         </nav>
 
-        {/* Footer */}
         <div className="px-4 py-3 border-t border-gray-800 flex-shrink-0">
           <p className="text-[10px] text-gray-600">loveintea.wealthpsy.com</p>
         </div>
@@ -110,6 +115,8 @@ export function AppShell() {
           {tab === 'brand_dna'        && <BrandDnaView />}
           {tab === 'content_workshop' && <ContentWorkshopView />}
           {tab === 'image_studio'     && <ImageStudioView />}
+          {tab === 'image_library'    && <ImageLibraryView />}
+          {tab === 'job_queue'        && <JobQueueView />}
           {tab === 'content_queue'    && <ContentQueueView />}
           {tab === 'publisher'        && <PublisherView />}
           {tab === 'blog_factory'     && <BlogFactoryView />}

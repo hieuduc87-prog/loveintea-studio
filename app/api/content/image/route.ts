@@ -2,32 +2,70 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
-import { editProductImage, generateImage } from '@/lib/openai-image';
+import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
 import { buildImageEditPrompt } from '@/lib/o3-engine';
 import { SKUS } from '@/lib/brand-dna';
+import { getDb } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
+  const db = getDb();
+  const { skuId, uspId, contextId, customPrompt, useEdit = true } = await req.json();
+
+  const sku = SKUS.find(s => s.id === skuId);
+  if (!sku) return NextResponse.json({ error: 'Invalid SKU' }, { status: 400 });
+
+  const jobId  = uuid();
+  const prompt = buildImageEditPrompt({ skuId, uspId, contextId, extraNotes: customPrompt });
+  const start  = Date.now();
+
+  // Insert job as pending
+  db.prepare(`
+    INSERT INTO image_jobs (id, sku_id, usp_id, context_id, prompt, use_edit, status, model)
+    VALUES (?, ?, ?, ?, ?, ?, 'running', 'gpt-image-1')
+  `).run(jobId, skuId, uspId ?? '', contextId ?? '', prompt, useEdit ? 1 : 0);
+
   try {
-    const { skuId, uspId, contextId, customPrompt, useEdit } = await req.json();
-
-    const sku = SKUS.find(s => s.id === skuId);
-    if (!sku) return NextResponse.json({ error: 'Invalid SKU' }, { status: 400 });
-
-    const prompt = buildImageEditPrompt({ skuId, uspId, contextId, extraNotes: customPrompt });
-    const jobId  = uuid();
-
     let imageUrl: string;
 
+    // ALWAYS prefer edit mode — keeps product packaging intact
     if (useEdit) {
-      // Use product image as reference — GPT edits into lifestyle scene
-      const productImagePath = path.join(process.cwd(), 'public', 'brand', 'products', path.basename(sku.image));
+      const productImagePath = path.join(
+        process.cwd(), 'public', 'brand', 'products',
+        path.basename(sku.image)
+      );
       imageUrl = await editProductImage({ productImagePath, prompt, size: '1024x1536' });
     } else {
       imageUrl = await generateImage({ prompt, size: '1024x1536' });
     }
 
-    return NextResponse.json({ jobId, imageUrl, prompt, skuId });
+    // Save to file if base64
+    let savedUrl = imageUrl;
+    if (imageUrl.startsWith('data:')) {
+      const filename = `${jobId}.png`;
+      savedUrl = await saveImageToFile(imageUrl, filename);
+    }
+
+    const durationMs = Date.now() - start;
+
+    // Update job
+    db.prepare(`
+      UPDATE image_jobs
+      SET status='done', result_url=?, duration_ms=?, completed_at=datetime('now')
+      WHERE id=?
+    `).run(savedUrl, durationMs, jobId);
+
+    // Save to image library
+    const libId = uuid();
+    db.prepare(`
+      INSERT INTO image_library (id, job_id, sku_id, usp_id, context_id, prompt, image_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(libId, jobId, skuId, uspId ?? '', contextId ?? '', prompt, savedUrl);
+
+    return NextResponse.json({ jobId, imageUrl: savedUrl, prompt, skuId, libId, durationMs });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    const msg = String(e);
+    db.prepare(`UPDATE image_jobs SET status='failed', error=?, completed_at=datetime('now') WHERE id=?`)
+      .run(msg, jobId);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -1,26 +1,31 @@
 /**
  * Facebook / Instagram Graph API adapter
- * Adapted from hoa-lang-thang social poster pattern.
+ * Credentials: reads from env first, then from settings DB (saved via FB Setup).
  */
 
-const GRAPH = 'https://graph.facebook.com/v21.0';
+import { getDb } from './db';
 
-function token() {
-  const t = process.env.FB_PAGE_ACCESS_TOKEN;
-  if (!t) throw new Error('FB_PAGE_ACCESS_TOKEN not set');
-  return t;
+const GRAPH   = 'https://graph.facebook.com/v21.0';
+const APP_ID  = '1267157968709745';  // Same app as HLT
+
+function getSetting(key: string): string {
+  try {
+    const db  = getDb();
+    const row = db.prepare('SELECT value FROM settings WHERE key=?').get(key) as { value: string } | undefined;
+    return row?.value ?? '';
+  } catch { return ''; }
 }
 
-function pageId() {
-  const id = process.env.FB_PAGE_ID;
-  if (!id) throw new Error('FB_PAGE_ID not set');
-  return id;
+function token(): string {
+  return process.env.FB_PAGE_ACCESS_TOKEN || getSetting('FB_PAGE_ACCESS_TOKEN') || '';
 }
 
-function igAccountId() {
-  const id = process.env.IG_BUSINESS_ACCOUNT_ID;
-  if (!id) throw new Error('IG_BUSINESS_ACCOUNT_ID not set');
-  return id;
+function pageId(): string {
+  return process.env.FB_PAGE_ID || getSetting('FB_PAGE_ID') || '';
+}
+
+function igAccountId(): string {
+  return process.env.IG_BUSINESS_ACCOUNT_ID || getSetting('IG_BUSINESS_ACCOUNT_ID') || '';
 }
 
 export interface PostResult {
@@ -29,91 +34,101 @@ export interface PostResult {
   error?: string;
 }
 
-/** Upload a photo unpublished and return its media_fbid */
+/** Upload a photo unpublished and return media_fbid */
 async function uploadPhoto(imageUrl: string): Promise<string> {
-  const body: Record<string, string> = {
-    url: imageUrl,
-    published: 'false',
-    access_token: token(),
-  };
   const r = await fetch(`${GRAPH}/${pageId()}/photos`, {
     method: 'POST',
-    body: new URLSearchParams(body),
+    body: new URLSearchParams({
+      url: imageUrl,
+      published: 'false',
+      access_token: token(),
+    }),
   });
-  const data = await r.json() as { id?: string; error?: { message: string } };
-  if (!data.id) throw new Error(data.error?.message ?? 'Photo upload failed');
-  return data.id;
+  const d = await r.json() as { id?: string; error?: { message: string } };
+  if (!d.id) throw new Error(d.error?.message ?? 'Photo upload failed');
+  return d.id;
 }
 
-/** Post to FB Page feed with photos */
+/** Post to FB Page feed — supports immediate or scheduled */
 export async function postToFacebook(opts: {
   caption: string;
   imageUrls: string[];
+  scheduledAt?: Date;   // if set, post is scheduled (not immediate)
 }): Promise<PostResult> {
   try {
-    const { caption, imageUrls } = opts;
-    const mediaIds: string[] = [];
+    const tok = token();
+    const pid = pageId();
+    if (!tok || !pid) return { ok: false, error: 'FB credentials not configured. Go to Publisher → FB Setup.' };
 
+    const { caption, imageUrls, scheduledAt } = opts;
+
+    const mediaIds: string[] = [];
     for (const url of imageUrls) {
-      const id = await uploadPhoto(url);
-      mediaIds.push(id);
+      if (url) mediaIds.push(await uploadPhoto(url));
     }
 
     const body: Record<string, string> = {
       message: caption,
-      access_token: token(),
+      access_token: tok,
     };
+
+    if (scheduledAt) {
+      // Scheduled post
+      const unixTime = Math.floor(scheduledAt.getTime() / 1000);
+      body.published             = 'false';
+      body.scheduled_publish_time = String(unixTime);
+    } else {
+      body.published = 'true';
+    }
+
     if (mediaIds.length === 1) {
       body.attached_media = JSON.stringify([{ media_fbid: mediaIds[0] }]);
     } else if (mediaIds.length > 1) {
       body.attached_media = JSON.stringify(mediaIds.map(id => ({ media_fbid: id })));
     }
 
-    const r = await fetch(`${GRAPH}/${pageId()}/feed`, {
+    const r = await fetch(`${GRAPH}/${pid}/feed`, {
       method: 'POST',
       body: new URLSearchParams(body),
     });
-    const data = await r.json() as { id?: string; error?: { message: string } };
-    if (!data.id) return { ok: false, error: data.error?.message ?? 'Post failed' };
-    return { ok: true, postId: data.id };
+    const d = await r.json() as { id?: string; error?: { message: string } };
+    if (!d.id) return { ok: false, error: d.error?.message ?? 'Post failed' };
+    return { ok: true, postId: d.id };
   } catch (e) {
     return { ok: false, error: String(e) };
   }
 }
 
-/** Post to Instagram Business Account (carousel or single) */
+/** Post to Instagram Business Account */
 export async function postToInstagram(opts: {
   caption: string;
   imageUrls: string[];
 }): Promise<PostResult> {
   try {
-    const { caption, imageUrls } = opts;
+    const tok  = token();
     const igId = igAccountId();
-    const tok = token();
+    if (!tok || !igId) return { ok: false, error: 'IG credentials not configured. Go to Publisher → FB Setup.' };
 
-    if (imageUrls.length === 1) {
-      // Single image
-      const containerRes = await fetch(`${GRAPH}/${igId}/media`, {
-        method: 'POST',
-        body: new URLSearchParams({
-          image_url: imageUrls[0],
-          caption,
-          access_token: tok,
-        }),
-      });
-      const container = await containerRes.json() as { id?: string; error?: { message: string } };
-      if (!container.id) return { ok: false, error: container.error?.message ?? 'Container failed' };
+    const { caption, imageUrls } = opts;
 
-      const publishRes = await fetch(`${GRAPH}/${igId}/media_publish`, {
+    if (imageUrls.length <= 1) {
+      const url = imageUrls[0] ?? '';
+      if (!url) return { ok: false, error: 'Image URL required for IG post' };
+
+      const contRes = await fetch(`${GRAPH}/${igId}/media`, {
         method: 'POST',
-        body: new URLSearchParams({
-          creation_id: container.id,
-          access_token: tok,
-        }),
+        body: new URLSearchParams({ image_url: url, caption, access_token: tok }),
       });
-      const published = await publishRes.json() as { id?: string; error?: { message: string } };
-      if (!published.id) return { ok: false, error: published.error?.message ?? 'Publish failed' };
-      return { ok: true, postId: published.id };
+      const cont = await contRes.json() as { id?: string; error?: { message: string } };
+      if (!cont.id) return { ok: false, error: cont.error?.message ?? 'Container failed' };
+
+      const pubRes = await fetch(`${GRAPH}/${igId}/media_publish`, {
+        method: 'POST',
+        body: new URLSearchParams({ creation_id: cont.id, access_token: tok }),
+      });
+      const pub = await pubRes.json() as { id?: string; error?: { message: string } };
+      if (!pub.id) return { ok: false, error: pub.error?.message ?? 'Publish failed' };
+      return { ok: true, postId: pub.id };
     }
 
     // Carousel
@@ -126,40 +141,31 @@ export async function postToInstagram(opts: {
       const d = await r.json() as { id?: string };
       if (d.id) children.push(d.id);
     }
-
-    const carouselRes = await fetch(`${GRAPH}/${igId}/media`, {
+    const carRes = await fetch(`${GRAPH}/${igId}/media`, {
       method: 'POST',
-      body: new URLSearchParams({
-        media_type: 'CAROUSEL',
-        children: children.join(','),
-        caption,
-        access_token: tok,
-      }),
+      body: new URLSearchParams({ media_type: 'CAROUSEL', children: children.join(','), caption, access_token: tok }),
     });
-    const carousel = await carouselRes.json() as { id?: string; error?: { message: string } };
-    if (!carousel.id) return { ok: false, error: carousel.error?.message ?? 'Carousel container failed' };
+    const car = await carRes.json() as { id?: string; error?: { message: string } };
+    if (!car.id) return { ok: false, error: car.error?.message ?? 'Carousel failed' };
 
-    const publishRes = await fetch(`${GRAPH}/${igId}/media_publish`, {
+    const pubRes = await fetch(`${GRAPH}/${igId}/media_publish`, {
       method: 'POST',
-      body: new URLSearchParams({ creation_id: carousel.id, access_token: tok }),
+      body: new URLSearchParams({ creation_id: car.id, access_token: tok }),
     });
-    const published = await publishRes.json() as { id?: string; error?: { message: string } };
-    if (!published.id) return { ok: false, error: published.error?.message };
-    return { ok: true, postId: published.id };
+    const pub = await pubRes.json() as { id?: string; error?: { message: string } };
+    return pub.id ? { ok: true, postId: pub.id } : { ok: false, error: pub.error?.message };
   } catch (e) {
     return { ok: false, error: String(e) };
   }
 }
 
-/** Fetch FB Page feed posts with metrics */
 export async function getPagePosts(limit = 20) {
   const r = await fetch(
-    `${GRAPH}/${pageId()}/feed?fields=id,message,created_time,full_picture,insights.metric(post_impressions,post_engaged_users,post_reactions_by_type_total)&limit=${limit}&access_token=${token()}`
+    `${GRAPH}/${pageId()}/feed?fields=id,message,created_time,full_picture,insights.metric(post_impressions,post_engaged_users)&limit=${limit}&access_token=${token()}`
   );
   return r.json();
 }
 
-/** Fetch FB Page inbox messages */
 export async function getPageInbox(limit = 50) {
   const r = await fetch(
     `${GRAPH}/${pageId()}/conversations?fields=id,snippet,updated_time,participants,unread_count&limit=${limit}&access_token=${token()}`
@@ -167,26 +173,19 @@ export async function getPageInbox(limit = 50) {
   return r.json();
 }
 
-/** Fetch FB Page posts comments */
-export async function getPostComments(postId: string, limit = 50) {
-  const r = await fetch(
-    `${GRAPH}/${postId}/comments?fields=id,from,message,created_time&limit=${limit}&access_token=${token()}`
-  );
-  return r.json();
-}
-
-/** Fetch IG account media with metrics */
 export async function getIgMedia(limit = 20) {
   const r = await fetch(
-    `${GRAPH}/${igAccountId()}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,reach&limit=${limit}&access_token=${token()}`
+    `${GRAPH}/${igAccountId()}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count&limit=${limit}&access_token=${token()}`
   );
   return r.json();
 }
 
-/** Fetch IG account insights */
 export async function getIgInsights() {
   const r = await fetch(
     `${GRAPH}/${igAccountId()}/insights?metric=impressions,reach,follower_count&period=day&access_token=${token()}`
   );
   return r.json();
 }
+
+// expose app id for OAuth URL construction
+export { APP_ID };
