@@ -49,7 +49,7 @@ export async function editProductImage(opts: {
   );
 
   const response = await client.images.edit({
-    model: 'gpt-image-1',
+    model: 'gpt-image-2',
     image: imageFile,
     prompt,
     size,
@@ -77,7 +77,7 @@ export async function generateImage(opts: {
   const { prompt, size = '1024x1536' } = opts;
 
   const response = await client.images.generate({
-    model: 'gpt-image-1',
+    model: 'gpt-image-2',
     prompt,
     size,
     n: 1,
@@ -100,7 +100,9 @@ export async function saveImageToFile(
   base64DataUrl: string,
   filename: string
 ): Promise<string> {
-  const imagesDir = path.join(process.cwd(), 'public', 'generated');
+  // Save to DATA_DIR/images/ — persists across next build
+  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+  const imagesDir = path.join(dataDir, 'images');
   fs.mkdirSync(imagesDir, { recursive: true });
 
   const base64 = base64DataUrl.replace(/^data:image\/\w+;base64,/, '');
@@ -108,5 +110,5 @@ export async function saveImageToFile(
   const filePath = path.join(imagesDir, filename);
   fs.writeFileSync(filePath, buffer);
 
-  return `/generated/${filename}`;
+  return `/api/images/${filename}`;
 }

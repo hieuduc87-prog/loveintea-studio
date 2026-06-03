@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   // Insert job as pending
   db.prepare(`
     INSERT INTO image_jobs (id, sku_id, usp_id, context_id, prompt, use_edit, status, model)
-    VALUES (?, ?, ?, ?, ?, ?, 'running', 'gpt-image-1')
+    VALUES (?, ?, ?, ?, ?, ?, 'running', 'gpt-image-2')
   `).run(jobId, skuId, uspId ?? '', contextId ?? '', prompt, useEdit ? 1 : 0);
 
   try {

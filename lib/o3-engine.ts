@@ -99,7 +99,7 @@ Return as JSON: { "caption": "...", "imagePrompt": "..." }`;
 }
 
 /**
- * Build the GPT-image-1 edit prompt for a product + scene combination.
+ * Build the GPT-image-2 edit prompt for a product + scene combination.
  * Ensures the product stays intact and brand rules are respected.
  */
 export function buildImageEditPrompt(opts: {

@@ -91,7 +91,7 @@ export function PublisherView() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-5">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-5">
       {/* Status banner */}
       {status?.connected && (
         <div className="flex items-center gap-3 p-3 bg-green-900/20 border border-green-800/50 rounded-xl">

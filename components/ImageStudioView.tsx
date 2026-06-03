@@ -49,12 +49,12 @@ export function ImageStudioView() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div className="grid grid-cols-5 gap-6">
         {/* Config */}
         <div className="col-span-2 space-y-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h2 className="text-sm font-semibold text-white mb-4">Image Studio — GPT-image-1</h2>
+            <h2 className="text-sm font-semibold text-white mb-4">Image Studio — GPT-image-2 Edit</h2>
 
             {/* Mode */}
             <div className="flex gap-2 mb-4">
@@ -208,7 +208,7 @@ export function ImageStudioView() {
             <div className="bg-gray-900 border border-gray-800 rounded-xl aspect-[4/5] flex flex-col items-center justify-center text-center">
               <p className="text-5xl mb-3">🖼️</p>
               <p className="text-white font-medium mb-1">Select SKU + Scene + USP</p>
-              <p className="text-gray-500 text-sm">GPT-image-1 edit keeps the product intact<br />and builds a lifestyle scene around it.</p>
+              <p className="text-gray-500 text-sm">GPT-image-2 edit keeps the product intact<br />and builds a lifestyle scene around it.</p>
             </div>
           )}
 

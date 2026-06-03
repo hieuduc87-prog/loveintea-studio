@@ -22,7 +22,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 
 export function BrandDnaView() {
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8 p-5 bg-gradient-to-r from-brand-600/20 to-transparent border border-brand-600/30 rounded-xl">
         <div className="w-14 h-14 rounded-xl bg-brand-600/30 flex items-center justify-center overflow-hidden flex-shrink-0">

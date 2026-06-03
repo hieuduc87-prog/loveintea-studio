@@ -71,7 +71,7 @@ export function InboxView() {
   }, [tab, loadMessages, loadFbFeed]);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto">
       {/* Tab bar */}
       <div className="flex items-center gap-2 mb-6">
         {(['messages', 'comments', 'feed'] as const).map(t => (

@@ -69,7 +69,7 @@ export function ImageLibraryView() {
   const usp = (id: string) => USP_ANCHORS.find(u => u.id === id);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <span className="text-sm font-semibold text-white">Image Library</span>

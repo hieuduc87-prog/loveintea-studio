@@ -1,0 +1,21 @@
+# Next.js
+.next/
+node_modules/
+out/
+
+# Env
+.env.local
+.env*.local
+
+# Data — persists on server, not in git
+data/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Build
+dist/

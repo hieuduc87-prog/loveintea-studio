@@ -36,7 +36,7 @@ export function AnalyticsView() {
   if (loading) return <div className="text-center text-gray-500 py-20">Loading…</div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
       {/* Post Stats */}
       {postStats && (
         <div>

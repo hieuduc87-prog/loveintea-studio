@@ -56,7 +56,7 @@ export function BlogFactoryView() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div className="grid grid-cols-5 gap-6">
         {/* Generator */}
         <div className="col-span-2 space-y-4">
