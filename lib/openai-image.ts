@@ -10,6 +10,7 @@
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
+import { upscaleImage } from './upscale';
 
 let _client: OpenAI | null = null;
 
@@ -110,5 +111,13 @@ export async function saveImageToFile(
   const filePath = path.join(imagesDir, filename);
   fs.writeFileSync(filePath, buffer);
 
-  return `/api/images/${filename}`;
+  // Upscale 4x with Lanczos (1024×1536 → 4096×6144) — ~1-2s on Apple Silicon
+  try {
+    const upscaledPath = await upscaleImage(filePath, 4);
+    const upscaledFilename = path.basename(upscaledPath);
+    return `/api/images/${upscaledFilename}`;
+  } catch {
+    // Fallback to original if upscale fails
+    return `/api/images/${filename}`;
+  }
 }
