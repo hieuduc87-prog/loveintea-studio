@@ -66,6 +66,7 @@ export function ContentWorkshopView() {
   const [error, setError]       = useState('');
   const [logs, setLogs]         = useState<LogEntry[]>([]);
   const [genImage, setGenImage] = useState<{ url: string; jobId: string; durationMs: number } | null>(null);
+  const [autoPostFb, setAutoPostFb] = useState(true);
 
   // Batch mode state
   const [batchSkus, setBatchSkus]         = useState<string[]>([]);
@@ -185,6 +186,38 @@ export function ContentWorkshopView() {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image_url: d2.imageUrl }),
         });
+
+        // Auto-post to Facebook if enabled
+        if (autoPostFb && data.caption && d2.imageUrl) {
+          addLog('⟳ Auto-posting to Facebook…', 'loading');
+          try {
+            const rPub = await fetch('/api/publish', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                caption: data.caption,
+                imageUrls: [d2.imageUrl],
+                platforms: ['facebook'],
+              }),
+            });
+            const dPub = await rPub.json() as { fb?: { ok: boolean; postId?: string; error?: string }; error?: string };
+            if (dPub?.fb?.ok) {
+              updateLastLog(`✅ Posted to Facebook (ID: ${dPub.fb.postId})`, 'ok');
+              if (postId) await fetch(`/api/posts/${postId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'published', fb_post_id: dPub.fb.postId, published_at: new Date().toISOString() }),
+              });
+            } else {
+              const errMsg = dPub?.fb?.error ?? dPub?.error ?? 'Unknown error';
+              updateLastLog(`✗ FB post failed: ${errMsg}`, 'error');
+              if (postId) await fetch(`/api/posts/${postId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'failed' }),
+              });
+            }
+          } catch (pubErr) {
+            updateLastLog(`✗ FB post error: ${String(pubErr)}`, 'error');
+          }
+        }
       }
     } catch (e) {
       updateLastLog(`✗ ${String(e)}`, 'error');
@@ -297,9 +330,19 @@ export function ContentWorkshopView() {
                     rows={2} placeholder="Any extra context…" />
                 </div>
                 {error && <p className="text-red-400 text-xs">{error}</p>}
+
+                {/* Auto-post toggle */}
+                <label className={`flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer border transition-colors ${autoPostFb ? 'bg-blue-900/20 border-blue-700/50' : 'bg-gray-800/50 border-gray-700'}`}>
+                  <input type="checkbox" checked={autoPostFb} onChange={e => setAutoPostFb(e.target.checked)} className="rounded accent-blue-500 w-4 h-4" />
+                  <div>
+                    <span className="text-sm text-white font-medium">📘 Auto-post to Facebook</span>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{autoPostFb ? 'Will publish immediately after image gen' : 'Save to queue only (publish manually)'}</p>
+                  </div>
+                </label>
+
                 <button onClick={generate} disabled={loading || imgLoading}
                   className="w-full py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                  {(loading || imgLoading) ? <><span className="animate-spin inline-block">⟳</span> Working…</> : <><span>✨</span> Generate + Image + Save</>}
+                  {(loading || imgLoading) ? <><span className="animate-spin inline-block">⟳</span> Working…</> : <><span>✨</span> Generate + Image + {autoPostFb ? 'Post to FB' : 'Save'}</>}
                 </button>
               </div>
             </div>

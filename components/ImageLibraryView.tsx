@@ -190,60 +190,76 @@ export function ImageLibraryView() {
         </div>
       )}
 
-      {/* Detail panel */}
+      {/* Lightbox modal */}
       {selected && (
-        <div className="fixed bottom-0 right-0 w-80 bg-gray-950 border-l border-t border-gray-800 p-4 z-50 max-h-[70vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-bold text-white uppercase tracking-widest">Image Detail</p>
-            <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white">✕</button>
-          </div>
-
-          <div className="rounded-lg overflow-hidden mb-3 bg-gray-800">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={selected.image_url} alt="" className="w-full" />
-          </div>
-
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center gap-2">
-              {sku(selected.sku_id) && (
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: sku(selected.sku_id)?.color }} />
-                  <span className="text-white">{sku(selected.sku_id)?.name}</span>
-                </span>
-              )}
-              {selected.usp_id && (
-                <span className="bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{selected.usp_id}</span>
-              )}
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="bg-gray-950 rounded-2xl overflow-hidden flex flex-col md:flex-row max-w-5xl w-full max-h-[95vh] shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Image — full height, object-contain */}
+            <div className="flex-1 bg-black flex items-center justify-center min-h-0 overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={selected.image_url}
+                alt=""
+                className="max-h-[85vh] md:max-h-[95vh] max-w-full object-contain"
+              />
             </div>
 
-            <div>
-              <p className="text-gray-500 mb-1">Prompt</p>
-              <p className="text-gray-300 leading-relaxed">{selected.prompt.slice(0, 200)}…</p>
-            </div>
+            {/* Sidebar info */}
+            <div className="md:w-64 flex-shrink-0 p-5 flex flex-col gap-4 border-t md:border-t-0 md:border-l border-gray-800 overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-white uppercase tracking-widest">Detail</p>
+                <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white text-lg leading-none">✕</button>
+              </div>
 
-            <p className="text-gray-600">{new Date(selected.created_at).toLocaleString()}</p>
+              <div className="space-y-1 text-xs">
+                {sku(selected.sku_id) && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: sku(selected.sku_id)?.color }} />
+                    <span className="text-white font-medium">{sku(selected.sku_id)?.name}</span>
+                  </div>
+                )}
+                {selected.usp_id && (
+                  <span className="inline-block bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{selected.usp_id}</span>
+                )}
+              </div>
 
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => toggleFavorite(selected)}
-                className="flex-1 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-white transition-colors"
-              >
-                {selected.is_favorite ? '★ Unfav' : '☆ Favorite'}
-              </button>
-              <button
-                onClick={() => copyUrl(selected.image_url, selected.id)}
-                className="flex-1 py-1.5 rounded bg-brand-600 hover:bg-brand-700 text-white transition-colors"
-              >
-                {copying === selected.id ? '✓ Copied' : '⎘ Copy URL'}
-              </button>
+              <div className="text-xs">
+                <p className="text-gray-500 mb-1">Prompt</p>
+                <p className="text-gray-300 leading-relaxed">{selected.prompt.slice(0, 200)}…</p>
+              </div>
+
+              <p className="text-[10px] text-gray-600">{new Date(selected.created_at).toLocaleString()}</p>
+
+              <div className="flex flex-col gap-2 mt-auto">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => toggleFavorite(selected)}
+                    className="flex-1 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-xs transition-colors"
+                  >
+                    {selected.is_favorite ? '★ Unfav' : '☆ Fav'}
+                  </button>
+                  <button
+                    onClick={() => copyUrl(selected.image_url, selected.id)}
+                    className="flex-1 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs transition-colors"
+                  >
+                    {copying === selected.id ? '✓ Copied' : '⎘ URL'}
+                  </button>
+                </div>
+                <a
+                  href={selected.image_url}
+                  download={`loveintea-${selected.sku_id}-${selected.id.slice(0, 8)}.png`}
+                  className="block text-center py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-xs transition-colors"
+                >
+                  ⬇ Download Full Res
+                </a>
+              </div>
             </div>
-            <a
-              href={selected.image_url}
-              download={`loveintea-${selected.sku_id}-${selected.id.slice(0, 8)}.png`}
-              className="block text-center py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-white transition-colors"
-            >
-              ⬇ Download
-            </a>
           </div>
         </div>
       )}
