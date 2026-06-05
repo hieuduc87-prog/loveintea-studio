@@ -152,19 +152,22 @@ export default function KanbanPage() {
 
   const uploadImage = async (cardId: string, files: FileList | File[]) => {
     setUploadingFor(cardId);
-    for (const file of Array.from(files)) {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch(`/api/kanban/${cardId}/image`, { method: 'POST', body: fd });
-      if (res.ok) {
-        const updated = await res.json();
-        setCards(prev => prev.map(c => c.id === updated.id ? updated : c));
-        if (modalCard?.id === cardId) {
-          setModalDraft(prev => ({ ...prev, images: updated.images }));
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(`/api/kanban/${cardId}/image`, { method: 'POST', body: fd });
+        if (res.ok) {
+          const updated = await res.json();
+          setCards(prev => prev.map(c => c.id === updated.id ? updated : c));
+          if (modalCard?.id === cardId) {
+            setModalDraft(prev => ({ ...prev, images: updated.images }));
+          }
         }
       }
+    } finally {
+      setUploadingFor(null);
     }
-    setUploadingFor(null);
   };
 
   const colCards = (status: Status) => cards.filter(c => c.status === status);
