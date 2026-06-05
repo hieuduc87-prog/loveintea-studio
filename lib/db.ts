@@ -494,6 +494,119 @@ function initSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_fb_pages_conn   ON fb_pages(connection_id);
     CREATE INDEX IF NOT EXISTS idx_fb_pages_active ON fb_pages(is_active);
+
+    -- ═══════════════════════════════════════════════════════
+    -- HUB EXTENSION — DAM + Content Log + Payment
+    -- ═══════════════════════════════════════════════════════
+
+    CREATE TABLE IF NOT EXISTS assets (
+      id            TEXT PRIMARY KEY,
+      brand_id      TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      product_id    TEXT REFERENCES products(id) ON DELETE SET NULL,
+      url           TEXT NOT NULL,
+      filename      TEXT NOT NULL,
+      file_type     TEXT DEFAULT 'image',
+      file_size     INTEGER,
+      width         INTEGER,
+      height        INTEGER,
+      status        TEXT DEFAULT 'unused',   -- unused | scheduled | aired
+      source        TEXT DEFAULT 'upload',   -- upload | generated
+      source_job_id TEXT,
+      notes         TEXT,
+      created_by    TEXT,
+      created_at    TEXT DEFAULT (datetime('now')),
+      updated_at    TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id         TEXT PRIMARY KEY,
+      brand_id   TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      slug       TEXT NOT NULL,
+      type       TEXT DEFAULT 'custom',     -- product | brand | content_goal | format | season | occasion | custom
+      color      TEXT DEFAULT '#6b7280',
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(brand_id, slug)
+    );
+
+    CREATE TABLE IF NOT EXISTS asset_tags (
+      asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+      tag_id   TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (asset_id, tag_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS content_log (
+      id           TEXT PRIMARY KEY,
+      brand_id     TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      product_id   TEXT REFERENCES products(id) ON DELETE SET NULL,
+      title        TEXT,
+      caption      TEXT,
+      content_type TEXT DEFAULT 'post',     -- post | reel | story | carousel | video | blog
+      platform     TEXT DEFAULT 'instagram',-- facebook | instagram | tiktok | youtube | other
+      status       TEXT DEFAULT 'draft',    -- draft | scheduled | aired
+      scheduled_at TEXT,
+      aired_at     TEXT,
+      post_url     TEXT,
+      notes        TEXT,
+      created_by   TEXT,
+      created_at   TEXT DEFAULT (datetime('now')),
+      updated_at   TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS content_log_assets (
+      content_id TEXT NOT NULL REFERENCES content_log(id) ON DELETE CASCADE,
+      asset_id   TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+      PRIMARY KEY (content_id, asset_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS payment_plans (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      type        TEXT NOT NULL,             -- setup_once | subscription_monthly
+      price       INTEGER NOT NULL,          -- VND
+      description TEXT,
+      features    TEXT DEFAULT '[]',
+      is_active   INTEGER DEFAULT 1,
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS bank_transfers (
+      id              TEXT PRIMARY KEY,
+      order_id        TEXT UNIQUE NOT NULL,
+      user_id         TEXT NOT NULL,
+      plan_id         TEXT NOT NULL,
+      amount          INTEGER NOT NULL,
+      status          TEXT DEFAULT 'pending', -- pending | paid | expired
+      metadata        TEXT DEFAULT '{}',
+      casso_tid       TEXT,
+      sender_name     TEXT,
+      sender_account  TEXT,
+      paid_at         TEXT,
+      expires_at      TEXT,
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id                  TEXT PRIMARY KEY,
+      user_id             TEXT NOT NULL,
+      plan_id             TEXT NOT NULL,
+      status              TEXT DEFAULT 'active', -- active | expired | cancelled
+      started_at          TEXT NOT NULL,
+      current_period_end  TEXT NOT NULL,
+      payment_method      TEXT DEFAULT 'bank_transfer',
+      payment_reference   TEXT,
+      created_at          TEXT DEFAULT (datetime('now')),
+      updated_at          TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_assets_brand     ON assets(brand_id);
+    CREATE INDEX IF NOT EXISTS idx_assets_product   ON assets(product_id);
+    CREATE INDEX IF NOT EXISTS idx_assets_status    ON assets(status);
+    CREATE INDEX IF NOT EXISTS idx_tags_brand       ON tags(brand_id);
+    CREATE INDEX IF NOT EXISTS idx_asset_tags_tag   ON asset_tags(tag_id);
+    CREATE INDEX IF NOT EXISTS idx_content_brand    ON content_log(brand_id);
+    CREATE INDEX IF NOT EXISTS idx_content_status   ON content_log(status);
+    CREATE INDEX IF NOT EXISTS idx_subs_user        ON subscriptions(user_id);
   `);
 
   // ── Migration: add plan_id to posts if not exists ──
