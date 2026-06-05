@@ -24,6 +24,7 @@ import { UserGuideView }     from './UserGuideView';
 import { UserManagementView } from './UserManagementView';
 import { AssetDamView }      from './AssetDamView';
 import { ContentLogView }    from './ContentLogView';
+import { PaymentView }       from './PaymentView';
 
 type TabId =
   | 'brand_dna' | 'products'
@@ -33,6 +34,7 @@ type TabId =
   | 'analytics'
   | 'inbox'
   | 'asset_dam' | 'content_log'
+  | 'payment'
   | 'guide'
   | 'team';
 
@@ -59,12 +61,14 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'image_library',    label: 'Image Library',    icon: '🖼️', group: 'Library' },
   { id: 'content_log',      label: 'Content Log',      icon: '📜', group: 'Library' },
   { id: 'inbox',            label: 'Inbox',            icon: '💬', group: 'Library' },
+  // Billing
+  { id: 'payment',          label: 'Thanh Toán',       icon: '💳', group: 'Billing' },
   // Guide
   { id: 'guide',            label: 'Hướng dẫn',       icon: '📖', group: 'Help' },
   { id: 'team',             label: 'Team & Access',    icon: '👥', group: 'Help' },
 ];
 
-const GROUPS = ['Strategy', 'Plan', 'Create', 'Publish', 'Measure', 'Library', 'Help'];
+const GROUPS = ['Strategy', 'Plan', 'Create', 'Publish', 'Measure', 'Library', 'Billing', 'Help'];
 
 const TAB_LABELS: Record<TabId, string> = Object.fromEntries(TABS.map(t => [t.id, t.label])) as Record<TabId, string>;
 
@@ -269,6 +273,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: { initialTab?: stri
           {tab === 'asset_dam'        && <AssetDamView />}
           {tab === 'image_library'    && <ImageLibraryView />}
           {tab === 'content_log'      && <ContentLogView />}
+          {tab === 'payment'          && <PaymentView />}
           {tab === 'inbox'            && <InboxView />}
           {tab === 'guide'            && <UserGuideView />}
           {tab === 'team'             && <UserManagementView />}

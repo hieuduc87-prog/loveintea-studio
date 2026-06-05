@@ -647,6 +647,21 @@ function initSchema(db: Database.Database) {
     `);
   } catch { /* tables might not be populated */ }
 
+  // ── Seed payment plans ─────────────────────────────
+  try {
+    db.exec(`
+      INSERT OR IGNORE INTO payment_plans (id, name, type, price, description, features, is_active) VALUES
+        ('plan-setup', 'Studio Setup', 'setup_once', 2000000,
+         'Onboarding và thiết lập ban đầu: brand hub, sản phẩm, kênh social',
+         '["Thiết lập Brand DNA & sản phẩm","Kết nối Facebook & Instagram","Thư viện ảnh (DAM)","Hướng dẫn sử dụng 1-1","Truy cập tính năng nền tảng trọn đời"]',
+         1),
+        ('plan-monthly', 'Studio Pro', 'subscription_monthly', 990000,
+         'Đầy đủ tính năng Studio Pro cho toàn bộ team mỗi tháng',
+         '["AI sinh content 30 bài/tháng","Image Studio (gpt-image-2)","Scheduler & Publisher","Analytics & Inbox","Team access tối đa 5 người","Hỗ trợ ưu tiên"]',
+         1)
+    `);
+  } catch { /* already seeded */ }
+
   // ── Seed default tags ───────────────────────────────
   try {
     db.exec(`
