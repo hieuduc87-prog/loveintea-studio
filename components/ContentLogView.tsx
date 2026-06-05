@@ -28,7 +28,7 @@ const EMPTY_FORM = {
   status: 'draft', product_id: '', scheduled_at: '', aired_at: '', post_url: '', notes: '',
 };
 
-export function ContentLogView() {
+export function ContentLogView({ brandId = 'loveintea' }: { brandId?: string }) {
   const [items, setItems]       = useState<ContentEntry[]>([]);
   const [total, setTotal]       = useState(0);
   const [loading, setLoading]   = useState(true);
@@ -48,7 +48,7 @@ export function ContentLogView() {
 
   const loadItems = useCallback(async () => {
     setLoading(true);
-    const p = new URLSearchParams({ brand: 'loveintea', limit: '100' });
+    const p = new URLSearchParams({ brand: brandId, limit: '100' });
     if (filterProduct)  p.set('product', filterProduct);
     if (filterStatus)   p.set('status', filterStatus);
     if (filterPlatform) p.set('platform', filterPlatform);
@@ -60,7 +60,7 @@ export function ContentLogView() {
   }, [filterProduct, filterStatus, filterPlatform]);
 
   useEffect(() => {
-    fetch('/api/products?brand=loveintea')
+    fetch(`/api/products?brand=${brandId}`)
       .then(r => r.json())
       .then((d: { products: Product[] }) => setProducts(d.products ?? []));
   }, []);

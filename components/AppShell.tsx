@@ -25,9 +25,10 @@ import { UserManagementView } from './UserManagementView';
 import { AssetDamView }      from './AssetDamView';
 import { ContentLogView }    from './ContentLogView';
 import { PaymentView }       from './PaymentView';
+import { BrandsView }        from './BrandsView';
 
 type TabId =
-  | 'brand_dna' | 'products'
+  | 'brands' | 'brand_dna' | 'products'
   | 'import_plan' | 'calendar' | 'schedule'
   | 'content_workshop' | 'image_studio' | 'blog_factory'
   | 'content_queue' | 'image_library' | 'publisher' | 'job_queue'
@@ -39,6 +40,8 @@ type TabId =
   | 'team';
 
 const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
+  // Brands
+  { id: 'brands',           label: 'All Brands',       icon: '🏷️', group: 'Brands' },
   // Strategy
   { id: 'brand_dna',        label: 'Brand DNA',        icon: '🌿', group: 'Strategy' },
   { id: 'products',         label: 'Products',         icon: '📦', group: 'Strategy' },
@@ -68,26 +71,36 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'team',             label: 'Team & Access',    icon: '👥', group: 'Help' },
 ];
 
-const GROUPS = ['Strategy', 'Plan', 'Create', 'Publish', 'Measure', 'Library', 'Billing', 'Help'];
+const GROUPS = ['Brands', 'Strategy', 'Plan', 'Create', 'Publish', 'Measure', 'Library', 'Billing', 'Help'];
 
 const TAB_LABELS: Record<TabId, string> = Object.fromEntries(TABS.map(t => [t.id, t.label])) as Record<TabId, string>;
 
-function SidebarContent({ tab, changeTab, onClose, userRole, pendingCount }: {
+function SidebarContent({ tab, changeTab, onClose, userRole, pendingCount, activeBrand, onBrandClick }: {
   tab: TabId; changeTab: (t: TabId) => void; onClose?: () => void; userRole?: string; pendingCount?: number;
+  activeBrand?: { id: string; name: string; logo_url?: string | null };
+  onBrandClick?: () => void;
 }) {
   return (
     <>
-      {/* Brand header */}
-      <div className="px-4 py-4 border-b border-gray-800 flex-shrink-0">
-        <button onClick={() => { changeTab('brand_dna'); onClose?.(); }}
-          className="flex items-center gap-2.5 w-full hover:opacity-80 transition-opacity">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden bg-brand-600 flex-shrink-0">
-            <Image src="/brand/logos/logo-white.png" alt="LoveinTea" width={28} height={28} className="object-contain" />
+      {/* Studio header */}
+      <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
+        <div className="flex items-center gap-2 mb-2">
+          <Image src="/brand/logos/logo-white.png" alt="Studio" width={24} height={24} className="object-contain flex-shrink-0" />
+          <span className="text-xs font-bold text-white">Marketing Studio</span>
+        </div>
+        {/* Active brand selector */}
+        <button
+          onClick={() => { onBrandClick?.(); changeTab('brands'); onClose?.(); }}
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-left"
+        >
+          <div className="w-5 h-5 rounded flex-shrink-0 bg-brand-600/30 flex items-center justify-center text-[10px]">
+            🏷️
           </div>
-          <div className="min-w-0">
-            <div className="font-semibold text-white text-sm leading-tight truncate">LoveinTea</div>
-            <div className="text-[10px] text-gray-500 leading-tight">Marketing Studio</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-white truncate">{activeBrand?.name || 'Select brand'}</p>
+            <p className="text-[9px] text-gray-600">click to switch brand</p>
           </div>
+          <span className="text-gray-600 text-xs flex-shrink-0">▾</span>
         </button>
       </div>
 
@@ -156,11 +169,22 @@ function SidebarContent({ tab, changeTab, onClose, userRole, pendingCount }: {
 
 export function AppShell({ initialTab, fbSuccess, fbError }: { initialTab?: string; fbSuccess?: boolean; fbError?: string }) {
   const validInitialTab = TABS.find(t => t.id === initialTab) ? (initialTab as TabId) : null;
-  const [tab, setTab] = useState<TabId>(validInitialTab || 'content_workshop');
+  const [tab, setTab] = useState<TabId>(validInitialTab || 'brands');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [activeBrand, setActiveBrand] = useState<{ id: string; name: string; logo_url?: string | null }>({ id: 'loveintea', name: 'LoveinTea' });
   const { data: session } = useSession();
   const router = useRouter();
+
+  // Load brands list once to pick default
+  useEffect(() => {
+    fetch('/api/brands').then(r => r.json()).then((d: { brands: Array<{ id: string; name: string; logo_url: string | null }> }) => {
+      if (d.brands?.length && activeBrand.id === 'loveintea') {
+        const found = d.brands.find(b => b.id === 'loveintea') || d.brands[0];
+        setActiveBrand({ id: found.id, name: found.name, logo_url: found.logo_url });
+      }
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const changeTab = useCallback((t: TabId) => {
     setTab(t);
@@ -196,7 +220,8 @@ export function AppShell({ initialTab, fbSuccess, fbError }: { initialTab?: stri
     <div className="min-h-screen bg-gray-950 flex">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-52 flex-shrink-0 border-r border-gray-800 bg-gray-900/50 flex-col sticky top-0 h-screen overflow-y-auto">
-        <SidebarContent tab={tab} changeTab={changeTab} userRole={userRole} pendingCount={pendingCount} />
+        <SidebarContent tab={tab} changeTab={changeTab} userRole={userRole} pendingCount={pendingCount}
+          activeBrand={activeBrand} />
       </aside>
 
       {/* Mobile overlay */}
@@ -208,7 +233,8 @@ export function AppShell({ initialTab, fbSuccess, fbError }: { initialTab?: stri
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 border-r border-gray-800 flex flex-col transform transition-transform duration-200 md:hidden ${
         drawerOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
-        <SidebarContent tab={tab} changeTab={changeTab} onClose={() => setDrawerOpen(false)} userRole={userRole} pendingCount={pendingCount} />
+        <SidebarContent tab={tab} changeTab={changeTab} onClose={() => setDrawerOpen(false)} userRole={userRole} pendingCount={pendingCount}
+          activeBrand={activeBrand} />
       </aside>
 
       {/* Main content */}
@@ -258,8 +284,17 @@ export function AppShell({ initialTab, fbSuccess, fbError }: { initialTab?: stri
         </header>
 
         <main className="flex-1 overflow-auto">
+          {tab === 'brands'           && (
+            <BrandsView onSelectBrand={id => {
+              fetch('/api/brands').then(r => r.json()).then((d: { brands: Array<{id:string;name:string;logo_url:string|null}> }) => {
+                const b = d.brands.find(x => x.id === id);
+                if (b) setActiveBrand({ id: b.id, name: b.name, logo_url: b.logo_url });
+              });
+              changeTab('products');
+            }} />
+          )}
           {tab === 'brand_dna'        && <BrandDnaView />}
-          {tab === 'products'         && <ProductsView />}
+          {tab === 'products'         && <ProductsView brandId={activeBrand.id} />}
           {tab === 'import_plan'      && <ContentPlansView />}
           {tab === 'calendar'         && <CalendarView />}
           {tab === 'schedule'         && <ScheduleView />}
@@ -270,9 +305,9 @@ export function AppShell({ initialTab, fbSuccess, fbError }: { initialTab?: stri
           {tab === 'publisher'        && <PublisherView fbSuccess={fbSuccess} fbError={fbError} />}
           {tab === 'job_queue'        && <JobQueueView />}
           {tab === 'analytics'        && <AnalyticsView />}
-          {tab === 'asset_dam'        && <AssetDamView />}
+          {tab === 'asset_dam'        && <AssetDamView brandId={activeBrand.id} />}
           {tab === 'image_library'    && <ImageLibraryView />}
-          {tab === 'content_log'      && <ContentLogView />}
+          {tab === 'content_log'      && <ContentLogView brandId={activeBrand.id} />}
           {tab === 'payment'          && <PaymentView />}
           {tab === 'inbox'            && <InboxView />}
           {tab === 'guide'            && <UserGuideView />}

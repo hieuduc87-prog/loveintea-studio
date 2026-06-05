@@ -24,7 +24,7 @@ const IMAGE_TYPES = [
   { value: 'ingredient', label: 'Ingredient Detail' },
 ];
 
-export function ProductsView() {
+export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading]   = useState(true);
   const [selected, setSelected] = useState<Product | null>(null);
@@ -42,7 +42,7 @@ export function ProductsView() {
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
-    const r = await fetch('/api/products?brand=loveintea');
+    const r = await fetch(`/api/products?brand=${brandId}`);
     const d = await r.json() as { products: Product[] };
     setProducts(d.products ?? []);
     setLoading(false);

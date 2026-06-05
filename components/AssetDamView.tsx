@@ -29,7 +29,7 @@ const TAG_TYPE_LABELS: Record<string, string> = {
   content_goal: 'Goal', occasion: 'Occasion', custom: 'Custom',
 };
 
-export function AssetDamView() {
+export function AssetDamView({ brandId = 'loveintea' }: { brandId?: string }) {
   const [assets, setAssets]         = useState<Asset[]>([]);
   const [total, setTotal]           = useState(0);
   const [loading, setLoading]       = useState(true);
@@ -67,7 +67,7 @@ export function AssetDamView() {
 
   const loadAssets = useCallback(async () => {
     setLoading(true);
-    const p = new URLSearchParams({ brand: 'loveintea', limit: '200' });
+    const p = new URLSearchParams({ brand: brandId, limit: '200' });
     if (filterProduct) p.set('product', filterProduct);
     if (filterStatus)  p.set('status', filterStatus);
     if (filterSource)  p.set('source', filterSource);
@@ -81,8 +81,8 @@ export function AssetDamView() {
 
   const loadMeta = useCallback(async () => {
     const [tr, pr] = await Promise.all([
-      fetch('/api/hub/tags?brand=loveintea').then(r => r.json()),
-      fetch('/api/products?brand=loveintea').then(r => r.json()),
+      fetch(`/api/hub/tags?brand=${brandId}`).then(r => r.json()),
+      fetch(`/api/products?brand=${brandId}`).then(r => r.json()),
     ]);
     setAllTags((tr as { tags: Tag[] }).tags ?? []);
     setProducts(((pr as { products: Product[] }).products ?? []).map((p: Product) => ({
@@ -148,7 +148,7 @@ export function AssetDamView() {
     setUploading(true); setUploadMsg('');
     const fd = new FormData();
     files.forEach(f => fd.append('files', f));
-    fd.append('brand_id', 'loveintea');
+    fd.append('brand_id', brandId);
     if (uploadProduct) fd.append('product_id', uploadProduct);
     const r = await fetch('/api/hub/assets/upload', { method: 'POST', body: fd });
     const d = await r.json() as { ok?: boolean; uploaded?: { id: string }[]; error?: string };
