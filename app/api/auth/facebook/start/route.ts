@@ -8,17 +8,12 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { APP_ID } from '@/lib/facebook';
 
-// Scopes needed for full page management + IG + analytics + messaging
+// Minimal scopes — only what's needed to post (no App Review required)
 const FB_SCOPES = [
-  'pages_show_list',          // list all pages the user manages
-  'pages_manage_posts',       // create/edit posts on page
-  'pages_read_engagement',    // read likes, comments, post insights
-  'pages_read_user_content',  // read user-generated content on page
-  'pages_messaging',          // read/send Messenger messages
-  'instagram_basic',          // read IG profile + media
+  'pages_show_list',          // list pages user manages
+  'pages_manage_posts',       // create posts on page
+  'instagram_basic',          // read IG profile
   'instagram_content_publish',// publish to IG
-  'instagram_manage_comments',// read/respond to IG comments
-  'instagram_manage_insights',// IG analytics
 ].join(',');
 
 export async function GET(req: Request) {
