@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { KanbanSquare, GitBranch } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { BrandDnaView }       from './BrandDnaView';
 import { ProductsView }      from './ProductsView';
 import { ContentWorkshopView } from './ContentWorkshopView';
@@ -144,13 +145,18 @@ function SidebarContent({ tab, changeTab, onClose, userRole, pendingCount }: {
   );
 }
 
-export function AppShell() {
-  const [tab, setTab] = useState<TabId>('content_workshop');
+export function AppShell({ initialTab, fbSuccess, fbError }: { initialTab?: string; fbSuccess?: boolean; fbError?: string }) {
+  const validInitialTab = TABS.find(t => t.id === initialTab) ? (initialTab as TabId) : null;
+  const [tab, setTab] = useState<TabId>(validInitialTab || 'content_workshop');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const { data: session } = useSession();
+  const router = useRouter();
 
-  const changeTab = useCallback((t: TabId) => setTab(t), []);
+  const changeTab = useCallback((t: TabId) => {
+    setTab(t);
+    router.push(`/?tab=${t}`, { scroll: false });
+  }, [router]);
   const userRole = (session?.user as any)?.role as string | undefined;
 
   // Fetch pending count for admin badge
@@ -252,7 +258,7 @@ export function AppShell() {
           {tab === 'image_studio'     && <ImageStudioView />}
           {tab === 'blog_factory'     && <BlogFactoryView />}
           {tab === 'content_queue'    && <ContentQueueView />}
-          {tab === 'publisher'        && <PublisherView />}
+          {tab === 'publisher'        && <PublisherView fbSuccess={fbSuccess} fbError={fbError} />}
           {tab === 'job_queue'        && <JobQueueView />}
           {tab === 'analytics'        && <AnalyticsView />}
           {tab === 'image_library'    && <ImageLibraryView />}

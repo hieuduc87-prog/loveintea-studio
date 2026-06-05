@@ -36,8 +36,8 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error');
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3202';
-  const successUrl = `${siteUrl}/?fb_success=1`;
-  const errorUrl   = (reason: string) => `${siteUrl}/?fb_error=${reason}`;
+  const successUrl = `${siteUrl}/?tab=publisher&fb_success=1`;
+  const errorUrl   = (reason: string) => `${siteUrl}/?tab=publisher&fb_error=${reason}`;
 
   if (error) {
     return NextResponse.redirect(errorUrl('denied'));

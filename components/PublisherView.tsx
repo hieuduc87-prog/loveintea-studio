@@ -9,7 +9,7 @@ interface OAuthPage {
 interface FbStatus { connected: boolean; pageId: string; pageName: string; igId: string; pageInfo: Record<string, unknown> }
 interface PublishResult { fb?: { ok: boolean; postId?: string; error?: string }; ig?: { ok: boolean; postId?: string; error?: string } }
 
-export function PublisherView() {
+export function PublisherView({ fbSuccess, fbError }: { fbSuccess?: boolean; fbError?: string } = {}) {
   const [tab, setTab] = useState<'setup' | 'post' | 'schedule'>('setup');
   const [status, setStatus] = useState<FbStatus | null>(null);
 
@@ -47,20 +47,16 @@ export function PublisherView() {
   useEffect(() => {
     loadStatus();
     loadOauthPages();
-    // Detect redirect back from Facebook OAuth
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('fb_success')) {
+    // Handle FB OAuth result passed from page.tsx via server searchParams
+    if (fbSuccess) {
       setOauthMsg('✅ Facebook connected successfully!');
       setTab('setup');
-      window.history.replaceState({}, '', window.location.pathname);
       loadOauthPages().then(() => loadStatus());
-    } else if (params.get('fb_error')) {
-      const reason = params.get('fb_error');
-      setOauthMsg(`❌ Facebook connection failed: ${reason === 'denied' ? 'You declined the permissions.' : reason}`);
+    } else if (fbError) {
+      setOauthMsg(`❌ Facebook connection failed: ${fbError === 'denied' ? 'You declined the permissions.' : fbError}`);
       setTab('setup');
-      window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [loadStatus, loadOauthPages]);
+  }, [loadStatus, loadOauthPages, fbSuccess, fbError]);
 
   async function activatePage(pageId: string) {
     setActivating(pageId);
