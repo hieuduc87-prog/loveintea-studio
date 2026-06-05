@@ -11,7 +11,7 @@ interface GeneratedImage {
   skuId: string;
 }
 
-export function ImageStudioView() {
+export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
   const [skuId, setSkuId]         = useState('');
   const [uspId, setUspId]         = useState('');
   const [contextId, setContextId] = useState('');

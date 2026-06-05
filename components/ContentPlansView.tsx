@@ -96,7 +96,7 @@ function formatDate(iso: string): string {
 }
 
 // ── Component ─────────────────────────────────────────────────────────
-export function ContentPlansView() {
+export function ContentPlansView({ brandId }: { brandId?: string } = {}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [plans, setPlans]       = useState<Plan[]>([]);
   const [loading, setLoading]   = useState(true);

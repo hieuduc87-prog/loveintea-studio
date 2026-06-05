@@ -17,7 +17,7 @@ interface LibImage {
   created_at: string;
 }
 
-export function ImageLibraryView() {
+export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
   const [images, setImages]     = useState<LibImage[]>([]);
   const [loading, setLoading]   = useState(true);
   const [skuFilter, setSkuFilter] = useState('');

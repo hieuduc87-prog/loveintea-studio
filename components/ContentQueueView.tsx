@@ -18,7 +18,7 @@ const STATUS_COLORS: Record<string, string> = {
   failed:    'text-red-400 bg-red-900/30',
 };
 
-export function ContentQueueView() {
+export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
   const [posts, setPosts]       = useState<Post[]>([]);
   const [loading, setLoading]   = useState(true);
   const [filter, setFilter]     = useState('all');

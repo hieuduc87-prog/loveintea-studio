@@ -12,7 +12,7 @@ interface BlogPost {
   created_at: string;
 }
 
-export function BlogFactoryView() {
+export function BlogFactoryView({ brandId }: { brandId?: string } = {}) {
   const [topic, setTopic]     = useState('');
   const [skuId, setSkuId]     = useState('');
   const [loading, setLoading] = useState(false);

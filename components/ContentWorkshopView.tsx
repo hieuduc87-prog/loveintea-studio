@@ -49,7 +49,7 @@ function MultiCheck({ label, items, selected, onToggle }: {
   );
 }
 
-export function ContentWorkshopView() {
+export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
   const [mode, setMode] = useState<'single' | 'batch'>('single');
 
   // Single mode state

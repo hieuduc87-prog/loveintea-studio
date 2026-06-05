@@ -42,7 +42,7 @@ function MetricCard({ label, value, sub }: { label: string; value: number | stri
   );
 }
 
-export function AnalyticsView() {
+export function AnalyticsView({ brandId }: { brandId?: string } = {}) {
   const [tab, setTab] = useState<'overview' | 'per-post' | 'ig'>('overview');
   const [days, setDays] = useState(30);
 

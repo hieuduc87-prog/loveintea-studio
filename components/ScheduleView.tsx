@@ -47,7 +47,7 @@ const PLATFORM_BADGE: Record<string, string> = {
   both:      'bg-purple-900/40 text-purple-300',
 };
 
-export function ScheduleView() {
+export function ScheduleView({ brandId }: { brandId?: string } = {}) {
   const [posts, setPosts]         = useState<Post[]>([]);
   const [plans, setPlans]         = useState<Plan[]>([]);
   const [loading, setLoading]     = useState(true);

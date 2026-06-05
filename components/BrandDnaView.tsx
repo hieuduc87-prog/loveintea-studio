@@ -21,7 +21,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
   );
 }
 
-export function BrandDnaView() {
+export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
   const voiceRef = useRef<HTMLInputElement>(null);
   const [voiceContent, setVoiceContent] = useState('');
   const [voiceMsg, setVoiceMsg] = useState('');
