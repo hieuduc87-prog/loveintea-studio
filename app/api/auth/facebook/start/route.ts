@@ -8,12 +8,10 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { APP_ID } from '@/lib/facebook';
 
-// Minimal scopes — only what's needed to post (no App Review required)
+// Absolute minimum — just email/profile for login test
 const FB_SCOPES = [
-  'pages_show_list',          // list pages user manages
-  'pages_manage_posts',       // create posts on page
-  'instagram_basic',          // read IG profile
-  'instagram_content_publish',// publish to IG
+  'email',
+  'public_profile',
 ].join(',');
 
 export async function GET(req: Request) {
