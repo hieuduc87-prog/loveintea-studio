@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { SKUS, USP_ANCHORS } from '@/lib/brand-dna';
 
 interface LibImage {
@@ -25,6 +25,12 @@ export function ImageLibraryView() {
   const [favOnly, setFavOnly]   = useState(false);
   const [selected, setSelected] = useState<LibImage | null>(null);
   const [copying, setCopying]   = useState('');
+
+  // Upload
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const [uploadSku, setUploadSku] = useState('hibiscus');
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,6 +63,19 @@ export function ImageLibraryView() {
     await fetch(`/api/image-library/${id}`, { method: 'DELETE' });
     setImages(imgs => imgs.filter(i => i.id !== id));
     if (selected?.id === id) setSelected(null);
+  }
+
+  async function uploadFile(file: File) {
+    setUploading(true); setUploadMsg('');
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('sku_id', uploadSku);
+    const r = await fetch('/api/image-library/upload', { method: 'POST', body: fd });
+    const d = await r.json() as { ok?: boolean; error?: string };
+    if (d.ok) { setUploadMsg('✓ Uploaded'); await load(); }
+    else { setUploadMsg('✗ ' + d.error); }
+    setUploading(false);
+    setTimeout(() => setUploadMsg(''), 3000);
   }
 
   async function copyUrl(url: string, id: string) {
@@ -106,9 +125,21 @@ export function ImageLibraryView() {
 
         <span className="text-xs text-gray-600">{images.length} images</span>
 
-        <button onClick={load} className="ml-auto text-xs text-gray-600 hover:text-white px-3 py-1.5 bg-gray-800 rounded-lg">
-          ↻
-        </button>
+        {/* Upload */}
+        <div className="ml-auto flex items-center gap-2">
+          {uploadMsg && <span className={`text-xs ${uploadMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{uploadMsg}</span>}
+          <select value={uploadSku} onChange={e => setUploadSku(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none">
+            {SKUS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <input ref={uploadRef} type="file" accept="image/*" className="hidden" multiple
+            onChange={e => { const files = Array.from(e.target.files ?? []); files.forEach(f => uploadFile(f)); e.target.value = ''; }} />
+          <button onClick={() => uploadRef.current?.click()} disabled={uploading}
+            className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">
+            {uploading ? '⟳' : '⬆ Upload'}
+          </button>
+          <button onClick={load} className="text-xs text-gray-600 hover:text-white px-3 py-1.5 bg-gray-800 rounded-lg">↻</button>
+        </div>
       </div>
 
       {loading ? (

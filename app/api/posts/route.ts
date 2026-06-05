@@ -13,28 +13,32 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const db = getDb();
-  const body = await req.json();
-  const id = uuid();
-  db.prepare(`
-    INSERT INTO posts (id, sku_id, segment_id, rtb_id, usp_id, narrative_id, context_id, cta, cell_id, caption, hashtags, image_url, image_prompt, platforms, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id,
-    body.skuId ?? body.sku_id ?? '',
-    body.segmentId ?? '',
-    body.rtbId ?? '',
-    body.uspId ?? '',
-    body.narrativeId ?? '',
-    body.contextId ?? '',
-    body.cta ?? '',
-    body.cellId ?? body.cell_id ?? '',
-    body.caption ?? '',
-    body.hashtags ?? '',
-    body.imageUrl ?? body.image_url ?? '',
-    body.imagePrompt ?? body.image_prompt ?? '',
-    body.platforms ?? body.platform ?? 'facebook,instagram',
-    body.notes ?? '',
-  );
-  return NextResponse.json({ id, ok: true });
+  try {
+    const db = getDb();
+    const body = await req.json();
+    const id = uuid();
+    db.prepare(`
+      INSERT INTO posts (id, sku_id, segment_id, rtb_id, usp_id, narrative_id, context_id, cta, cell_id, caption, hashtags, image_url, image_prompt, platforms, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      body.skuId ?? body.sku_id ?? '',
+      body.segmentId ?? '',
+      body.rtbId ?? '',
+      body.uspId ?? '',
+      body.narrativeId ?? '',
+      body.contextId ?? '',
+      body.cta ?? '',
+      body.cellId ?? body.cell_id ?? '',
+      body.caption ?? '',
+      body.hashtags ?? '',
+      body.imageUrl ?? body.image_url ?? '',
+      body.imagePrompt ?? body.image_prompt ?? '',
+      body.platforms ?? body.platform ?? 'facebook,instagram',
+      body.notes ?? '',
+    );
+    return NextResponse.json({ id, ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 }

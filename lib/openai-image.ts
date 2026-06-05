@@ -1,8 +1,11 @@
 /**
  * OpenAI Image Generation — LoveinTea Studio
  *
- * RULE: All content images MUST use gpt-image-1 edit mode with the product
+ * RULE: All content images MUST use gpt-image-2 edit mode with the product
  * image as reference to keep the packaging/product shape 100% intact.
+ *
+ * Cost strategy: quality='low' (half-price) + Lanczos 4x upscale = same
+ * visual result for posting, ~50% cheaper than quality='medium'/'high'.
  *
  * Only use generate (no reference) for backgrounds/scenes with no product.
  */
@@ -24,6 +27,7 @@ function getClient(): OpenAI {
 }
 
 export type ImageSize = '1024x1024' | '1024x1536' | '1536x1024';
+export type ImageQuality = 'low' | 'medium' | 'high';
 
 /**
  * PRIMARY method — edit product image into lifestyle scene.
@@ -34,9 +38,10 @@ export async function editProductImage(opts: {
   productImagePath: string;
   prompt: string;
   size?: ImageSize;
+  quality?: ImageQuality;
 }): Promise<string> {
   const client = getClient();
-  const { productImagePath, prompt, size = '1024x1536' } = opts;
+  const { productImagePath, prompt, size = '1024x1536', quality = 'low' } = opts;
 
   if (!fs.existsSync(productImagePath)) {
     throw new Error(`Product image not found: ${productImagePath}`);
@@ -54,8 +59,9 @@ export async function editProductImage(opts: {
     image: imageFile,
     prompt,
     size,
+    quality,
     n: 1,
-  });
+  } as Parameters<typeof client.images.edit>[0]);
 
   const imageData = response.data?.[0];
   if (!imageData) throw new Error('No image returned from OpenAI');
@@ -73,16 +79,18 @@ export async function editProductImage(opts: {
 export async function generateImage(opts: {
   prompt: string;
   size?: ImageSize;
+  quality?: ImageQuality;
 }): Promise<string> {
   const client = getClient();
-  const { prompt, size = '1024x1536' } = opts;
+  const { prompt, size = '1024x1536', quality = 'low' } = opts;
 
   const response = await client.images.generate({
     model: 'gpt-image-2',
     prompt,
     size,
+    quality,
     n: 1,
-  });
+  } as Parameters<typeof client.images.generate>[0]);
 
   const imageData = response.data?.[0];
   if (!imageData) throw new Error('No image returned from OpenAI');

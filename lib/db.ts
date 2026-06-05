@@ -192,5 +192,346 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_publish_log_post  ON publish_log(post_id);
     CREATE INDEX IF NOT EXISTS idx_inbox_read        ON inbox_messages(is_read);
     CREATE INDEX IF NOT EXISTS idx_inbox_platform    ON inbox_messages(platform);
+
+    -- ═════════════════════════════════════════════════
+    -- MULTI-BRAND MARKETING SYSTEM (Layer 1-5)
+    -- ═════════════════════════════════════════════════
+
+    -- ─── Layer 1: Organization ───────────────────────
+    CREATE TABLE IF NOT EXISTS brands (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      slug        TEXT UNIQUE NOT NULL,
+      logo_url    TEXT,
+      domain      TEXT,
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS brand_settings (
+      id          TEXT PRIMARY KEY,
+      brand_id    TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      key         TEXT NOT NULL,
+      value       TEXT NOT NULL DEFAULT '',
+      updated_at  TEXT DEFAULT (datetime('now')),
+      UNIQUE(brand_id, key)
+    );
+
+    -- ─── Layer 2: Strategy ───────────────────────────
+    CREATE TABLE IF NOT EXISTS brand_dna (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT UNIQUE NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      tagline         TEXT,
+      archetype       TEXT,
+      through_line    TEXT,
+      colors_json     TEXT DEFAULT '{}',
+      typography_json TEXT DEFAULT '{}',
+      voice_traits    TEXT DEFAULT '[]',
+      compliance_json TEXT DEFAULT '{}',
+      hashtags        TEXT DEFAULT '[]',
+      updated_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS products (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      slug            TEXT NOT NULL,
+      name            TEXT NOT NULL,
+      display_name    TEXT,
+      theme           TEXT,
+      color           TEXT,
+      color_name      TEXT,
+      ingredients     TEXT DEFAULT '[]',
+      image_url       TEXT,
+      best_moment     TEXT,
+      use_cases       TEXT DEFAULT '[]',
+      pitch           TEXT,
+      sort_order      INTEGER DEFAULT 0,
+      created_at      TEXT DEFAULT (datetime('now')),
+      UNIQUE(brand_id, slug)
+    );
+
+    CREATE TABLE IF NOT EXISTS product_images (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      product_id      TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      image_url       TEXT NOT NULL,
+      type            TEXT DEFAULT 'photo',     -- photo|packshot|lifestyle|macro|flat-lay
+      caption         TEXT,
+      is_hero         INTEGER DEFAULT 0,
+      sort_order      INTEGER DEFAULT 0,
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS audiences (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      code            TEXT NOT NULL,
+      name            TEXT NOT NULL,
+      age_range       TEXT,
+      tension         TEXT,
+      lead_product_ids TEXT DEFAULT '[]',
+      sort_order      INTEGER DEFAULT 0,
+      UNIQUE(brand_id, code)
+    );
+
+    CREATE TABLE IF NOT EXISTS variables (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      type            TEXT NOT NULL,
+      code            TEXT NOT NULL,
+      label           TEXT NOT NULL,
+      data_json       TEXT DEFAULT '{}',
+      product_ids     TEXT DEFAULT '[]',
+      audience_ids    TEXT DEFAULT '[]',
+      sort_order      INTEGER DEFAULT 0,
+      UNIQUE(brand_id, type, code)
+    );
+
+    CREATE TABLE IF NOT EXISTS channels (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      platform        TEXT NOT NULL,
+      name            TEXT,
+      credentials     TEXT DEFAULT '{}',
+      status          TEXT DEFAULT 'active',
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS knowledge_docs (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      type            TEXT NOT NULL,
+      title           TEXT NOT NULL,
+      content         TEXT,
+      file_url        TEXT,
+      uploaded_at     TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ─── Layer 3: Planning ───────────────────────────
+    CREATE TABLE IF NOT EXISTS campaigns (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      name            TEXT NOT NULL,
+      objective       TEXT,
+      start_date      TEXT,
+      end_date        TEXT,
+      status          TEXT DEFAULT 'planning',
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS content_plans (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      campaign_id     TEXT REFERENCES campaigns(id),
+      title           TEXT NOT NULL,
+      through_line    TEXT,
+      cadence         TEXT,
+      wave_structure  TEXT DEFAULT '[]',
+      stories_json    TEXT DEFAULT '{}',
+      summary_json    TEXT DEFAULT '{}',
+      source_file     TEXT,
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS plan_items (
+      id              TEXT PRIMARY KEY,
+      plan_id         TEXT NOT NULL REFERENCES content_plans(id) ON DELETE CASCADE,
+      brand_id        TEXT NOT NULL REFERENCES brands(id),
+      date            TEXT,
+      day_of_week     TEXT,
+      wave            TEXT,
+      surface         TEXT,
+      purpose         TEXT,
+      pillar          TEXT,
+      product_id      TEXT,
+      audience_code   TEXT,
+      rtb_code        TEXT,
+      usp_code        TEXT,
+      context         TEXT,
+      hook            TEXT,
+      copy_direction  TEXT,
+      visual_direction TEXT,
+      hashtags        TEXT,
+      repurpose       TEXT,
+      tree_id         TEXT,
+      win_band        TEXT,
+      sort_order      INTEGER DEFAULT 0
+    );
+
+    -- ─── Layer 5: Intelligence ───────────────────────
+    CREATE TABLE IF NOT EXISTS post_metrics (
+      id              TEXT PRIMARY KEY,
+      post_id         TEXT REFERENCES posts(id),
+      brand_id        TEXT,
+      platform        TEXT NOT NULL,
+      fetched_at      TEXT DEFAULT (datetime('now')),
+      reach           INTEGER DEFAULT 0,
+      impressions     INTEGER DEFAULT 0,
+      engaged         INTEGER DEFAULT 0,
+      reactions       INTEGER DEFAULT 0,
+      comments        INTEGER DEFAULT 0,
+      shares          INTEGER DEFAULT 0,
+      saves           INTEGER DEFAULT 0,
+      sends           INTEGER DEFAULT 0,
+      link_clicks     INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS variable_scores (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT,
+      variable_id     TEXT,
+      product_id      TEXT,
+      metric          TEXT NOT NULL,
+      avg_score       REAL DEFAULT 0,
+      sample_size     INTEGER DEFAULT 0,
+      period          TEXT,
+      updated_at      TEXT DEFAULT (datetime('now')),
+      UNIQUE(brand_id, variable_id, product_id, metric, period)
+    );
+
+    CREATE TABLE IF NOT EXISTS insights (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT,
+      type            TEXT NOT NULL,
+      title           TEXT NOT NULL,
+      description     TEXT,
+      evidence_json   TEXT,
+      priority        INTEGER DEFAULT 5,
+      status          TEXT DEFAULT 'new',
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ─── Indexes for new tables ──────────────────────
+    CREATE INDEX IF NOT EXISTS idx_products_brand     ON products(brand_id);
+    CREATE INDEX IF NOT EXISTS idx_product_imgs_prod  ON product_images(product_id);
+    CREATE INDEX IF NOT EXISTS idx_variables_brand    ON variables(brand_id, type);
+    CREATE INDEX IF NOT EXISTS idx_plan_items_plan    ON plan_items(plan_id);
+    CREATE INDEX IF NOT EXISTS idx_post_metrics_post  ON post_metrics(post_id);
+
+    -- ═════════════════════════════════════════════════
+    -- AUTH TABLES (NextAuth)
+    -- ═════════════════════════════════════════════════
+
+    CREATE TABLE IF NOT EXISTS auth_accounts (
+      id                   TEXT PRIMARY KEY,
+      user_id              TEXT NOT NULL,
+      type                 TEXT NOT NULL,
+      provider             TEXT NOT NULL,
+      provider_account_id  TEXT NOT NULL,
+      refresh_token        TEXT,
+      access_token         TEXT,
+      expires_at           INTEGER,
+      token_type           TEXT,
+      scope                TEXT,
+      id_token             TEXT,
+      session_state        TEXT,
+      UNIQUE(provider, provider_account_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id            TEXT PRIMARY KEY,
+      session_token TEXT NOT NULL UNIQUE,
+      user_id       TEXT NOT NULL,
+      expires       TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_users (
+      id             TEXT PRIMARY KEY,
+      name           TEXT,
+      email          TEXT UNIQUE NOT NULL,
+      email_verified TEXT,
+      image          TEXT,
+      role           TEXT NOT NULL DEFAULT 'viewer',
+      is_approved    INTEGER NOT NULL DEFAULT 0,
+      created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+      last_login     TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_verification_tokens (
+      identifier TEXT NOT NULL,
+      token      TEXT NOT NULL,
+      expires    TEXT NOT NULL,
+      UNIQUE(identifier, token)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_auth_accounts_user    ON auth_accounts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_user    ON auth_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_token   ON auth_sessions(session_token);
+
+    -- ═════════════════════════════════════════════════
+    -- FACEBOOK OAUTH CONNECTIONS (multi-user ready)
+    -- ═════════════════════════════════════════════════
+
+    -- One row per (app user, FB user) pair. Stores encrypted long-lived user token.
+    CREATE TABLE IF NOT EXISTS fb_connections (
+      id              TEXT PRIMARY KEY,
+      user_id         TEXT NOT NULL,              -- 'owner' (single-user) or auth_users.id
+      fb_user_id      TEXT NOT NULL,
+      fb_user_name    TEXT,
+      user_token_enc  TEXT NOT NULL,              -- AES-256-GCM encrypted long-lived user token
+      user_token_iv   TEXT NOT NULL,
+      user_token_tag  TEXT NOT NULL,
+      expires_at      TEXT NOT NULL,              -- ISO datetime
+      created_at      TEXT DEFAULT (datetime('now')),
+      updated_at      TEXT DEFAULT (datetime('now')),
+      UNIQUE(user_id, fb_user_id)
+    );
+
+    -- One row per Facebook Page the user manages. Page tokens are never-expiring.
+    CREATE TABLE IF NOT EXISTS fb_pages (
+      id              TEXT PRIMARY KEY,
+      connection_id   TEXT NOT NULL REFERENCES fb_connections(id) ON DELETE CASCADE,
+      page_id         TEXT NOT NULL,              -- Facebook Page ID
+      page_name       TEXT NOT NULL,
+      page_token_enc  TEXT NOT NULL,              -- AES-256-GCM encrypted page access token
+      page_token_iv   TEXT NOT NULL,
+      page_token_tag  TEXT NOT NULL,
+      ig_account_id   TEXT DEFAULT '',            -- Linked Instagram Business Account ID
+      is_active       INTEGER DEFAULT 0,          -- 1 = currently selected for posting
+      created_at      TEXT DEFAULT (datetime('now')),
+      UNIQUE(connection_id, page_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_fb_pages_conn   ON fb_pages(connection_id);
+    CREATE INDEX IF NOT EXISTS idx_fb_pages_active ON fb_pages(is_active);
   `);
+
+  // ── Migration: add plan_id to posts if not exists ──
+  try { db.exec(`ALTER TABLE posts ADD COLUMN plan_id TEXT REFERENCES content_plans(id)`); } catch { /* already exists */ }
+
+  // ── Seed default brand if not exists ──────────────
+  seedDefaultBrand(db);
+}
+
+function seedDefaultBrand(db: Database.Database) {
+  const exists = db.prepare('SELECT 1 FROM brands WHERE id=?').get('loveintea');
+  if (exists) return;
+
+  db.prepare('INSERT INTO brands (id, name, slug, logo_url, domain) VALUES (?,?,?,?,?)').run(
+    'loveintea', 'LoveinTea', 'loveintea', '/brand/logos/logo-green.png', 'loveintea.com'
+  );
+
+  db.prepare(`INSERT INTO brand_dna (id, brand_id, tagline, archetype, through_line, colors_json, typography_json, voice_traits, compliance_json, hashtags)
+    VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
+    'dna-loveintea', 'loveintea', 'Timeless Remedies', 'The Joyful Healer',
+    "Vietnam's timeless herbal remedies, made simple for your everyday calm.",
+    JSON.stringify({"heritageGreen":"#1A5632","loveCoral":"#E04854","cottonCream":"#FFF8F0","deepEarth":"#2D2D2D","warmStone":"#8C8C8C","naturalWhite":"#F5F5F0"}),
+    JSON.stringify({"display":"Sorean","body":"Lato"}),
+    JSON.stringify(["Warmly Wise — gentle authority of a grandmother who knows her herbs","Cheerfully Simple — light, accessible, joyful; wellness feels like a treat","Proudly Vietnamese — celebrate heritage naturally, never exoticize"]),
+    JSON.stringify({"neverSay":["cures","treats","heals","prevents disease","innovative","disrupting","mysterious","ancient secrets","exotic Eastern","optimize your wellness protocol"],"alwaysSay":["traditionally used to support","a soothing ritual for","plant-based corn-fiber pyramid","grown in the Vietnamese highlands","all-natural, zero calories"]}),
+    JSON.stringify(["#LoveinTea","#TimelessRemedies","#VietnameseHerbs"])
+  );
+
+  // Seed products
+  const productInsert = db.prepare(`INSERT INTO products (id, brand_id, slug, name, display_name, theme, color, color_name, ingredients, image_url, best_moment, use_cases, pitch, sort_order)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const skus = [
+    ['prod-dandelion','loveintea','dandelion','Dandelion','DANDELION TEA BAGS','Daily reset ritual','#F4A020','Dandelion Gold','["Dandelion","Ginger","Artichoke","Tangerine Peel","Hibiscus"]','/brand/products/Da.png','morning','["morning","after-meal"]','Gentle daily reset; warm, earthy, golden cup',0],
+    ['prod-ginger','loveintea','ginger','Ginger','GINGER TEA BAGS','Warm morning lift','#A8B525','Ginger Zest','["Dried Ginger (53%)","Ampelopsis","Jujube","Jasmine","Cinnamon"]','/brand/products/Gi.png','morning','["morning","wfh-desk"]','Cozy warming morning ritual, spicy-sweet',1],
+    ['prod-hibiscus','loveintea','hibiscus','Hibiscus','HIBISCUS TEA BAGS','Bright & refreshing','#5B8C3E','Hibiscus Garden','["Hibiscus (25%)","Ginger","Tangerine Peel","Artichoke","Jujube"]','/brand/products/Hi.png','afternoon','["afternoon","cold-brew","self-care"]','Bright ruby cup, vibrant and uplifting',2],
+    ['prod-lemon-balm','loveintea','lemon-balm','Lemon Balm','LEMON BALM TEA BAGS','Calm & unwind','#8BBF5C','Lemon Mist','["Perilla","Ginger","Fennel","Lemon Balm","Jiaogulan","Peppermint"]','/brand/products/Le.png','evening','["evening","self-care","journaling"]','Unwind, light-hearted calm moment',3],
+    ['prod-peppermint','loveintea','peppermint','Peppermint','PEPPERMINT TEA BAGS','Cool & after-meal ease','#5BBCD2','Peppermint Wave','["Peppermint (40%)","Artichoke","Ampelopsis","Perilla","Reishi"]','/brand/products/Pe.png','afternoon','["after-meal","afternoon","wfh-desk"]','Cool, fresh after-meal ritual',4],
+    ['prod-nighty-night','loveintea','nighty-night','Nighty Night','NIGHTY NIGHT TEA BAGS','Wind-down before sleep','#3F3D99','Dreamy Indigo','["Perilla","Chamomile","Lotus Leaf","Jujube","Lemon Balm","Jiaogulan"]','/brand/products/Ni.png','evening','["bedside","sofa","journaling"]','Evening wind-down ritual, restful and quiet',5],
+  ];
+  for (const s of skus) productInsert.run(...s);
 }

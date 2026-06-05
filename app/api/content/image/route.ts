@@ -15,7 +15,12 @@ export async function POST(req: NextRequest) {
   if (!sku) return NextResponse.json({ error: 'Invalid SKU' }, { status: 400 });
 
   const jobId  = uuid();
-  const prompt = buildImageEditPrompt({ skuId, uspId, contextId, extraNotes: customPrompt });
+  let prompt: string;
+  try {
+    prompt = buildImageEditPrompt({ skuId, uspId, contextId, extraNotes: customPrompt });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 400 });
+  }
   const start  = Date.now();
 
   // Insert job as pending

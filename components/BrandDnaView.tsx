@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useRef, useState, useEffect } from 'react';
 import { BRAND, SKUS, SEGMENTS, RTBS, USP_ANCHORS, NARRATIVES, CONTEXTS, FORMATS } from '@/lib/brand-dna';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -21,6 +22,30 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 }
 
 export function BrandDnaView() {
+  const voiceRef = useRef<HTMLInputElement>(null);
+  const [voiceContent, setVoiceContent] = useState('');
+  const [voiceMsg, setVoiceMsg] = useState('');
+  const [voiceUploading, setVoiceUploading] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/brand-voice').then(r => r.json()).then(d => { if (d.content) setVoiceContent(d.content); });
+  }, []);
+
+  async function uploadVoice(file: File) {
+    setVoiceUploading(true); setVoiceMsg('');
+    const fd = new FormData(); fd.append('file', file);
+    const r = await fetch('/api/brand-voice', { method: 'POST', body: fd });
+    const d = await r.json() as { ok?: boolean; length?: number; error?: string };
+    if (d.ok) {
+      setVoiceMsg(`✓ Saved (${d.length?.toLocaleString()} chars)`);
+      const r2 = await fetch('/api/brand-voice');
+      const d2 = await r2.json() as { content: string };
+      setVoiceContent(d2.content);
+    } else { setVoiceMsg('✗ ' + d.error); }
+    setVoiceUploading(false);
+    setTimeout(() => setVoiceMsg(''), 4000);
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -151,6 +176,36 @@ export function BrandDnaView() {
           </div>
         </Section>
       </div>
+
+      {/* Brand Voice Upload */}
+      <Section title="Brand Voice — Upload Custom File">
+        <Card>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-400 mb-2">
+                Upload a .txt, .md, or .docx file to override the default brand voice used in content generation.
+                The AI will follow this voice guide when writing captions.
+              </p>
+              {voiceContent ? (
+                <div className="bg-gray-800/50 rounded-lg p-3 max-h-32 overflow-y-auto">
+                  <p className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">{voiceContent.slice(0, 600)}{voiceContent.length > 600 ? '…' : ''}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-600 italic">No custom brand voice uploaded — using default from brand-dna.ts</p>
+              )}
+            </div>
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+              <input ref={voiceRef} type="file" accept=".txt,.md,.docx" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadVoice(f); e.target.value = ''; }} />
+              <button onClick={() => voiceRef.current?.click()} disabled={voiceUploading}
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors whitespace-nowrap">
+                {voiceUploading ? '⟳ Uploading…' : '⬆ Upload Voice File'}
+              </button>
+              {voiceMsg && <p className={`text-xs ${voiceMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{voiceMsg}</p>}
+            </div>
+          </div>
+        </Card>
+      </Section>
 
       {/* Compliance Gate */}
       <Section title="Compliance Gate — Hard Rules">

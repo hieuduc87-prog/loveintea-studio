@@ -26,16 +26,30 @@ export interface O3Result {
 }
 
 export async function generateO3Content(config: O3Config): Promise<O3Result> {
-  const sku       = SKUS.find(s => s.id === config.skuId);
-  const segment   = SEGMENTS.find(s => s.id === config.segmentId);
-  const rtb       = RTBS.find(r => r.id === config.rtbId);
-  const usp       = USP_ANCHORS.find(u => u.id === config.uspId);
-  const narrative = NARRATIVES.find(n => n.id === config.narrativeId);
-  const context   = CONTEXTS.find(c => c.id === config.contextId);
+  const sku_      = SKUS.find(s => s.id === config.skuId);
+  const segment_  = SEGMENTS.find(s => s.id === config.segmentId);
+  const rtb_      = RTBS.find(r => r.id === config.rtbId);
+  const usp_      = USP_ANCHORS.find(u => u.id === config.uspId);
+  const narrative_= NARRATIVES.find(n => n.id === config.narrativeId);
+  const context_  = CONTEXTS.find(c => c.id === config.contextId);
 
-  if (!sku || !segment || !rtb || !usp || !narrative || !context) {
-    throw new Error('Invalid O3 config — missing required fields');
+  const missing: string[] = [];
+  if (!sku_)       missing.push('SKU');
+  if (!segment_)   missing.push('Segment');
+  if (!rtb_)       missing.push('Reason to Buy (RTB)');
+  if (!usp_)       missing.push('USP Anchor');
+  if (!narrative_) missing.push('Narrative');
+  if (!context_)   missing.push('Scene / Context');
+  if (missing.length) {
+    throw new Error(`Thiếu: ${missing.join(', ')}. Vui lòng chọn đầy đủ trước khi generate.`);
   }
+
+  const sku = sku_!;
+  const segment = segment_!;
+  const rtb = rtb_!;
+  const usp = usp_!;
+  const narrative = narrative_!;
+  const context = context_!;
 
   const prompt = `You are writing an Instagram caption for LoveinTea, a premium Vietnamese herbal tea brand sold in the US.
 

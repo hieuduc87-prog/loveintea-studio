@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-interface Page { id: string; name: string; category: string; access_token: string; picture?: { data?: { url?: string } } }
+interface OAuthPage {
+  id: string; pageId: string; pageName: string;
+  igAccountId: string; isActive: boolean; fbUserName: string; expiresAt: string;
+}
 interface FbStatus { connected: boolean; pageId: string; pageName: string; igId: string; pageInfo: Record<string, unknown> }
 interface PublishResult { fb?: { ok: boolean; postId?: string; error?: string }; ig?: { ok: boolean; postId?: string; error?: string } }
 
@@ -10,12 +13,12 @@ export function PublisherView() {
   const [tab, setTab] = useState<'setup' | 'post' | 'schedule'>('setup');
   const [status, setStatus] = useState<FbStatus | null>(null);
 
-  // Setup state
-  const [userToken, setUserToken]   = useState('');
-  const [pages, setPages]           = useState<Page[]>([]);
-  const [loadingPages, setLoadingPages] = useState(false);
-  const [savingPage, setSavingPage] = useState(false);
-  const [setupMsg, setSetupMsg]     = useState('');
+  // OAuth connection state
+  const [oauthPages, setOauthPages]   = useState<OAuthPage[]>([]);
+  const [oauthConnected, setOauthConnected] = useState(false);
+  const [oauthMsg, setOauthMsg]       = useState('');
+  const [activating, setActivating]   = useState('');
+  const [disconnecting, setDisconnecting] = useState(false);
 
   // Post state
   const [caption, setCaption]     = useState('');
@@ -34,39 +37,59 @@ export function PublisherView() {
     if (d.connected) setTab('post');
   }, []);
 
-  useEffect(() => { loadStatus(); }, [loadStatus]);
+  const loadOauthPages = useCallback(async () => {
+    const r = await fetch('/api/auth/facebook/pages');
+    const d = await r.json() as { connected: boolean; pages: OAuthPage[] };
+    setOauthPages(d.pages ?? []);
+    setOauthConnected(d.connected);
+  }, []);
 
-  async function fetchPages() {
-    if (!userToken.trim()) return;
-    setLoadingPages(true);
-    setSetupMsg('');
-    const r = await fetch('/api/fb-setup/pages', {
+  useEffect(() => {
+    loadStatus();
+    loadOauthPages();
+    // Detect redirect back from Facebook OAuth
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('fb_success')) {
+      setOauthMsg('✅ Facebook connected successfully!');
+      setTab('setup');
+      window.history.replaceState({}, '', window.location.pathname);
+      loadOauthPages().then(() => loadStatus());
+    } else if (params.get('fb_error')) {
+      const reason = params.get('fb_error');
+      setOauthMsg(`❌ Facebook connection failed: ${reason === 'denied' ? 'You declined the permissions.' : reason}`);
+      setTab('setup');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [loadStatus, loadOauthPages]);
+
+  async function activatePage(pageId: string) {
+    setActivating(pageId);
+    const r = await fetch('/api/auth/facebook/pages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userToken }),
+      body: JSON.stringify({ pageId }),
     });
-    const d = await r.json() as { pages?: Page[]; error?: string };
-    if (d.error) { setSetupMsg('Error: ' + d.error); }
-    else { setPages(d.pages ?? []); }
-    setLoadingPages(false);
+    const d = await r.json() as { ok?: boolean; error?: string };
+    if (d.ok) {
+      await loadOauthPages();
+      await loadStatus();
+      setOauthMsg(`✅ Switched to page: ${oauthPages.find(p => p.pageId === pageId)?.pageName}`);
+    } else {
+      setOauthMsg('❌ ' + d.error);
+    }
+    setActivating('');
   }
 
-  async function savePage(page: Page) {
-    setSavingPage(true);
-    const r = await fetch('/api/fb-setup/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pageId: page.id, pageAccessToken: page.access_token, pageName: page.name }),
-    });
-    const d = await r.json() as { ok?: boolean; igAccountId?: string; error?: string };
-    if (d.ok) {
-      setSetupMsg(`✅ Saved! LoveinTea Official connected${d.igAccountId ? ` + IG ${d.igAccountId}` : ''}`);
-      await loadStatus();
-      setTimeout(() => setTab('post'), 1200);
-    } else {
-      setSetupMsg('Error: ' + d.error);
-    }
-    setSavingPage(false);
+  async function disconnect() {
+    if (!confirm('Disconnect Facebook? This will remove all stored page tokens.')) return;
+    setDisconnecting(true);
+    await fetch('/api/auth/facebook/disconnect', { method: 'POST' });
+    setOauthPages([]);
+    setOauthConnected(false);
+    setStatus(null);
+    setOauthMsg('Disconnected from Facebook.');
+    setTab('setup');
+    setDisconnecting(false);
   }
 
   async function publish() {
@@ -133,60 +156,80 @@ export function PublisherView() {
       {/* Setup Tab */}
       {tab === 'setup' && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-white">Connect LoveinTea Official Page</h2>
-
-          <div className="bg-gray-800/50 rounded-lg p-3 text-xs text-gray-400 space-y-1">
-            <p className="font-medium text-white">How to get User Access Token:</p>
-            <p>1. Go to <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">Graph API Explorer</a></p>
-            <p>2. App: <strong className="text-white">select your app (1267157968709745)</strong></p>
-            <p>3. Click <strong className="text-white">Generate Access Token</strong> → log in as page admin</p>
-            <p>4. Paste the token below</p>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white">Facebook / Instagram Connection</h2>
+            {oauthConnected && (
+              <button
+                onClick={disconnect}
+                disabled={disconnecting}
+                className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+              >
+                {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+              </button>
+            )}
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">User Access Token</label>
-            <textarea
-              value={userToken}
-              onChange={e => setUserToken(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white font-mono resize-none focus:outline-none focus:border-brand-500 h-20"
-              placeholder="Paste User Access Token here…"
-            />
-          </div>
-
-          <button
-            onClick={fetchPages}
-            disabled={loadingPages || !userToken.trim()}
-            className="w-full py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium transition-colors"
-          >
-            {loadingPages ? '⟳ Loading pages…' : '🔍 List my Pages'}
-          </button>
-
-          {setupMsg && (
-            <p className={`text-sm ${setupMsg.startsWith('✅') ? 'text-green-400' : 'text-red-400'}`}>{setupMsg}</p>
+          {oauthMsg && (
+            <p className={`text-sm ${oauthMsg.startsWith('✅') ? 'text-green-400' : 'text-red-400'}`}>{oauthMsg}</p>
           )}
 
-          {pages.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-bold text-gray-400 uppercase">Select LoveinTea Official</p>
-              {pages.map(p => (
-                <div key={p.id} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
-                  {p.picture?.data?.url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.picture.data.url} alt="" className="w-8 h-8 rounded-full flex-shrink-0" />
-                  )}
+          {!oauthConnected ? (
+            <div className="space-y-4">
+              <div className="bg-gray-800/50 rounded-lg p-3 text-xs text-gray-400 space-y-1">
+                <p>Click the button below to log in with Facebook and grant access to your Pages and Instagram account. No tokens are stored in plaintext — everything is encrypted with AES-256-GCM.</p>
+                <p className="pt-1">Permissions requested: post, read messages, comments, analytics.</p>
+              </div>
+              <a
+                href="/api/auth/facebook/start"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-[#1877F2] hover:bg-[#166fe5] text-white text-sm font-medium transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+                Connect with Facebook
+              </a>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Connected Pages</p>
+              {oauthPages.map(p => (
+                <div
+                  key={p.id}
+                  className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                    p.isActive
+                      ? 'bg-green-900/20 border-green-800/50'
+                      : 'bg-gray-800 border-gray-700'
+                  }`}
+                >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white font-medium">{p.name}</p>
-                    <p className="text-xs text-gray-500">{p.category} · {p.id}</p>
+                    <p className="text-sm text-white font-medium">{p.pageName}</p>
+                    <p className="text-xs text-gray-500">
+                      ID: {p.pageId}
+                      {p.igAccountId ? ` · IG: ${p.igAccountId}` : ''}
+                    </p>
+                    <p className="text-[10px] text-gray-600 mt-0.5">
+                      Token expires: {new Date(p.expiresAt).toLocaleDateString()}
+                    </p>
                   </div>
-                  <button
-                    onClick={() => savePage(p)}
-                    disabled={savingPage}
-                    className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors flex-shrink-0"
-                  >
-                    {savingPage ? '…' : 'Use this page'}
-                  </button>
+                  {p.isActive ? (
+                    <span className="text-xs text-green-400 font-medium flex-shrink-0">Active</span>
+                  ) : (
+                    <button
+                      onClick={() => activatePage(p.pageId)}
+                      disabled={activating === p.pageId}
+                      className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors flex-shrink-0"
+                    >
+                      {activating === p.pageId ? '…' : 'Use this'}
+                    </button>
+                  )}
                 </div>
               ))}
+              <a
+                href="/api/auth/facebook/start"
+                className="block text-center text-xs text-brand-400 hover:text-brand-300 pt-1"
+              >
+                Re-authorize or add more pages
+              </a>
             </div>
           )}
         </div>

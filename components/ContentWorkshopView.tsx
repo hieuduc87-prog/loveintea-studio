@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { SKUS, SEGMENTS, RTBS, USP_ANCHORS, NARRATIVES, CONTEXTS, CTA_OPTIONS } from '@/lib/brand-dna';
+import { SKUS, SEGMENTS, RTBS, USP_ANCHORS, NARRATIVES, CONTEXTS, CTA_OPTIONS, FORMATS } from '@/lib/brand-dna';
 
 interface O3Result { caption: string; imagePrompt: string; hashtags: string; cellId: string; }
 interface LogEntry  { msg: string; status: 'loading' | 'ok' | 'error'; }
@@ -56,9 +56,11 @@ export function ContentWorkshopView() {
   const [config, setConfig] = useState<{
     skuId: string; segmentId: string; rtbId: string; uspId: string;
     narrativeId: string; contextId: string; cta: string; extraNotes: string;
+    formatId: string; varLayer: 'brand' | 'sku';
   }>({
     skuId: '', segmentId: '', rtbId: '', uspId: '',
     narrativeId: '', contextId: '', cta: CTA_OPTIONS[0], extraNotes: '',
+    formatId: '', varLayer: 'sku',
   });
   const [result, setResult]     = useState<O3Result | null>(null);
   const [loading, setLoading]   = useState(false);
@@ -78,8 +80,36 @@ export function ContentWorkshopView() {
   const [batchCtas, setBatchCtas]         = useState<string[]>([CTA_OPTIONS[0]]);
   const [batchJobs, setBatchJobs]   = useState<BatchJob[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
+  const [batchChunkInfo, setBatchChunkInfo] = useState<{ chunk: number; total: number } | null>(null);
 
   const selectedSku = SKUS.find(s => s.id === config.skuId);
+
+  // SKU-aware variable filtering
+  const filteredSegments = config.varLayer === 'sku' && config.skuId
+    ? [...SEGMENTS].sort((a, b) => {
+        const aMatch = (a.leadSkus as readonly string[]).includes(config.skuId) ? -1 : 1;
+        const bMatch = (b.leadSkus as readonly string[]).includes(config.skuId) ? -1 : 1;
+        return aMatch - bMatch;
+      })
+    : SEGMENTS;
+
+  const filteredRtbs = config.varLayer === 'sku' && config.skuId
+    ? [...RTBS].sort((a, b) => {
+        const aSku = SEGMENTS.find(s => s.id === a.bestSeg)?.leadSkus ?? [];
+        const bSku = SEGMENTS.find(s => s.id === b.bestSeg)?.leadSkus ?? [];
+        const aMatch = (aSku as readonly string[]).includes(config.skuId) ? -1 : 1;
+        const bMatch = (bSku as readonly string[]).includes(config.skuId) ? -1 : 1;
+        return aMatch - bMatch;
+      })
+    : RTBS;
+
+  const filteredUsps = config.varLayer === 'sku' && selectedSku
+    ? [...USP_ANCHORS].sort((a, b) => {
+        const aMatch = selectedSku.useCases.some(uc => a.id.toLowerCase().includes(uc) || a.label.toLowerCase().includes(uc)) ? -1 : 1;
+        const bMatch = selectedSku.useCases.some(uc => b.id.toLowerCase().includes(uc) || b.label.toLowerCase().includes(uc)) ? -1 : 1;
+        return aMatch - bMatch;
+      })
+    : USP_ANCHORS;
 
   function addLog(msg: string, status: LogEntry['status']) {
     setLogs(l => [...l, { msg, status }]);
@@ -244,19 +274,42 @@ export function ContentWorkshopView() {
     return out;
   })();
 
+  const BATCH_CHUNK_SIZE = 5;
+
+  const [batchError, setBatchError] = useState('');
+
   async function runBatch() {
-    if (!batchSkus.length) return;
+    setBatchError('');
+    const missing: string[] = [];
+    if (!batchSkus.length)       missing.push('SKU');
+    if (!batchSegments.length)   missing.push('Segment');
+    if (!batchRtbs.length)       missing.push('Reason to Buy (RTB)');
+    if (!batchUsps.length)       missing.push('USP Anchor');
+    if (!batchNarratives.length) missing.push('Narrative');
+    if (!batchContexts.length)   missing.push('Scene / Context');
+    if (missing.length) {
+      setBatchError(`Thiếu: ${missing.join(', ')}. Chọn ít nhất 1 cho mỗi trường.`);
+      return;
+    }
     const jobs: BatchJob[] = batchCombinations.map((c, i) => ({
       id: `batch-${i}`, skuId: c.skuId, status: 'pending', logs: [],
     }));
     setBatchJobs(jobs);
     setBatchRunning(true);
+    setBatchChunkInfo(null);
+
+    const totalChunks = Math.ceil(jobs.length / BATCH_CHUNK_SIZE);
 
     for (let i = 0; i < jobs.length; i++) {
+      const chunkIdx = Math.floor(i / BATCH_CHUNK_SIZE) + 1;
+      if (jobs.length > BATCH_CHUNK_SIZE) {
+        setBatchChunkInfo({ chunk: chunkIdx, total: totalChunks });
+      }
+
       const combo = batchCombinations[i];
       setBatchJobs(prev => prev.map((j, idx) => idx === i ? { ...j, status: 'running', logs: [{ msg: '⟳ Running…', status: 'loading' }] } : j));
       try {
-        const cfg = { ...combo, extraNotes: '' };
+        const cfg = { ...combo, extraNotes: '', formatId: '', varLayer: 'sku' as const };
         const res = await runSingleJob(cfg);
         setBatchJobs(prev => prev.map((j, idx) => idx === i ? {
           ...j, status: 'done', imageUrl: res?.imageUrl, caption: res?.caption,
@@ -267,8 +320,59 @@ export function ContentWorkshopView() {
           ...j, status: 'error', logs: [{ msg: `✗ ${String(e)}`, status: 'error' }],
         } : j));
       }
+
+      // Pause 2s between chunks (skip after last item)
+      const isLastInChunk = (i + 1) % BATCH_CHUNK_SIZE === 0;
+      const isLastItem = i === jobs.length - 1;
+      if (jobs.length > BATCH_CHUNK_SIZE && isLastInChunk && !isLastItem) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
     }
     setBatchRunning(false);
+    setBatchChunkInfo(null);
+  }
+
+  async function retryFailed() {
+    const failedIndices = batchJobs
+      .map((j, i) => ({ j, i }))
+      .filter(({ j }) => j.status === 'error')
+      .map(({ i }) => i);
+    if (!failedIndices.length) return;
+
+    setBatchRunning(true);
+    setBatchChunkInfo(null);
+    const totalChunks = Math.ceil(failedIndices.length / BATCH_CHUNK_SIZE);
+
+    for (let ci = 0; ci < failedIndices.length; ci++) {
+      const i = failedIndices[ci];
+      const chunkIdx = Math.floor(ci / BATCH_CHUNK_SIZE) + 1;
+      if (failedIndices.length > BATCH_CHUNK_SIZE) {
+        setBatchChunkInfo({ chunk: chunkIdx, total: totalChunks });
+      }
+
+      const combo = batchCombinations[i];
+      setBatchJobs(prev => prev.map((j, idx) => idx === i ? { ...j, status: 'running', logs: [{ msg: '⟳ Retrying…', status: 'loading' }] } : j));
+      try {
+        const cfg = { ...combo, extraNotes: '', formatId: '', varLayer: 'sku' as const };
+        const res = await runSingleJob(cfg);
+        setBatchJobs(prev => prev.map((j, idx) => idx === i ? {
+          ...j, status: 'done', imageUrl: res?.imageUrl, caption: res?.caption,
+          logs: [{ msg: '✓ Done — saved to queue', status: 'ok' }],
+        } : j));
+      } catch (e) {
+        setBatchJobs(prev => prev.map((j, idx) => idx === i ? {
+          ...j, status: 'error', logs: [{ msg: `✗ ${String(e)}`, status: 'error' }],
+        } : j));
+      }
+
+      const isLastInChunk = (ci + 1) % BATCH_CHUNK_SIZE === 0;
+      const isLastItem = ci === failedIndices.length - 1;
+      if (failedIndices.length > BATCH_CHUNK_SIZE && isLastInChunk && !isLastItem) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    setBatchRunning(false);
+    setBatchChunkInfo(null);
   }
 
   function toggle(setter: React.Dispatch<React.SetStateAction<string[]>>) {
@@ -311,12 +415,36 @@ export function ContentWorkshopView() {
                     ))}
                   </div>
                 </div>
-                <Select label="Segment" value={config.segmentId} onChange={v => setConfig(c => ({ ...c, segmentId: v }))}
-                  options={SEGMENTS.map(s => ({ value: s.id, label: `${s.id} — ${s.name}` }))} />
+                {/* Variable Layer toggle */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Variable Layer
+                    <span className="ml-2 text-gray-600 font-normal">— filter by SKU relevance</span>
+                  </label>
+                  <div className="flex gap-2">
+                    {(['brand', 'sku'] as const).map(l => (
+                      <button key={l} onClick={() => setConfig(c => ({ ...c, varLayer: l }))}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${config.varLayer === l ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
+                        {l === 'brand' ? '🌿 Brand (all)' : '🎯 SKU-first'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Format selector */}
+                <Select label="Content Format" value={config.formatId} onChange={v => setConfig(c => ({ ...c, formatId: v }))}
+                  options={FORMATS.map(f => ({ value: f.id, label: `${f.label} (${f.size})` }))} />
+
+                <Select label="Segment"
+                  value={config.segmentId} onChange={v => setConfig(c => ({ ...c, segmentId: v }))}
+                  options={filteredSegments.map(s => ({
+                    value: s.id,
+                    label: `${s.id} — ${s.name}${(s.leadSkus as readonly string[]).includes(config.skuId) ? ' ★' : ''}`,
+                  }))} />
                 <Select label="Reason to Buy" value={config.rtbId} onChange={v => setConfig(c => ({ ...c, rtbId: v }))}
-                  options={RTBS.map(r => ({ value: r.id, label: `${r.id}: ${r.label.slice(0, 40)}…` }))} />
+                  options={filteredRtbs.map(r => ({ value: r.id, label: `${r.id}: ${r.label.slice(0, 40)}…` }))} />
                 <Select label="USP Anchor" value={config.uspId} onChange={v => setConfig(c => ({ ...c, uspId: v }))}
-                  options={USP_ANCHORS.map(u => ({ value: u.id, label: `${u.id} — ${u.label}` }))} />
+                  options={filteredUsps.map(u => ({ value: u.id, label: `${u.id} — ${u.label}` }))} />
                 <Select label="Narrative" value={config.narrativeId} onChange={v => setConfig(c => ({ ...c, narrativeId: v }))}
                   options={NARRATIVES.map(n => ({ value: n.id, label: `${n.id} — ${n.label}` }))} />
                 <Select label="Scene / Context" value={config.contextId} onChange={v => setConfig(c => ({ ...c, contextId: v }))}
@@ -474,10 +602,18 @@ export function ContentWorkshopView() {
                 {batchCombinations.length > 20 && <p className="text-yellow-500 mt-1">⚠ Large batch — each job ~30-60s</p>}
               </div>
 
+              {batchError && (
+                <p className="text-xs text-red-400 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">{batchError}</p>
+              )}
+
               <button onClick={runBatch}
                 disabled={batchRunning || batchCombinations.length === 0 || !batchSkus.length}
                 className="w-full py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                {batchRunning ? <><span className="animate-spin inline-block">⟳</span> Running batch…</> : `🗂 Run ${batchCombinations.length} Jobs`}
+                {batchRunning
+                  ? batchChunkInfo
+                    ? <><span className="animate-spin inline-block">⟳</span> Chunk {batchChunkInfo.chunk}/{batchChunkInfo.total}…</>
+                    : <><span className="animate-spin inline-block">⟳</span> Running batch…</>
+                  : `🗂 Run ${batchCombinations.length} Jobs${batchCombinations.length > BATCH_CHUNK_SIZE ? ` (${Math.ceil(batchCombinations.length / BATCH_CHUNK_SIZE)} chunks)` : ''}`}
               </button>
             </div>
           </div>
@@ -496,12 +632,20 @@ export function ContentWorkshopView() {
                     {batchJobs.filter(j => j.status === 'done').length}/{batchJobs.length} done
                     {batchJobs.some(j => j.status === 'error') && <span className="text-red-400 ml-2">· {batchJobs.filter(j => j.status === 'error').length} errors</span>}
                   </p>
-                  {batchRunning && (
-                    <div className="w-32 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-brand-500 transition-all duration-500"
-                        style={{ width: `${(batchJobs.filter(j => j.status === 'done' || j.status === 'error').length / batchJobs.length) * 100}%` }} />
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {!batchRunning && batchJobs.some(j => j.status === 'error') && (
+                      <button onClick={retryFailed}
+                        className="px-3 py-1 rounded-lg text-xs font-medium bg-red-900/40 text-red-400 hover:bg-red-900/60 transition-colors">
+                        ↺ Retry {batchJobs.filter(j => j.status === 'error').length} failed
+                      </button>
+                    )}
+                    {batchRunning && (
+                      <div className="w-32 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-brand-500 transition-all duration-500"
+                          style={{ width: `${(batchJobs.filter(j => j.status === 'done' || j.status === 'error').length / batchJobs.length) * 100}%` }} />
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   {batchJobs.map(job => {

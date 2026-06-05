@@ -3,6 +3,7 @@
  * Credentials: reads from env first, then from settings DB (saved via FB Setup).
  */
 
+import crypto from 'crypto';
 import { getDb } from './db';
 
 const GRAPH    = 'https://graph.facebook.com/v21.0';
@@ -193,3 +194,86 @@ export async function getIgInsights() {
 
 // expose app id for OAuth URL construction
 export { APP_ID };
+
+// ─────────────────────────────────────────────────────────
+// OAuth helpers — used by /api/auth/facebook/* routes
+// ─────────────────────────────────────────────────────────
+
+/** HMAC-SHA256 proof to prevent token theft. Required for all server-side API calls. */
+export function appSecretProof(accessToken: string): string {
+  const secret = process.env.FB_APP_SECRET;
+  if (!secret) throw new Error('FB_APP_SECRET env var is required');
+  return crypto.createHmac('sha256', secret).update(accessToken).digest('hex');
+}
+
+/** Exchange short-lived authorization code for a short-lived user token */
+export async function exchangeCodeForToken(code: string): Promise<{ access_token: string; expires_in: number }> {
+  const url = `${GRAPH}/oauth/access_token?` + new URLSearchParams({
+    client_id: APP_ID,
+    client_secret: process.env.FB_APP_SECRET!,
+    redirect_uri: process.env.FB_REDIRECT_URI!,
+    code,
+  });
+  const res = await fetch(url);
+  const body = await res.text();
+  if (!res.ok) throw new Error(`exchangeCodeForToken failed: ${body}`);
+  return JSON.parse(body);
+}
+
+/** Exchange short-lived user token for a 60-day long-lived user token */
+export async function getLongLivedToken(shortToken: string): Promise<{ access_token: string; expires_in: number }> {
+  const url = `${GRAPH}/oauth/access_token?` + new URLSearchParams({
+    grant_type: 'fb_exchange_token',
+    client_id: APP_ID,
+    client_secret: process.env.FB_APP_SECRET!,
+    fb_exchange_token: shortToken,
+  });
+  const res = await fetch(url);
+  const body = await res.text();
+  if (!res.ok) throw new Error(`getLongLivedToken failed: ${body}`);
+  return JSON.parse(body);
+}
+
+/** Get Facebook user ID + display name for the token owner */
+export async function getFbUser(userToken: string): Promise<{ id: string; name: string }> {
+  const proof = appSecretProof(userToken);
+  const res = await fetch(
+    `${GRAPH}/me?fields=id,name&access_token=${userToken}&appsecret_proof=${proof}`
+  );
+  if (!res.ok) throw new Error(`getFbUser failed: ${await res.text()}`);
+  return res.json();
+}
+
+/** Get all Pages the user manages + their never-expiring page access tokens */
+export async function getUserPages(userToken: string): Promise<Array<{ id: string; name: string; access_token: string }>> {
+  const proof = appSecretProof(userToken);
+  const res = await fetch(
+    `${GRAPH}/me/accounts?fields=id,name,access_token&limit=50&access_token=${userToken}&appsecret_proof=${proof}`
+  );
+  if (!res.ok) throw new Error(`getUserPages failed: ${await res.text()}`);
+  const d = await res.json() as { data?: Array<{ id: string; name: string; access_token: string }>; error?: { message: string } };
+  if (d.error) throw new Error(d.error.message);
+  return d.data ?? [];
+}
+
+/** Find the Instagram Business Account ID linked to a Facebook Page (if any) */
+export async function getLinkedIgAccount(fbPageId: string, pageToken: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `${GRAPH}/${fbPageId}?fields=instagram_business_account&access_token=${pageToken}`
+    );
+    const d = await res.json() as { instagram_business_account?: { id: string } };
+    return d.instagram_business_account?.id ?? '';
+  } catch { return ''; }
+}
+
+/** Revoke all permissions from FB (call before deleting connection from DB) */
+export async function revokePermissions(userToken: string): Promise<void> {
+  try {
+    const proof = appSecretProof(userToken);
+    await fetch(
+      `${GRAPH}/me/permissions?access_token=${userToken}&appsecret_proof=${proof}`,
+      { method: 'DELETE' }
+    );
+  } catch { /* best-effort */ }
+}

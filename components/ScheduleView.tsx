@@ -7,8 +7,13 @@ import { SKUS } from '@/lib/brand-dna';
 interface Post {
   id: string; sku_id: string; caption: string; image_url?: string;
   status: 'draft'|'scheduled'|'published'|'failed'; platform: string;
+  plan_id?: string;
   scheduled_at?: string; published_at?: string;
   fb_post_id?: string; ig_post_id?: string; created_at: string;
+}
+
+interface Plan {
+  id: string; title: string; post_count: number;
 }
 
 function groupByDate(posts: Post[]): { label: string; posts: Post[] }[] {
@@ -44,8 +49,10 @@ const PLATFORM_BADGE: Record<string, string> = {
 
 export function ScheduleView() {
   const [posts, setPosts]         = useState<Post[]>([]);
+  const [plans, setPlans]         = useState<Plan[]>([]);
   const [loading, setLoading]     = useState(true);
   const [filter, setFilter]       = useState<'all'|'facebook'|'instagram'>('all');
+  const [planFilter, setPlanFilter] = useState<string>('all');
   const [selected, setSelected]   = useState<Post | null>(null);
 
   // Edit schedule
@@ -62,9 +69,14 @@ export function ScheduleView() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const r = await fetch('/api/posts');
-    const d = await r.json();
-    setPosts(d.posts ?? []);
+    const [rPosts, rPlans] = await Promise.all([
+      fetch('/api/posts'),
+      fetch('/api/plans'),
+    ]);
+    const dPosts = await rPosts.json();
+    const dPlans = await rPlans.json();
+    setPosts(dPosts.posts ?? []);
+    setPlans(dPlans.plans ?? []);
     setLoading(false);
   }, []);
 
@@ -110,6 +122,16 @@ export function ScheduleView() {
       if (d?.error) setPubError(d.error);
       else {
         setPubResult(d);
+        const patch: Record<string, unknown> = {
+          status: 'published',
+          published_at: new Date().toISOString(),
+        };
+        if (d?.fb?.ok && d.fb.postId) patch.fb_post_id = d.fb.postId;
+        if (d?.ig?.ok && d.ig.postId) patch.ig_post_id = d.ig.postId;
+        await fetch(`/api/posts/${selected.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
         setPosts(prev => prev.map(p => p.id === selected.id ? { ...p, status: 'published' } : p));
         setSelected(prev => prev ? { ...prev, status: 'published' } : null);
       }
@@ -138,11 +160,14 @@ export function ScheduleView() {
     finally { setPublishing(false); }
   }
 
-  const filtered = posts.filter(p => {
-    if (filter === 'facebook')  return p.platform === 'facebook';
-    if (filter === 'instagram') return p.platform === 'instagram';
-    return true;
-  });
+  // Apply filters
+  let filtered = posts;
+  if (filter !== 'all') filtered = filtered.filter(p => p.platform === filter);
+  if (planFilter !== 'all') {
+    filtered = planFilter === 'no-plan'
+      ? filtered.filter(p => !p.plan_id)
+      : filtered.filter(p => p.plan_id === planFilter);
+  }
 
   const groups = groupByDate(filtered.sort((a, b) => {
     const da = new Date(a.scheduled_at ?? a.created_at).getTime();
@@ -151,12 +176,13 @@ export function ScheduleView() {
   }));
 
   const sku = (id: string) => SKUS.find(s => s.id === id);
+  const planName = (id: string) => plans.find(p => p.id === id)?.title;
 
   const stats = {
-    total:     posts.length,
-    scheduled: posts.filter(p => p.status === 'scheduled').length,
-    published: posts.filter(p => p.status === 'published').length,
-    draft:     posts.filter(p => p.status === 'draft').length,
+    total:     filtered.length,
+    scheduled: filtered.filter(p => p.status === 'scheduled').length,
+    published: filtered.filter(p => p.status === 'published').length,
+    draft:     filtered.filter(p => p.status === 'draft').length,
   };
 
   return (
@@ -177,13 +203,24 @@ export function ScheduleView() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 mb-5 flex-shrink-0">
+      <div className="flex items-center gap-2 mb-5 flex-shrink-0 flex-wrap">
         {(['all','facebook','instagram'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${filter === f ? 'bg-brand-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
             {f === 'all' ? '🌐 All' : f === 'facebook' ? '📘 Facebook' : '📸 Instagram'}
           </button>
         ))}
+        <div className="w-px h-5 bg-gray-800 mx-1" />
+        {plans.length > 0 && (
+          <select value={planFilter} onChange={e => setPlanFilter(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+            <option value="all">All plans</option>
+            {plans.map(p => (
+              <option key={p.id} value={p.id}>{p.title} ({p.post_count})</option>
+            ))}
+            <option value="no-plan">Unlinked posts</option>
+          </select>
+        )}
         <button onClick={load} className="ml-auto text-xs text-gray-500 hover:text-white px-3 py-1.5 rounded-lg bg-gray-800">↻ Refresh</button>
       </div>
 
@@ -192,7 +229,7 @@ export function ScheduleView() {
       ) : posts.length === 0 ? (
         <div className="text-center text-gray-500 py-20">
           <p className="text-3xl mb-2">📅</p>
-          <p>No posts yet. Generate content in the Content Workshop.</p>
+          <p>No posts yet. Import a content plan first.</p>
         </div>
       ) : (
         <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
@@ -205,6 +242,7 @@ export function ScheduleView() {
                   {group.posts.map(post => {
                     const s = sku(post.sku_id);
                     const time = post.scheduled_at ? new Date(post.scheduled_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—';
+                    const pName = post.plan_id ? planName(post.plan_id) : null;
                     return (
                       <div key={post.id} onClick={() => openPost(post)}
                         className={`bg-gray-900 border rounded-xl p-3 cursor-pointer transition-colors flex items-center gap-3 ${selected?.id === post.id ? 'border-brand-500' : 'border-gray-800 hover:border-gray-700'}`}>
@@ -245,6 +283,7 @@ export function ScheduleView() {
                             {post.fb_post_id && <span className="text-[9px] text-blue-400">✓</span>}
                           </div>
                           <p className="text-xs text-gray-400 truncate">{post.caption?.slice(0, 60)}…</p>
+                          {pName && <p className="text-[9px] text-brand-400/60 truncate mt-0.5">📋 {pName}</p>}
                         </div>
                       </div>
                     );
@@ -265,6 +304,10 @@ export function ScheduleView() {
                   </div>
                   <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white text-sm">✕</button>
                 </div>
+
+                {selected.plan_id && (
+                  <p className="text-xs text-brand-400">📋 From plan: {planName(selected.plan_id)}</p>
+                )}
 
                 {/* Image */}
                 {selected.image_url && (
@@ -302,7 +345,6 @@ export function ScheduleView() {
                   <div className="border-t border-gray-800 pt-4 space-y-3">
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Publish Settings</p>
 
-                    {/* Platforms */}
                     <div className="grid grid-cols-2 gap-2">
                       <label className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-colors ${toFb ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700 hover:border-gray-600'}`}>
                         <input type="checkbox" checked={toFb} onChange={e => setToFb(e.target.checked)} className="accent-blue-500" />
@@ -314,7 +356,6 @@ export function ScheduleView() {
                       </label>
                     </div>
 
-                    {/* Schedule time */}
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">
                         Schedule time <span className="text-gray-600">(blank = post immediately)</span>
