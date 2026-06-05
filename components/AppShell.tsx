@@ -262,6 +262,8 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
   const [tab, setTab]           = useState<TabId>(validInitialTab || 'products');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  // Keep-alive: track which tabs have been visited so they stay mounted
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set([validInitialTab || 'products']));
 
   // Brand state
   const [brands, setBrands]           = useState<BrandSummary[]>([]);
@@ -293,6 +295,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
 
   const changeTab = useCallback((t: TabId) => {
     setTab(t);
+    setVisitedTabs(prev => new Set([...prev, t]));
     router.push(`/?tab=${t}`, { scroll: false });
   }, [router]);
 
@@ -315,6 +318,15 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
     document.body.style.overflow = drawerOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [drawerOpen]);
+
+  // When brand switches, reset visited tabs so all views remount fresh for new brand
+  const prevBrandRef = useRef(activeBrand.id);
+  useEffect(() => {
+    if (prevBrandRef.current !== activeBrand.id) {
+      prevBrandRef.current = activeBrand.id;
+      setVisitedTabs(new Set([tab]));
+    }
+  }, [activeBrand.id, tab]);
 
   const currentTab  = TABS.find(t => t.id === tab);
   const bid         = activeBrand.id;
@@ -384,27 +396,36 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
           )}
         </header>
 
-        <main className="flex-1 overflow-auto">
-          {tab === 'brands'           && <BrandsView onSelectBrand={id => { const b = brands.find(x => x.id === id); if (b) setActiveBrand(b); changeTab('products'); }} />}
-          {tab === 'brand_dna'        && <BrandDnaView brandId={bid} />}
-          {tab === 'products'         && <ProductsView brandId={bid} />}
-          {tab === 'import_plan'      && <ContentPlansView brandId={bid} />}
-          {tab === 'calendar'         && <CalendarView brandId={bid} />}
-          {tab === 'schedule'         && <ScheduleView brandId={bid} />}
-          {tab === 'content_workshop' && <ContentWorkshopView brandId={bid} />}
-          {tab === 'image_studio'     && <ImageStudioView brandId={bid} />}
-          {tab === 'blog_factory'     && <BlogFactoryView brandId={bid} />}
-          {tab === 'content_queue'    && <ContentQueueView brandId={bid} />}
-          {tab === 'publisher'        && <PublisherView fbSuccess={fbSuccess} fbError={fbError} />}
-          {tab === 'job_queue'        && <JobQueueView />}
-          {tab === 'analytics'        && <AnalyticsView brandId={bid} />}
-          {tab === 'asset_dam'        && <AssetDamView brandId={bid} />}
-          {tab === 'image_library'    && <ImageLibraryView brandId={bid} />}
-          {tab === 'content_log'      && <ContentLogView brandId={bid} />}
-          {tab === 'payment'          && <PaymentView />}
-          {tab === 'inbox'            && <InboxView />}
-          {tab === 'guide'            && <UserGuideView />}
-          {tab === 'team'             && <UserManagementView />}
+        {/* Keep visited tabs mounted (hidden when not active) so state is preserved */}
+        <main className="flex-1 overflow-hidden relative">
+          {TABS.map(({ id }) => {
+            if (!visitedTabs.has(id)) return null;
+            const isActive = tab === id;
+            return (
+              <div key={id} className={`absolute inset-0 overflow-auto ${isActive ? '' : 'hidden'}`}>
+                {id === 'brands'           && <BrandsView onSelectBrand={bId => { const b = brands.find(x => x.id === bId); if (b) setActiveBrand(b); changeTab('products'); }} />}
+                {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}
+                {id === 'products'         && <ProductsView brandId={bid} />}
+                {id === 'import_plan'      && <ContentPlansView brandId={bid} />}
+                {id === 'calendar'         && <CalendarView brandId={bid} />}
+                {id === 'schedule'         && <ScheduleView brandId={bid} />}
+                {id === 'content_workshop' && <ContentWorkshopView brandId={bid} />}
+                {id === 'image_studio'     && <ImageStudioView brandId={bid} />}
+                {id === 'blog_factory'     && <BlogFactoryView brandId={bid} />}
+                {id === 'content_queue'    && <ContentQueueView brandId={bid} />}
+                {id === 'publisher'        && <PublisherView fbSuccess={fbSuccess} fbError={fbError} />}
+                {id === 'job_queue'        && <JobQueueView />}
+                {id === 'analytics'        && <AnalyticsView brandId={bid} />}
+                {id === 'asset_dam'        && <AssetDamView brandId={bid} />}
+                {id === 'image_library'    && <ImageLibraryView brandId={bid} />}
+                {id === 'content_log'      && <ContentLogView brandId={bid} />}
+                {id === 'payment'          && <PaymentView />}
+                {id === 'inbox'            && <InboxView />}
+                {id === 'guide'            && <UserGuideView />}
+                {id === 'team'             && <UserManagementView />}
+              </div>
+            );
+          })}
         </main>
       </div>
     </div>

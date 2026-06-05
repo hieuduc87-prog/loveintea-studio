@@ -611,6 +611,24 @@ function initSchema(db: Database.Database) {
 
   // ── Migrations ─────────────────────────────────────
   try { db.exec(`ALTER TABLE posts ADD COLUMN plan_id TEXT REFERENCES content_plans(id)`); } catch { /* already exists */ }
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS momo_payments (
+        id            TEXT PRIMARY KEY,
+        user_id       TEXT NOT NULL,
+        order_id      TEXT UNIQUE NOT NULL,
+        plan_id       TEXT NOT NULL,
+        amount        INTEGER NOT NULL,
+        status        TEXT DEFAULT 'pending',
+        pay_url       TEXT,
+        qr_code_url   TEXT,
+        momo_trans_id TEXT,
+        paid_at       TEXT,
+        created_at    TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_momo_order ON momo_payments(order_id);
+    `);
+  } catch { /* already exists */ }
 
   // ── Seed root users ────────────────────────────────
   db.exec(`

@@ -24,6 +24,8 @@ const IMAGE_TYPES = [
   { value: 'ingredient', label: 'Ingredient Detail' },
 ];
 
+const EMPTY_NEW = { name: '', display_name: '', theme: '', color: '#888888', color_name: '', pitch: '', image_url: '' };
+
 export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -40,13 +42,19 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
   // Lightbox
   const [lightbox, setLightbox] = useState<ProductImage | null>(null);
 
+  // Add product form
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newProduct, setNewProduct]   = useState(EMPTY_NEW);
+  const [adding, setAdding]           = useState(false);
+  const [addMsg, setAddMsg]           = useState('');
+
   const loadProducts = useCallback(async () => {
     setLoading(true);
     const r = await fetch(`/api/products?brand=${brandId}`);
     const d = await r.json() as { products: Product[] };
     setProducts(d.products ?? []);
     setLoading(false);
-  }, []);
+  }, [brandId]);
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
@@ -78,14 +86,79 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
     setTimeout(() => setUploadMsg(''), 3000);
   }
 
+  async function addProduct() {
+    if (!newProduct.name.trim()) return;
+    setAdding(true); setAddMsg('');
+    const r = await fetch(`/api/brands/${brandId}/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newProduct),
+    });
+    const d = await r.json() as { ok?: boolean; error?: string };
+    if (d.ok) {
+      setShowAddForm(false);
+      setNewProduct(EMPTY_NEW);
+      await loadProducts();
+    } else {
+      setAddMsg('✗ ' + (d.error || 'Error'));
+    }
+    setAdding(false);
+  }
+
   const parseJson = (s: string) => { try { return JSON.parse(s); } catch { return []; } };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto flex flex-col gap-6">
-      <div>
-        <h2 className="text-lg font-semibold text-white">Products & Asset Library</h2>
-        <p className="text-sm text-gray-500 mt-0.5">Manage product catalog and original product photography</p>
+      <div className="flex items-center gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Products & Asset Library</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Manage product catalog and original product photography</p>
+        </div>
+        <button onClick={() => { setShowAddForm(s => !s); setAddMsg(''); }}
+          className="ml-auto px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs rounded-lg transition-colors">
+          {showAddForm ? '✕ Cancel' : '+ Add Product'}
+        </button>
       </div>
+
+      {showAddForm && (
+        <div className="bg-gray-900 border border-brand-600/30 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-white mb-4">New Product</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {([
+              ['name',         'Name *',         'text', 'e.g. Green Tea'],
+              ['display_name', 'Display Name',   'text', 'e.g. GREEN TEA BAGS'],
+              ['theme',        'Theme',          'text', 'e.g. Daily refresh ritual'],
+              ['color_name',   'Color Name',     'text', 'e.g. Emerald Green'],
+              ['pitch',        'Pitch',          'text', 'One-line pitch'],
+              ['image_url',    'Image URL',      'text', '/brand/products/XX.png'],
+            ] as [keyof typeof EMPTY_NEW, string, string, string][]).map(([key, label, type, placeholder]) => (
+              <div key={key} className={key === 'pitch' || key === 'image_url' ? 'col-span-2' : ''}>
+                <label className="block text-xs text-gray-400 mb-1">{label}</label>
+                <input type={type} value={newProduct[key]}
+                  onChange={e => setNewProduct(p => ({ ...p, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-brand-500" />
+              </div>
+            ))}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Color</label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={newProduct.color}
+                  onChange={e => setNewProduct(p => ({ ...p, color: e.target.value }))}
+                  className="w-10 h-9 rounded border border-gray-700 bg-gray-800 cursor-pointer" />
+                <span className="text-xs text-gray-400">{newProduct.color}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mt-4">
+            <button onClick={addProduct} disabled={adding || !newProduct.name.trim()}
+              className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors">
+              {adding ? '⟳ Adding…' : 'Add Product'}
+            </button>
+            {addMsg && <span className="text-xs text-red-400">{addMsg}</span>}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center text-gray-500 py-20">Loading…</div>
