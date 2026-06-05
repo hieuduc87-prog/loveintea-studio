@@ -609,7 +609,7 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_subs_user        ON subscriptions(user_id);
   `);
 
-  // ── Migration: add plan_id to posts if not exists ──
+  // ── Migrations ─────────────────────────────────────
   try { db.exec(`ALTER TABLE posts ADD COLUMN plan_id TEXT REFERENCES content_plans(id)`); } catch { /* already exists */ }
 
   // ── Seed root users ────────────────────────────────
@@ -625,6 +625,50 @@ function initSchema(db: Database.Database) {
 
   // ── Seed default brand if not exists ──────────────
   seedDefaultBrand(db);
+
+  // ── Migrate existing images → assets DAM ───────────
+  try {
+    db.exec(`
+      INSERT OR IGNORE INTO assets
+        (id, brand_id, product_id, url, filename, file_type, status, source, source_job_id, created_at, updated_at)
+      SELECT il.id, 'loveintea', p.id, il.image_url,
+             il.id || '.jpg', 'image', 'unused', 'generated', il.job_id,
+             il.created_at, il.created_at
+      FROM image_library il
+      LEFT JOIN products p ON p.slug = il.sku_id AND p.brand_id = 'loveintea'
+    `);
+    db.exec(`
+      INSERT OR IGNORE INTO assets
+        (id, brand_id, product_id, url, filename, file_type, status, source, created_at, updated_at)
+      SELECT pi.id, pi.brand_id, pi.product_id, pi.image_url,
+             pi.id || '.jpg', 'image', 'unused', 'product_photo',
+             pi.created_at, pi.created_at
+      FROM product_images pi
+    `);
+  } catch { /* tables might not be populated */ }
+
+  // ── Seed default tags ───────────────────────────────
+  try {
+    db.exec(`
+      INSERT OR IGNORE INTO tags (id, brand_id, name, slug, type, color) VALUES
+        ('tag-dandelion','loveintea','Dandelion','dandelion','product','#F4A020'),
+        ('tag-ginger','loveintea','Ginger','ginger','product','#A8B525'),
+        ('tag-hibiscus','loveintea','Hibiscus','hibiscus','product','#5B8C3E'),
+        ('tag-lemon-balm','loveintea','Lemon Balm','lemon-balm','product','#8BBF5C'),
+        ('tag-peppermint','loveintea','Peppermint','peppermint','product','#5BBCD2'),
+        ('tag-nighty-night','loveintea','Nighty Night','nighty-night','product','#3F3D99'),
+        ('tag-morning','loveintea','Morning','morning','season','#fcd34d'),
+        ('tag-afternoon','loveintea','Afternoon','afternoon','season','#fb923c'),
+        ('tag-evening','loveintea','Evening','evening','season','#818cf8'),
+        ('tag-lifestyle','loveintea','Lifestyle','lifestyle','format','#6b7280'),
+        ('tag-product-shot','loveintea','Product Shot','product-shot','format','#9ca3af'),
+        ('tag-flat-lay','loveintea','Flat Lay','flat-lay','format','#c084fc'),
+        ('tag-macro','loveintea','Macro','macro','format','#67e8f9'),
+        ('tag-awareness','loveintea','Brand Awareness','awareness','content_goal','#60a5fa'),
+        ('tag-engagement','loveintea','Engagement','engagement','content_goal','#34d399'),
+        ('tag-promotion','loveintea','Promotion','promotion','content_goal','#f87171')
+    `);
+  } catch { /* already seeded */ }
 }
 
 function seedDefaultBrand(db: Database.Database) {

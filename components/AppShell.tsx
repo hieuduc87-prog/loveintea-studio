@@ -22,6 +22,8 @@ import { ContentPlansView }   from './ContentPlansView';
 import { CalendarView }       from './CalendarView';
 import { UserGuideView }     from './UserGuideView';
 import { UserManagementView } from './UserManagementView';
+import { AssetDamView }      from './AssetDamView';
+import { ContentLogView }    from './ContentLogView';
 
 type TabId =
   | 'brand_dna' | 'products'
@@ -30,6 +32,7 @@ type TabId =
   | 'content_queue' | 'image_library' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
+  | 'asset_dam' | 'content_log'
   | 'guide'
   | 'team';
 
@@ -52,7 +55,9 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   // Measure
   { id: 'analytics',        label: 'Analytics',        icon: '📊', group: 'Measure' },
   // Library
-  { id: 'image_library',    label: 'Image Library',    icon: '🗃️', group: 'Library' },
+  { id: 'asset_dam',        label: 'Asset DAM',        icon: '🗃️', group: 'Library' },
+  { id: 'image_library',    label: 'Image Library',    icon: '🖼️', group: 'Library' },
+  { id: 'content_log',      label: 'Content Log',      icon: '📜', group: 'Library' },
   { id: 'inbox',            label: 'Inbox',            icon: '💬', group: 'Library' },
   // Guide
   { id: 'guide',            label: 'Hướng dẫn',       icon: '📖', group: 'Help' },
@@ -261,7 +266,9 @@ export function AppShell({ initialTab, fbSuccess, fbError }: { initialTab?: stri
           {tab === 'publisher'        && <PublisherView fbSuccess={fbSuccess} fbError={fbError} />}
           {tab === 'job_queue'        && <JobQueueView />}
           {tab === 'analytics'        && <AnalyticsView />}
+          {tab === 'asset_dam'        && <AssetDamView />}
           {tab === 'image_library'    && <ImageLibraryView />}
+          {tab === 'content_log'      && <ContentLogView />}
           {tab === 'inbox'            && <InboxView />}
           {tab === 'guide'            && <UserGuideView />}
           {tab === 'team'             && <UserManagementView />}
