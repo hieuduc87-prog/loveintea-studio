@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { KanbanSquare, GitBranch, Users } from 'lucide-react';
+import { KanbanSquare, GitBranch } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { BrandDnaView }       from './BrandDnaView';
 import { ProductsView }      from './ProductsView';
@@ -20,6 +20,7 @@ import { ScheduleView }       from './ScheduleView';
 import { ContentPlansView }   from './ContentPlansView';
 import { CalendarView }       from './CalendarView';
 import { UserGuideView }     from './UserGuideView';
+import { UserManagementView } from './UserManagementView';
 
 type TabId =
   | 'brand_dna' | 'products'
@@ -28,7 +29,8 @@ type TabId =
   | 'content_queue' | 'image_library' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
-  | 'guide';
+  | 'guide'
+  | 'team';
 
 const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   // Strategy
@@ -53,14 +55,15 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'inbox',            label: 'Inbox',            icon: '💬', group: 'Library' },
   // Guide
   { id: 'guide',            label: 'Hướng dẫn',       icon: '📖', group: 'Help' },
+  { id: 'team',             label: 'Team & Access',    icon: '👥', group: 'Help' },
 ];
 
 const GROUPS = ['Strategy', 'Plan', 'Create', 'Publish', 'Measure', 'Library', 'Help'];
 
 const TAB_LABELS: Record<TabId, string> = Object.fromEntries(TABS.map(t => [t.id, t.label])) as Record<TabId, string>;
 
-function SidebarContent({ tab, changeTab, onClose, userRole }: {
-  tab: TabId; changeTab: (t: TabId) => void; onClose?: () => void; userRole?: string;
+function SidebarContent({ tab, changeTab, onClose, userRole, pendingCount }: {
+  tab: TabId; changeTab: (t: TabId) => void; onClose?: () => void; userRole?: string; pendingCount?: number;
 }) {
   return (
     <>
@@ -106,7 +109,11 @@ function SidebarContent({ tab, changeTab, onClose, userRole }: {
           return (
             <div key={group}>
               <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-600">{group}</p>
-              {items.map(t => (
+              {items.filter(t => {
+                // Hide team tab from non-admin users
+                if (t.id === 'team') return userRole === 'root_admin' || userRole === 'admin';
+                return true;
+              }).map(t => (
                 <button key={t.id}
                   onClick={() => { changeTab(t.id); onClose?.(); }}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors text-left ${
@@ -115,7 +122,12 @@ function SidebarContent({ tab, changeTab, onClose, userRole }: {
                       : 'text-gray-400 hover:text-white hover:bg-gray-800'
                   }`}>
                   <span className="text-base leading-none w-5 text-center flex-shrink-0">{t.icon}</span>
-                  <span className="truncate">{t.label}</span>
+                  <span className="truncate flex-1">{t.label}</span>
+                  {t.id === 'team' && pendingCount && pendingCount > 0 ? (
+                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0">
+                      {pendingCount > 9 ? '9+' : pendingCount}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -123,19 +135,7 @@ function SidebarContent({ tab, changeTab, onClose, userRole }: {
         })}
 
       </nav>
-      {/* Admin link */}
-      {userRole === 'admin' && (
-        <div className="px-2 pb-1 flex-shrink-0">
-          <Link
-            href="/admin/users"
-            onClick={() => onClose?.()}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-          >
-            <Users size={16} className="flex-shrink-0" />
-            <span className="truncate">Users</span>
-          </Link>
-        </div>
-      )}
+
 
       <div className="px-4 py-3 border-t border-gray-800 flex-shrink-0">
         <p className="text-[10px] text-gray-600">loveintea.wealthpsy.com</p>
@@ -147,10 +147,22 @@ function SidebarContent({ tab, changeTab, onClose, userRole }: {
 export function AppShell() {
   const [tab, setTab] = useState<TabId>('content_workshop');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const { data: session } = useSession();
 
   const changeTab = useCallback((t: TabId) => setTab(t), []);
   const userRole = (session?.user as any)?.role as string | undefined;
+
+  // Fetch pending count for admin badge
+  useEffect(() => {
+    if (userRole !== 'root_admin' && userRole !== 'admin') return;
+    fetch('/api/admin/users')
+      .then(res => {
+        const count = Number(res.headers.get('X-Pending-Count') ?? 0);
+        setPendingCount(count);
+      })
+      .catch(() => {});
+  }, [userRole]);
 
   useEffect(() => {
     const handler = () => { if (window.innerWidth >= 768) setDrawerOpen(false); };
@@ -169,7 +181,7 @@ export function AppShell() {
     <div className="min-h-screen bg-gray-950 flex">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-52 flex-shrink-0 border-r border-gray-800 bg-gray-900/50 flex-col sticky top-0 h-screen overflow-y-auto">
-        <SidebarContent tab={tab} changeTab={changeTab} userRole={userRole} />
+        <SidebarContent tab={tab} changeTab={changeTab} userRole={userRole} pendingCount={pendingCount} />
       </aside>
 
       {/* Mobile overlay */}
@@ -181,7 +193,7 @@ export function AppShell() {
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 border-r border-gray-800 flex flex-col transform transition-transform duration-200 md:hidden ${
         drawerOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
-        <SidebarContent tab={tab} changeTab={changeTab} onClose={() => setDrawerOpen(false)} userRole={userRole} />
+        <SidebarContent tab={tab} changeTab={changeTab} onClose={() => setDrawerOpen(false)} userRole={userRole} pendingCount={pendingCount} />
       </aside>
 
       {/* Main content */}
@@ -246,6 +258,7 @@ export function AppShell() {
           {tab === 'image_library'    && <ImageLibraryView />}
           {tab === 'inbox'            && <InboxView />}
           {tab === 'guide'            && <UserGuideView />}
+          {tab === 'team'             && <UserManagementView />}
         </main>
       </div>
     </div>

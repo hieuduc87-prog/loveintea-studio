@@ -499,6 +499,17 @@ function initSchema(db: Database.Database) {
   // ── Migration: add plan_id to posts if not exists ──
   try { db.exec(`ALTER TABLE posts ADD COLUMN plan_id TEXT REFERENCES content_plans(id)`); } catch { /* already exists */ }
 
+  // ── Seed root users ────────────────────────────────
+  db.exec(`
+    INSERT OR IGNORE INTO auth_users (id, name, email, role, is_approved, created_at)
+    VALUES ('root-duc', 'Duc Hieu', 'hieuduc87@gmail.com', 'root_admin', 1, datetime('now'));
+
+    UPDATE auth_users SET role='root_admin', is_approved=1 WHERE email='hieuduc87@gmail.com';
+
+    INSERT OR IGNORE INTO auth_users (id, name, email, role, is_approved, created_at)
+    VALUES ('root-son', 'Manh Son', 'manhson.nguyen@gmail.com', 'admin', 1, datetime('now'));
+  `);
+
   // ── Seed default brand if not exists ──────────────
   seedDefaultBrand(db);
 }
