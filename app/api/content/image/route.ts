@@ -71,6 +71,10 @@ export async function POST(req: NextRequest) {
     const msg = String(e);
     db.prepare(`UPDATE image_jobs SET status='failed', error=?, completed_at=datetime('now') WHERE id=?`)
       .run(msg, jobId);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    let userError = msg;
+    if (msg.includes('Billing hard limit') || msg.includes('billing') || msg.includes('quota')) {
+      userError = 'OpenAI billing limit reached — please top up credit at platform.openai.com → Settings → Billing';
+    }
+    return NextResponse.json({ error: userError }, { status: 500 });
   }
 }
