@@ -611,6 +611,7 @@ function initSchema(db: Database.Database) {
 
   // ── Migrations ─────────────────────────────────────
   try { db.exec(`ALTER TABLE posts ADD COLUMN plan_id TEXT REFERENCES content_plans(id)`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE posts ADD COLUMN brand_id TEXT DEFAULT 'loveintea'`); } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (

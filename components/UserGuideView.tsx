@@ -227,7 +227,7 @@ function PlanSection() {
         Hiển thị tất cả bài viết trên lịch tháng. Mỗi bài = 1 thanh nhỏ với color dot SKU + thời gian.
       </P>
       <P>
-        <strong className="text-white">Drag & drop:</strong> Kéo bài từ sidebar "Unscheduled Drafts" vào ngày trên lịch để lên lịch. Kéo bài giữa các ngày để đổi lịch.
+        <strong className="text-white">Plan Items (Blueprint):</strong> Nhấn nút <strong className="text-white">📋 Plan</strong> ở góc trên phải để bật/tắt hiển thị plan item từ Content Plans. Plan item hiện trên calendar như các ô màu xanh nhạt — là "bản thiết kế" cho bài viết chưa sản xuất (wave, surface, hook, product). Nhấn vào để xem brief chi tiết.
       </P>
       <P>
         <strong className="text-white">Filter by plan:</strong> Dropdown ở góc phải cho phép lọc theo plan hoặc xem tất cả.
