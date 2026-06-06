@@ -71,17 +71,22 @@ function QuickAdd({ colKey, onAdded }: { colKey: string; onAdded: () => void }) 
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
 
   async function submit() {
     if (!title.trim()) return;
     setSaving(true);
+    setErr('');
     try {
-      await fetch('/api/kanban', {
+      const res = await fetch('/api/kanban', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, status: colKey, type: 'task', priority: 'medium' }),
       });
+      if (!res.ok) { setErr(`Lỗi ${res.status} — thử reload trang`); return; }
       setTitle(''); setOpen(false); onAdded();
+    } catch (e) {
+      setErr('Mất kết nối — thử lại');
     } finally { setSaving(false); }
   }
 
@@ -99,6 +104,7 @@ function QuickAdd({ colKey, onAdded }: { colKey: string; onAdded: () => void }) 
         placeholder="Tiêu đề card... (Enter để lưu)" rows={2} autoFocus
         className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400 resize-none bg-white shadow-sm"
       />
+      {err && <p className="text-xs text-red-600 font-medium">{err}</p>}
       <div className="flex gap-2">
         <button onClick={submit} disabled={!title.trim() || saving}
           className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white disabled:opacity-40 transition"

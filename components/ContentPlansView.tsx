@@ -112,13 +112,15 @@ export function ContentPlansView({ brandId }: { brandId?: string } = {}) {
   const [detailTab, setDetailTab] = useState<'plan' | 'stories' | 'summary'>('plan');
 
   // ── Load plans list ─────────────────────────────────────────────
+  const bid = brandId || 'loveintea';
+
   const loadPlans = useCallback(async () => {
     setLoading(true);
-    const r = await fetch('/api/plans');
+    const r = await fetch(`/api/plans?brand=${bid}`);
     const d = await r.json() as { plans: Plan[] };
     setPlans(d.plans ?? []);
     setLoading(false);
-  }, []);
+  }, [bid]);
 
   useEffect(() => { loadPlans(); }, [loadPlans]);
 

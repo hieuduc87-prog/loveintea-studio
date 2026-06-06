@@ -50,9 +50,9 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="grid grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         {/* Config */}
-        <div className="col-span-2 space-y-4">
+        <div className="md:col-span-2 space-y-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <h2 className="text-sm font-semibold text-white mb-4">Image Studio — GPT-image-2 Edit</h2>
 
@@ -84,7 +84,7 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
             {/* SKU */}
             <div className="mb-3">
               <label className="block text-xs font-medium text-gray-400 mb-1">SKU</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 {SKUS.map(sku => (
                   <button
                     key={sku.id}
@@ -97,7 +97,7 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
                       <Image src={sku.image} alt={sku.name} width={32} height={40} className="object-cover w-full h-full" />
                     </div>
                     <span className="text-xs text-white">{sku.name}</span>
-                    <span className="ml-auto w-2 h-2 rounded-full" style={{ backgroundColor: sku.color }} />
+                    <span className="ml-auto w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: sku.color }} />
                   </button>
                 ))}
               </div>
@@ -168,7 +168,7 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
         </div>
 
         {/* Result */}
-        <div className="col-span-3 space-y-4">
+        <div className="md:col-span-3 space-y-4">
           {result ? (
             <div className="space-y-4">
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
