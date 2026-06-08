@@ -25,6 +25,7 @@ import { AssetDamView }       from './AssetDamView';
 import { ContentLogView }     from './ContentLogView';
 import { PaymentView }        from './PaymentView';
 import { BrandsView }         from './BrandsView';
+import { KnowledgeHubView }  from './KnowledgeHubView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,49 +35,53 @@ interface BrandSummary {
 }
 
 type TabId =
-  | 'brands' | 'brand_dna' | 'products'
+  | 'brands' | 'brand_dna' | 'products' | 'knowledge_hub'
   | 'import_plan' | 'calendar' | 'schedule'
   | 'content_workshop' | 'image_studio' | 'blog_factory'
-  | 'content_queue' | 'image_library' | 'publisher' | 'job_queue'
+  | 'content_queue' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
-  | 'asset_dam' | 'content_log'
+  | 'asset_dam' | 'image_library' | 'content_log'
   | 'payment'
   | 'guide' | 'team';
 
+// Navigation restructured to match Closed-Loop Content Engine:
+// Brain → Plan → Create → Review → Publish → Engage → Learn → (loop)
 const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
-  // Strategy (per brand)
-  { id: 'brand_dna',        label: 'Brand DNA',        icon: '🌿', group: 'Strategy' },
-  { id: 'products',         label: 'Products',         icon: '📦', group: 'Strategy' },
-  // Plan
+  // BRAIN — Brand identity + knowledge + rules (Fixed Core)
+  { id: 'knowledge_hub',    label: 'Knowledge Hub',    icon: '🧠', group: 'Brain' },
+  { id: 'brand_dna',        label: 'Brand DNA',        icon: '🌿', group: 'Brain' },
+  { id: 'products',         label: 'Products',         icon: '📦', group: 'Brain' },
+  // PLAN — Calendar, content plans, slot allocation
   { id: 'import_plan',      label: 'Content Plans',    icon: '📋', group: 'Plan' },
   { id: 'calendar',         label: 'Post Calendar',    icon: '🗓️', group: 'Plan' },
-  { id: 'schedule',         label: 'Schedule',         icon: '📅', group: 'Plan' },
-  // Create
+  // CREATE — Copy track + Visual track + Blog
   { id: 'content_workshop', label: 'Content Workshop', icon: '✍️', group: 'Create' },
   { id: 'image_studio',     label: 'Image Studio',     icon: '🖼️', group: 'Create' },
   { id: 'blog_factory',     label: 'Blog Factory',     icon: '📝', group: 'Create' },
-  // Publish
-  { id: 'content_queue',   label: 'Queue',             icon: '📋', group: 'Publish' },
+  // REVIEW & PUBLISH — Queue (review desk), Schedule, Channels
+  { id: 'content_queue',    label: 'Review & Queue',   icon: '✅', group: 'Publish' },
+  { id: 'schedule',         label: 'Schedule',         icon: '📅', group: 'Publish' },
   { id: 'publisher',        label: 'Channels',         icon: '📡', group: 'Publish' },
-  { id: 'job_queue',        label: 'Job Queue',        icon: '⏳', group: 'Publish' },
-  // Measure
-  { id: 'analytics',        label: 'Analytics',        icon: '📊', group: 'Measure' },
-  // Library
+  // ENGAGE — Community, inbox
+  { id: 'inbox',            label: 'Inbox & Comments',  icon: '💬', group: 'Engage' },
+  // LEARN — Analytics, feedback loop
+  { id: 'analytics',        label: 'Analytics',        icon: '📊', group: 'Learn' },
+  // LIBRARY — Assets, images, logs
   { id: 'asset_dam',        label: 'Asset DAM',        icon: '🗃️', group: 'Library' },
   { id: 'image_library',    label: 'Image Library',    icon: '🖼️', group: 'Library' },
   { id: 'content_log',      label: 'Content Log',      icon: '📜', group: 'Library' },
-  { id: 'inbox',            label: 'Inbox',            icon: '💬', group: 'Library' },
-  // Billing
-  { id: 'payment',          label: 'Thanh Toán',       icon: '💳', group: 'Billing' },
-  // Help
-  { id: 'guide',            label: 'Hướng dẫn',       icon: '📖', group: 'Help' },
-  { id: 'team',             label: 'Team & Access',    icon: '👥', group: 'Help' },
-  // Hidden — accessible but not in sidebar nav
+  { id: 'job_queue',        label: 'Job Queue',        icon: '⏳', group: 'Library' },
+  // SYSTEM — Billing, guide, team
+  { id: 'payment',          label: 'Billing',          icon: '💳', group: 'System' },
+  { id: 'guide',            label: 'Guide',            icon: '📖', group: 'System' },
+  { id: 'team',             label: 'Team & Access',    icon: '👥', group: 'System' },
+  // Hidden
   { id: 'brands',           label: 'Manage Brands',    icon: '🏷️', group: '_hidden' },
 ];
 
-const NAV_GROUPS = ['Strategy', 'Plan', 'Create', 'Publish', 'Measure', 'Library', 'Billing', 'Help'];
+// Closed-loop pipeline order
+const NAV_GROUPS = ['Brain', 'Plan', 'Create', 'Publish', 'Engage', 'Learn', 'Library', 'System'];
 
 const TAB_LABELS: Record<TabId, string> = Object.fromEntries(TABS.map(t => [t.id, t.label])) as Record<TabId, string>;
 
@@ -199,10 +204,26 @@ function SidebarContent({
         />
       </div>
 
-      <nav className="flex-1 px-2 py-2 space-y-3 overflow-y-auto">
+      <nav className="flex-1 px-2 py-2 space-y-1 overflow-y-auto">
+        {/* Pipeline flow indicator */}
+        <div className="px-2 py-2 mb-1">
+          <div className="flex items-center gap-0.5 text-[8px] font-mono text-gray-600">
+            {['Brain','Plan','Create','Publish','Engage','Learn'].map((s, i) => {
+              const isActive = TABS.find(t => t.id === tab)?.group === s;
+              return (
+                <span key={s} className="flex items-center gap-0.5">
+                  <span className={`px-1 py-0.5 rounded ${isActive ? 'bg-brand-600/30 text-brand-400 font-bold' : ''}`}>{s}</span>
+                  {i < 5 && <span className="text-gray-700">&rarr;</span>}
+                </span>
+              );
+            })}
+            <span className="text-gray-700 ml-0.5">&circlearrowleft;</span>
+          </div>
+        </div>
+
         {/* External links */}
-        <div>
-          <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-600">Projects</p>
+        <div className="mb-2">
+          <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-600">Tools</p>
           <Link href="/kanban" onClick={() => onClose?.()}
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
             <KanbanSquare size={14} className="flex-shrink-0" />
@@ -215,12 +236,27 @@ function SidebarContent({
           </Link>
         </div>
 
-        {NAV_GROUPS.map(group => {
+        {NAV_GROUPS.map((group, gi) => {
           const items = TABS.filter(t => t.group === group);
           if (!items.length) return null;
+          // Pipeline groups (first 6) get step numbers + flow line
+          const isPipeline = gi < 6;
+          const stepNum = isPipeline ? gi + 1 : 0;
+          const groupHasActive = items.some(t => t.id === tab);
           return (
-            <div key={group}>
-              <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-600">{group}</p>
+            <div key={group} className={isPipeline ? 'relative' : ''}>
+              <div className="flex items-center gap-1.5 px-2 mb-1">
+                {isPipeline && (
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${
+                    groupHasActive
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-gray-800 text-gray-500 border border-gray-700'
+                  }`}>{stepNum}</span>
+                )}
+                <p className={`text-[10px] font-semibold uppercase tracking-widest ${
+                  groupHasActive && isPipeline ? 'text-brand-400' : 'text-gray-600'
+                }`}>{group}</p>
+              </div>
               {items.filter(t => {
                 if (t.id === 'team') return userRole === 'root_admin' || userRole === 'admin';
                 return true;
@@ -228,6 +264,8 @@ function SidebarContent({
                 <button key={t.id}
                   onClick={() => { changeTab(t.id); onClose?.(); }}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs transition-colors text-left ${
+                    isPipeline ? 'ml-1' : ''
+                  } ${
                     tab === t.id
                       ? 'bg-brand-600/20 text-white font-semibold'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -247,7 +285,7 @@ function SidebarContent({
       </nav>
 
       <div className="px-4 py-2.5 border-t border-gray-800 flex-shrink-0">
-        <p className="text-[10px] text-gray-600">marketing-hub.wealthpsy.com</p>
+        <p className="text-[10px] text-gray-600">Closed-Loop Content Engine v1.0</p>
       </div>
     </>
   );
@@ -404,6 +442,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
             return (
               <div key={id} className={`absolute inset-0 overflow-auto ${isActive ? '' : 'hidden'}`}>
                 {id === 'brands'           && <BrandsView onSelectBrand={bId => { const b = brands.find(x => x.id === bId); if (b) setActiveBrand(b); changeTab('products'); }} />}
+                {id === 'knowledge_hub'    && <KnowledgeHubView brandId={bid} />}
                 {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}
                 {id === 'products'         && <ProductsView brandId={bid} />}
                 {id === 'import_plan'      && <ContentPlansView brandId={bid} />}
