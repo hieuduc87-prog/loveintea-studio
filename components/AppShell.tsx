@@ -26,6 +26,8 @@ import { ContentLogView }     from './ContentLogView';
 import { PaymentView }        from './PaymentView';
 import { BrandsView }         from './BrandsView';
 import { KnowledgeHubView }  from './KnowledgeHubView';
+import { ScoreboardView }   from './ScoreboardView';
+import { RulesEngineView }  from './RulesEngineView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +37,7 @@ interface BrandSummary {
 }
 
 type TabId =
-  | 'brands' | 'brand_dna' | 'products' | 'knowledge_hub'
+  | 'brands' | 'brand_dna' | 'products' | 'knowledge_hub' | 'rules_engine' | 'scoreboard'
   | 'import_plan' | 'calendar' | 'schedule'
   | 'content_workshop' | 'image_studio' | 'blog_factory'
   | 'content_queue' | 'publisher' | 'job_queue'
@@ -52,6 +54,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'knowledge_hub',    label: 'Knowledge Hub',    icon: '🧠', group: 'Brain' },
   { id: 'brand_dna',        label: 'Brand DNA',        icon: '🌿', group: 'Brain' },
   { id: 'products',         label: 'Products',         icon: '📦', group: 'Brain' },
+  { id: 'rules_engine',     label: 'Rules Engine',     icon: '⚙️', group: 'Brain' },
   // PLAN — Calendar, content plans, slot allocation
   { id: 'import_plan',      label: 'Content Plans',    icon: '📋', group: 'Plan' },
   { id: 'calendar',         label: 'Post Calendar',    icon: '🗓️', group: 'Plan' },
@@ -67,6 +70,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'inbox',            label: 'Inbox & Comments',  icon: '💬', group: 'Engage' },
   // LEARN — Analytics, feedback loop
   { id: 'analytics',        label: 'Analytics',        icon: '📊', group: 'Learn' },
+  { id: 'scoreboard',       label: 'Scoreboard',       icon: '🏆', group: 'Learn' },
   // LIBRARY — Assets, images, logs
   { id: 'asset_dam',        label: 'Asset DAM',        icon: '🗃️', group: 'Library' },
   { id: 'image_library',    label: 'Image Library',    icon: '🖼️', group: 'Library' },
@@ -443,6 +447,8 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
               <div key={id} className={`absolute inset-0 overflow-auto ${isActive ? '' : 'hidden'}`}>
                 {id === 'brands'           && <BrandsView onSelectBrand={bId => { const b = brands.find(x => x.id === bId); if (b) setActiveBrand(b); changeTab('products'); }} />}
                 {id === 'knowledge_hub'    && <KnowledgeHubView brandId={bid} />}
+                {id === 'rules_engine'     && <RulesEngineView brandId={bid} />}
+                {id === 'scoreboard'       && <ScoreboardView brandId={bid} />}
                 {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}
                 {id === 'products'         && <ProductsView brandId={bid} />}
                 {id === 'import_plan'      && <ContentPlansView brandId={bid} />}

@@ -609,9 +609,77 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_subs_user        ON subscriptions(user_id);
   `);
 
+  // ══════════════════════════════════════════════════════
+  // CLOSED-LOOP ENGINE — Briefs, Rules, Scoreboard
+  // ══════════════════════════════════════════════════════
+
+  db.exec(`
+    -- Briefs: generated from plan items, carry lineage
+    CREATE TABLE IF NOT EXISTS briefs (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL,
+      plan_item_id    TEXT,
+      rule_version    TEXT DEFAULT 'v1.0',
+      purpose         TEXT,
+      variable_cell   TEXT,
+      channel         TEXT DEFAULT 'instagram',
+      format          TEXT,
+      copy_direction  TEXT,
+      visual_direction TEXT,
+      sku_id          TEXT,
+      segment_id      TEXT,
+      rtb_id          TEXT,
+      usp_id          TEXT,
+      context_id      TEXT,
+      status          TEXT DEFAULT 'draft',
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Rules Engine: versioned brand rules (max 30 active)
+    CREATE TABLE IF NOT EXISTS content_rules (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL,
+      version         TEXT NOT NULL,
+      rule_text       TEXT NOT NULL,
+      evidence        TEXT,
+      source          TEXT DEFAULT 'manual',
+      replaces_rule_id TEXT,
+      status          TEXT DEFAULT 'active',
+      created_at      TEXT DEFAULT (datetime('now')),
+      retired_at      TEXT
+    );
+
+    -- Scoreboard: performance verdict per angle
+    CREATE TABLE IF NOT EXISTS scoreboard (
+      id              TEXT PRIMARY KEY,
+      brand_id        TEXT NOT NULL,
+      angle           TEXT NOT NULL,
+      channel         TEXT NOT NULL,
+      saves           INTEGER DEFAULT 0,
+      reach           INTEGER DEFAULT 0,
+      er              REAL DEFAULT 0,
+      sample_size     INTEGER DEFAULT 0,
+      verdict         TEXT DEFAULT 'HOLD',
+      evidence_json   TEXT,
+      updated_at      TEXT DEFAULT (datetime('now')),
+      UNIQUE(brand_id, angle, channel)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_briefs_brand   ON briefs(brand_id);
+    CREATE INDEX IF NOT EXISTS idx_briefs_status   ON briefs(status);
+    CREATE INDEX IF NOT EXISTS idx_rules_brand     ON content_rules(brand_id, status);
+    CREATE INDEX IF NOT EXISTS idx_scoreboard_brand ON scoreboard(brand_id);
+  `);
+
   // ── Migrations ─────────────────────────────────────
   try { db.exec(`ALTER TABLE posts ADD COLUMN plan_id TEXT REFERENCES content_plans(id)`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN brand_id TEXT DEFAULT 'loveintea'`); } catch { /* already exists */ }
+  // Lineage columns for closed-loop attribution
+  try { db.exec(`ALTER TABLE posts ADD COLUMN brief_id TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE posts ADD COLUMN rule_version TEXT DEFAULT 'v1.0'`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE posts ADD COLUMN plan_item_id TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE posts ADD COLUMN review_status TEXT DEFAULT 'pending'`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE posts ADD COLUMN review_notes TEXT`); } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (

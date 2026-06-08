@@ -65,6 +65,21 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
     if (!toFb && !toIg) { setPubError('Select at least one platform'); return; }
     setPublishing(true); setPubError(''); setPubResult(null);
     try {
+      // Run Review Desk gates before publish
+      const reviewRes = await fetch('/api/review', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, caption: post.caption }),
+      });
+      const review = await reviewRes.json() as { passed: boolean; gates: Record<string, { passed: boolean; issues: string[] }> };
+      if (!review.passed) {
+        const issues = Object.entries(review.gates)
+          .filter(([, g]) => !g.passed)
+          .flatMap(([gate, g]) => g.issues.map((i: string) => `[${gate}] ${i}`));
+        setPubError(`Review Desk FAILED:\n${issues.join('\n')}`);
+        setPublishing(false);
+        return;
+      }
+
       const r = await fetch('/api/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
