@@ -161,6 +161,32 @@ function initSchema(db: Database.Database) {
     );
 
     -- ─────────────────────────────────────────────
+    -- CONTENT TEMPLATES — reusable visual templates
+    -- ─────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS content_templates (
+      id           TEXT PRIMARY KEY,
+      brand_id     TEXT NOT NULL DEFAULT 'loveintea',
+      name         TEXT NOT NULL,
+      category     TEXT NOT NULL DEFAULT 'general',  -- layout | promo | story | quote | product | event | seasonal | general
+      purpose      TEXT DEFAULT '',                   -- e.g. "flash sale", "new launch", "testimonial"
+      format       TEXT DEFAULT 'post',               -- post | story | reel_cover | carousel | banner
+      aspect_ratio TEXT DEFAULT '2:3',                -- 1:1 | 4:5 | 2:3 | 9:16 | 16:9
+      image_url    TEXT NOT NULL,
+      thumbnail_url TEXT,
+      tags         TEXT DEFAULT '[]',                 -- JSON array of style tags
+      color_palette TEXT DEFAULT '',                  -- dominant colors description
+      notes        TEXT DEFAULT '',
+      is_active    INTEGER DEFAULT 1,
+      usage_count  INTEGER DEFAULT 0,
+      created_at   TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_content_tpl_brand    ON content_templates(brand_id);
+    CREATE INDEX IF NOT EXISTS idx_content_tpl_category ON content_templates(category);
+    CREATE INDEX IF NOT EXISTS idx_content_tpl_format   ON content_templates(format);
+    CREATE INDEX IF NOT EXISTS idx_content_tpl_active   ON content_templates(is_active);
+
+    -- ─────────────────────────────────────────────
     -- INBOX — FB/IG messages & comments
     -- ─────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS inbox_messages (

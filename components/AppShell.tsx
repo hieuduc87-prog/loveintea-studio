@@ -28,6 +28,7 @@ import { BrandsView }         from './BrandsView';
 import { KnowledgeHubView }  from './KnowledgeHubView';
 import { ScoreboardView }   from './ScoreboardView';
 import { RulesEngineView }  from './RulesEngineView';
+import { ContentTemplatesView } from './ContentTemplatesView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ type TabId =
   | 'content_queue' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
+  | 'content_templates'
   | 'asset_dam' | 'image_library' | 'content_log'
   | 'payment'
   | 'guide' | 'team';
@@ -55,6 +57,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'brand_dna',        label: 'Brand DNA',        icon: '🌿', group: 'Brain' },
   { id: 'products',         label: 'Products',         icon: '📦', group: 'Brain' },
   { id: 'rules_engine',     label: 'Rules Engine',     icon: '⚙️', group: 'Brain' },
+  { id: 'content_templates', label: 'Content Templates', icon: '🎨', group: 'Brain' },
   // PLAN — Calendar, content plans, slot allocation
   { id: 'import_plan',      label: 'Content Plans',    icon: '📋', group: 'Plan' },
   { id: 'calendar',         label: 'Post Calendar',    icon: '🗓️', group: 'Plan' },
@@ -448,6 +451,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'brands'           && <BrandsView onSelectBrand={bId => { const b = brands.find(x => x.id === bId); if (b) setActiveBrand(b); changeTab('products'); }} />}
                 {id === 'knowledge_hub'    && <KnowledgeHubView brandId={bid} />}
                 {id === 'rules_engine'     && <RulesEngineView brandId={bid} />}
+                {id === 'content_templates' && <ContentTemplatesView brandId={bid} />}
                 {id === 'scoreboard'       && <ScoreboardView brandId={bid} />}
                 {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}
                 {id === 'products'         && <ProductsView brandId={bid} />}
