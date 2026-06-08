@@ -3,6 +3,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 // ─── Types ──────────────────────────────────────────────────
+interface TemplateAnalysis {
+  layout?: { type: string; columns: number; rows: number; description: string };
+  zones?: Array<{ zone_id: string; type: string; position: string; size: string; description: string }>;
+  typography?: { headline_style: string; body_style: string; text_hierarchy: string; estimated_word_count: { headline: number; body: number } };
+  colors?: { palette: string[]; mood: string; contrast: string };
+  product_placement?: { has_product: boolean; position: string; size: string; style: string };
+  style_keywords?: string[];
+  best_for?: string[];
+  content_direction?: string;
+}
+
 interface Template {
   id: string;
   brand_id: string;
@@ -16,6 +27,7 @@ interface Template {
   tags: string;
   color_palette: string;
   notes: string;
+  analysis: string;
   is_active: number;
   usage_count: number;
   created_at: string;
@@ -90,6 +102,20 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
   const parseTags = (t: Template): string[] => {
     try { return JSON.parse(t.tags); } catch { return []; }
   };
+
+  const parseAnalysis = (t: Template): TemplateAnalysis | null => {
+    if (!t.analysis) return null;
+    try { return JSON.parse(t.analysis); } catch { return null; }
+  };
+
+  async function reAnalyze(id: string) {
+    const r = await fetch(`/api/content-templates/${id}/analyze`, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok && d.analysis) {
+      setTemplates(ts => ts.map(t => t.id === id ? { ...t, analysis: JSON.stringify(d.analysis) } : t));
+      if (selected?.id === id) setSelected(prev => prev ? { ...prev, analysis: JSON.stringify(d.analysis) } : null);
+    }
+  }
 
   const catColor = (cat: string) => CATEGORIES.find(c => c.id === cat)?.color ?? 'bg-gray-500';
   const catLabel = (cat: string) => CATEGORIES.find(c => c.id === cat)?.label ?? cat;
@@ -220,12 +246,14 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
               catColor={catColor}
               catLabel={catLabel}
               parseTags={parseTags}
+              parseAnalysis={parseAnalysis}
               editingId={editingId}
               onStartEdit={() => setEditingId(selected.id)}
               onSave={(data) => updateTemplate(selected.id, data)}
               onCancelEdit={() => setEditingId(null)}
               onClose={() => setSelected(null)}
               onDelete={() => deleteTemplate(selected.id)}
+              onReAnalyze={() => reAnalyze(selected.id)}
             />
           )}
         </div>
@@ -320,18 +348,20 @@ function TemplateCard({
 
 // ─── Detail Panel ───────────────────────────────────────────
 function DetailPanel({
-  tpl, catColor, catLabel, parseTags, editingId, onStartEdit, onSave, onCancelEdit, onClose, onDelete,
+  tpl, catColor, catLabel, parseTags, parseAnalysis, editingId, onStartEdit, onSave, onCancelEdit, onClose, onDelete, onReAnalyze,
 }: {
   tpl: Template;
   catColor: (c: string) => string;
   catLabel: (c: string) => string;
   parseTags: (t: Template) => string[];
+  parseAnalysis: (t: Template) => TemplateAnalysis | null;
   editingId: string | null;
   onStartEdit: () => void;
   onSave: (data: Partial<Template>) => void;
   onCancelEdit: () => void;
   onClose: () => void;
   onDelete: () => void;
+  onReAnalyze: () => void;
 }) {
   const isEditing = editingId === tpl.id;
   const [editName, setEditName] = useState(tpl.name);
@@ -500,6 +530,9 @@ function DetailPanel({
                 <p className="text-sm text-gray-300 whitespace-pre-wrap">{tpl.notes}</p>
               </div>
             )}
+
+            {/* AI Analysis */}
+            <AnalysisSection analysis={parseAnalysis(tpl)} onReAnalyze={onReAnalyze} />
 
             {/* Actions */}
             <div className="border-t border-gray-800 pt-4 flex gap-2">
@@ -714,15 +747,161 @@ function UploadModal({
               disabled={uploading || files.length === 0}
               className="flex-1 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium transition-colors"
             >
-              {uploading ? `Uploading... ${progress}%` : `Upload ${files.length || ''} Template${files.length !== 1 ? 's' : ''}`}
+              {uploading ? `Analyzing & Uploading... ${progress}%` : `Upload ${files.length || ''} Template${files.length !== 1 ? 's' : ''}`}
             </button>
             <button onClick={onClose} disabled={uploading}
               className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm transition-colors">
               Cancel
             </button>
           </div>
+          {uploading && (
+            <p className="text-xs text-gray-500 text-center">
+              Gemini is analyzing layout, typography, color & zones...
+            </p>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Analysis Section ───────────────────────────────────────
+function AnalysisSection({ analysis, onReAnalyze }: { analysis: TemplateAnalysis | null; onReAnalyze: () => void }) {
+  const [reanalyzing, setReanalyzing] = useState(false);
+
+  async function handleReAnalyze() {
+    setReanalyzing(true);
+    await onReAnalyze();
+    setReanalyzing(false);
+  }
+
+  return (
+    <div className="border-t border-gray-800 pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">AI Layout Analysis</p>
+        <button onClick={handleReAnalyze} disabled={reanalyzing}
+          className="text-[10px] text-gray-500 hover:text-white px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 transition-colors disabled:opacity-50">
+          {reanalyzing ? 'Analyzing...' : 'Re-analyze'}
+        </button>
+      </div>
+
+      {!analysis ? (
+        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+          <p className="text-xs text-gray-500 mb-2">No analysis yet</p>
+          <button onClick={handleReAnalyze} disabled={reanalyzing}
+            className="text-xs text-brand-400 hover:text-brand-300 disabled:opacity-50">
+            {reanalyzing ? 'Analyzing...' : 'Run AI Analysis'}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Layout */}
+          {analysis.layout && (
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Layout</p>
+              <p className="text-xs text-white font-medium capitalize">{analysis.layout.type}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">{analysis.layout.description}</p>
+              {(analysis.layout.columns > 1 || analysis.layout.rows > 1) && (
+                <p className="text-[10px] text-gray-500 mt-0.5">{analysis.layout.columns}col x {analysis.layout.rows}row</p>
+              )}
+            </div>
+          )}
+
+          {/* Zones */}
+          {analysis.zones && analysis.zones.length > 0 && (
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Content Zones</p>
+              <div className="space-y-1.5">
+                {analysis.zones.map((z, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 mt-0.5 ${
+                      z.type === 'text' ? 'bg-blue-900/30 text-blue-400' :
+                      z.type === 'image' ? 'bg-green-900/30 text-green-400' :
+                      z.type === 'product' ? 'bg-yellow-900/30 text-yellow-400' :
+                      z.type === 'logo' ? 'bg-purple-900/30 text-purple-400' :
+                      'bg-gray-700 text-gray-400'
+                    }`}>{z.type}</span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-white">{z.zone_id} <span className="text-gray-500">— {z.position}, {z.size}</span></p>
+                      <p className="text-[10px] text-gray-500 truncate">{z.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Typography */}
+          {analysis.typography && (
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Typography</p>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-gray-500">Headline: </span>
+                  <span className="text-white">{analysis.typography.headline_style}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Body: </span>
+                  <span className="text-white">{analysis.typography.body_style}</span>
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">{analysis.typography.text_hierarchy}</p>
+              {analysis.typography.estimated_word_count && (
+                <p className="text-[10px] text-gray-600 mt-0.5">
+                  ~{analysis.typography.estimated_word_count.headline} words headline, ~{analysis.typography.estimated_word_count.body} words body
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Colors */}
+          {analysis.colors && (
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Colors</p>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                {analysis.colors.palette?.map((hex, i) => (
+                  <span key={i} className="w-5 h-5 rounded-full border border-gray-700" style={{ backgroundColor: hex }} title={hex} />
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Mood: <span className="text-white capitalize">{analysis.colors.mood}</span>
+                {' '}| Contrast: <span className="text-white capitalize">{analysis.colors.contrast}</span>
+              </p>
+            </div>
+          )}
+
+          {/* Product Placement */}
+          {analysis.product_placement?.has_product && (
+            <div className="bg-yellow-900/10 border border-yellow-900/20 rounded-lg p-3">
+              <p className="text-[10px] text-yellow-500 uppercase tracking-widest mb-1">Product Zone</p>
+              <p className="text-[11px] text-white">
+                {analysis.product_placement.position} — {analysis.product_placement.size}
+              </p>
+              <p className="text-[10px] text-gray-400">Style: {analysis.product_placement.style}</p>
+            </div>
+          )}
+
+          {/* Best For */}
+          {analysis.best_for && analysis.best_for.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1.5">Best For</p>
+              <div className="flex flex-wrap gap-1">
+                {analysis.best_for.map((b, i) => (
+                  <span key={i} className="text-[10px] bg-brand-900/20 text-brand-400 px-2 py-0.5 rounded-full">{b}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Content Direction */}
+          {analysis.content_direction && (
+            <div className="bg-brand-900/10 border border-brand-900/20 rounded-lg p-3">
+              <p className="text-[10px] text-brand-400 uppercase tracking-widest mb-1">Content Direction</p>
+              <p className="text-[11px] text-gray-300 leading-relaxed">{analysis.content_direction}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

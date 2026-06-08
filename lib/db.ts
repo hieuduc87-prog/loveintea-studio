@@ -176,6 +176,7 @@ function initSchema(db: Database.Database) {
       tags         TEXT DEFAULT '[]',                 -- JSON array of style tags
       color_palette TEXT DEFAULT '',                  -- dominant colors description
       notes        TEXT DEFAULT '',
+      analysis     TEXT DEFAULT '',                 -- JSON: Gemini vision layout analysis
       is_active    INTEGER DEFAULT 1,
       usage_count  INTEGER DEFAULT 0,
       created_at   TEXT DEFAULT (datetime('now'))
@@ -706,6 +707,7 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE posts ADD COLUMN plan_item_id TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN review_status TEXT DEFAULT 'pending'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN review_notes TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE content_templates ADD COLUMN analysis TEXT DEFAULT ''`); } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (
