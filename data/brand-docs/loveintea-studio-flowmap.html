@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LoveinTea Studio — Flow Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3EEE4; --paper:#FBF8F1; --ink:#23241F; --muted:#6F6B60;
+    --green:#2F4A3C; --green-soft:#E3EAE2; --green-line:#B9C9BB;
+    --terra:#B0603A; --terra-soft:#F4E2D7;
+    --amber:#BD8526; --amber-soft:#F6E9CE;
+    --stone:#8A8579; --stone-soft:#E8E3D7;
+    --line:#D9D1C1; --line-2:#C7BEAB;
+    --r:12px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"IBM Plex Sans",sans-serif;line-height:1.6;
+    -webkit-font-smoothing:antialiased;padding:0 0 80px;}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px;}
+  code,.mono{font-family:"IBM Plex Mono",monospace;font-size:.88em;
+    background:#ece5d6;padding:1px 6px;border-radius:5px;color:#4a4636;}
+  h1,h2,h3{font-family:"Fraunces",serif;font-weight:600;letter-spacing:-.01em;line-height:1.15;}
+  header.top{background:var(--green);color:#F3EEE4;padding:54px 0 46px;}
+  header.top .wrap{display:block;}
+  .kicker{font-family:"IBM Plex Mono",monospace;text-transform:uppercase;
+    letter-spacing:.22em;font-size:12px;color:#A9C0AC;margin:0 0 14px;}
+  header.top h1{font-size:clamp(34px,5vw,56px);margin:0;color:#FBF8F1;}
+  header.top p{max-width:680px;color:#CFDBCF;margin:16px 0 0;font-size:17px;}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:26px;font-size:13px;color:#CFDBCF;}
+  .legend span{display:inline-flex;align-items:center;gap:7px;}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block;}
+  .d-click{background:#E08B5F;} .d-trust{background:#8FC2A2;}
+  .d-amber{background:#E0B05A;} .d-lock{background:#B7B1A2;}
+
+  section{padding:54px 0 8px;}
+  .sec-no{font-family:"IBM Plex Mono",monospace;color:var(--terra);font-size:13px;
+    letter-spacing:.2em;text-transform:uppercase;}
+  h2{font-size:30px;margin:6px 0 6px;}
+  .lead{color:var(--muted);max-width:760px;margin:0 0 26px;font-size:16px;}
+  .rule{height:1px;background:var(--line);border:0;margin:0;}
+
+  /* ---- setup cứng ---- */
+  .setup-band{background:var(--paper);border:1.5px solid var(--line-2);border-radius:18px;padding:8px 26px 26px;}
+  .setup-flag{display:inline-flex;align-items:center;gap:9px;background:var(--stone-soft);
+    color:#5b5648;font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;padding:7px 14px;border-radius:0 0 12px 12px;font-weight:500;}
+  .setup-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:20px;}
+  .setup-card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;}
+  .setup-card h3{font-size:17px;margin:0 0 4px;color:var(--green);}
+  .setup-card .grp{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--stone);margin:0 0 10px;}
+  .setup-card ul{margin:0;padding:0;list-style:none;}
+  .setup-card li{font-size:13.5px;padding:5px 0;border-top:1px dashed #e7e0d0;display:flex;gap:8px;align-items:baseline;}
+  .setup-card li:first-child{border-top:0;}
+  .src{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.08em;
+    padding:2px 6px;border-radius:5px;flex-shrink:0;font-weight:500;}
+  .src.file{background:var(--terra-soft);color:#8a3f1f;}
+  .src.cfg{background:var(--amber-soft);color:#7c5410;}
+  .src.asset{background:var(--green-soft);color:#2c4636;}
+  .setup-note{margin-top:18px;font-size:13.5px;color:var(--muted);border-left:3px solid var(--terra);padding-left:14px;}
+
+  /* ---- generic flow ---- */
+  .flow{display:flex;align-items:stretch;flex-wrap:wrap;gap:0;margin:8px 0 4px;}
+  .node{background:#fff;border:1.5px solid var(--line-2);border-radius:var(--r);
+    padding:13px 15px;min-width:120px;flex:1;display:flex;flex-direction:column;justify-content:center;}
+  .node .t{font-weight:600;font-size:15px;}
+  .node .s{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.45;}
+  .node.green{border-color:var(--green-line);background:#F4F7F3;}
+  .node.green .t{color:var(--green);}
+  .node.terra{border-color:#E3B69C;background:#FBF1EA;}
+  .node.terra .t{color:#8a3f1f;}
+  .node.amber{border-color:#E8CE94;background:#FBF4E4;}
+  .node.amber .t{color:#7c5410;}
+  .node.gate{border-style:dashed;border-color:var(--terra);background:#FBF1EA;}
+  .node.dim{opacity:.6;border-style:dashed;}
+  .arr{display:flex;align-items:center;justify-content:center;padding:0 4px;flex-shrink:0;}
+  .arr b{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--terra);
+    background:var(--terra-soft);border-radius:20px;padding:3px 9px;white-space:nowrap;font-weight:500;}
+  .arr.plain b{background:transparent;color:var(--line-2);font-size:18px;padding:0 2px;}
+
+  /* ---- master ---- */
+  .master{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:24px;}
+  .identity-bar{background:var(--green);color:#EAF0EA;border-radius:10px;padding:13px 18px;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px;}
+  .identity-bar b{font-family:"Fraunces",serif;font-size:17px;color:#fff;font-weight:600;}
+  .identity-bar span{font-size:12.5px;color:#BFD0C0;}
+  .feeds{text-align:center;color:var(--stone);font-family:"IBM Plex Mono",monospace;
+    font-size:11px;letter-spacing:.14em;padding:6px 0 2px;}
+  .loop-back{margin-top:10px;background:var(--terra-soft);border:1px dashed var(--terra);
+    border-radius:10px;padding:11px 16px;font-size:13.5px;color:#8a3f1f;display:flex;gap:10px;align-items:center;}
+  .loop-back b{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;}
+
+  /* ---- kanban ---- */
+  .ribbon{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:18px;
+    background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 14px;}
+  .ribbon .st{font-weight:600;font-size:13.5px;color:var(--green);}
+  .ribbon .tx{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--terra);}
+  .board{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;}
+  .col{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0;}
+  .col.retire{background:#f0ece2;}
+  .col h4{margin:0 0 4px;font-family:"Fraunces",serif;font-size:15px;color:var(--green);font-weight:600;}
+  .col .role{font-size:11px;color:var(--muted);margin:0 0 10px;line-height:1.4;}
+  .card{background:#fff;border:1px solid var(--line);border-left:3px solid var(--stone);
+    border-radius:8px;padding:8px 10px;margin-bottom:8px;}
+  .card .cn{font-size:12.5px;font-weight:500;line-height:1.35;}
+  .card .cm{font-size:10.5px;color:var(--muted);margin-top:4px;font-family:"IBM Plex Mono",monospace;}
+  .card.click{border-left-color:var(--terra);}
+  .card.trust{border-left-color:var(--green);}
+  .card.amber{border-left-color:var(--amber);}
+  .tag{display:inline-block;font-size:9.5px;font-family:"IBM Plex Mono",monospace;
+    padding:1px 6px;border-radius:4px;letter-spacing:.05em;vertical-align:1px;}
+  .tag.click{background:var(--terra-soft);color:#8a3f1f;}
+  .tag.trust{background:var(--green-soft);color:#2c4636;}
+  .tag.amber{background:var(--amber-soft);color:#7c5410;}
+
+  .detail-block{background:var(--paper);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px;margin-bottom:18px;}
+  .detail-block h3{font-size:19px;margin:0 0 3px;color:var(--ink);}
+  .detail-block .why{font-size:13.5px;color:var(--muted);margin:0 0 16px;}
+  .twocol{display:flex;gap:12px;flex-wrap:wrap;}
+  .lane{flex:1;min-width:240px;border:1px solid var(--line);border-radius:10px;padding:6px;}
+  .lane-h{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;padding:7px 10px;color:#fff;border-radius:7px;margin-bottom:8px;}
+  .lane-h.org{background:var(--green);} .lane-h.paid{background:var(--terra);}
+  .footer{color:var(--muted);font-size:13px;text-align:center;padding-top:40px;}
+  @media(max-width:880px){
+    .board{grid-template-columns:repeat(2,1fr);}
+    .flow{flex-direction:column;} .arr{padding:4px 0;transform:rotate(90deg);}
+  }
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <p class="kicker">LoveinTea Studio · Automation Flow Map</p>
+  <h1>Từ Brand Identity đến Execution Loop</h1>
+  <p>Bản đồ vận hành của cỗ máy content vòng kín: tầng Identity khoá cứng nuôi một băng chuyền angle chạy theo mode, có vòng học khép lại. Đọc cùng <code>social-growth-playbook-2026.md</code> + <code>loveintea-brand-application.md</code>.</p>
+  <div class="legend">
+    <span><i class="dot d-click"></i> Mode Click (craving/reach)</span>
+    <span><i class="dot d-trust"></i> Mode Trust (proof/save)</span>
+    <span><i class="dot d-amber"></i> Hybrid (theo funnel-stage)</span>
+    <span><i class="dot d-lock"></i> Setup cứng — không vào vòng test</span>
+  </div>
+</div></header>
+
+<div class="wrap">
+
+<!-- ============ SETUP CỨNG ============ -->
+<section>
+  <p class="sec-no">00 · Nền tảng</p>
+  <h2>Setup cứng — phải có TRƯỚC khi vòng chạy</h2>
+  <p class="lead">Đây là tầng Identity (Fixed Core) + các hạt giống Performance. Vòng execution chỉ <em>đọc</em> những thứ này; không bao giờ đưa mục Identity Lock vào vòng test. <span class="src file">FILE</span> = file upload · <span class="src cfg">CONFIG</span> = cấu hình trong app/Meta · <span class="src asset">ASSET</span> = tài nguyên đã dựng.</p>
+
+  <div class="setup-band">
+    <span class="setup-flag">⚿ Locked core — load once, read every cycle</span>
+    <div class="setup-grid">
+
+      <div class="setup-card">
+        <p class="grp">A · Brand brain (đã upload)</p>
+        <h3>Tài liệu nguồn</h3>
+        <ul>
+          <li><span class="src file">FILE</span> social-growth-playbook-2026.md — framework chung</li>
+          <li><span class="src file">FILE</span> loveintea-brand-application.md — instance: tier SKU, segment, USP, channel</li>
+          <li><span class="src file">FILE</span> brand-voice.md v1.1</li>
+          <li><span class="src file">FILE</span> content-library.md §14 (segment · RTB · USP per-SKU)</li>
+          <li><span class="src file">FILE</span> Communication Direction (split kênh, tỷ lệ cảm xúc)</li>
+          <li><span class="src file">FILE</span> Visual playbook / 9-tile guideline</li>
+        </ul>
+      </div>
+
+      <div class="setup-card">
+        <p class="grp">B · Identity Lock List (§7.1)</p>
+        <h3>Không bao giờ test</h3>
+        <ul>
+          <li><span class="src cfg">CONFIG</span> 1 tag trắng logo — không đỏ/kraft</li>
+          <li><span class="src cfg">CONFIG</span> Hệ màu brand</li>
+          <li><span class="src cfg">CONFIG</span> Typography device (set ở design, không AI render)</li>
+          <li><span class="src cfg">CONFIG</span> Brand voice</li>
+          <li><span class="src cfg">CONFIG</span> Ngôn ngữ claim-safe (no liver/detox/heart)</li>
+          <li><span class="src cfg">CONFIG</span> Lý do tồn tại / cảm xúc cốt lõi</li>
+        </ul>
+      </div>
+
+      <div class="setup-card">
+        <p class="grp">C · Hạt giống Performance</p>
+        <h3>Khung quyết định</h3>
+        <ul>
+          <li><span class="src cfg">CONFIG</span> USP anchors: Uconv · Upremium · Caffeine-free</li>
+          <li><span class="src cfg">CONFIG</span> 5 segment S1–S5 + core tension</li>
+          <li><span class="src cfg">CONFIG</span> RTB pairs √(Root Cause × Driver)</li>
+          <li><span class="src cfg">CONFIG</span> Tier SKU Hero/Core/Supporting + pool slot</li>
+          <li><span class="src cfg">CONFIG</span> Tỷ lệ pillar 40/30/20/10</li>
+          <li><span class="src cfg">CONFIG</span> Win Score weights v1 + baseline (sau 15–20 post)</li>
+          <li><span class="src cfg">CONFIG</span> Seed rules (Rules Engine v1)</li>
+        </ul>
+      </div>
+
+      <div class="setup-card">
+        <p class="grp">D · Kênh & công cụ</p>
+        <h3>Hạ tầng đăng</h3>
+        <ul>
+          <li><span class="src cfg">CONFIG</span> FB Setup: Page + Group + tokens</li>
+          <li><span class="src cfg">CONFIG</span> Scheduler set timezone US (ET/PT)</li>
+          <li><span class="src asset">ASSET</span> Higgsfield nano_banana_pro + ref sản phẩm / tag trắng / farm</li>
+          <li><span class="src asset">ASSET</span> Broadcast Channel</li>
+          <li><span class="src cfg">CONFIG</span> Meta Advantage+ (cho lane paid)</li>
+        </ul>
+      </div>
+
+    </div>
+    <p class="setup-note">Quy tắc khoá: plan tuần/tháng chỉ đổi <strong>biến bên trong container</strong> (hook · RTB · theme · context · audio). Container và mọi mục nhóm B <strong>không đổi</strong>. Đây là thứ cho phép chạy nhanh mà không trôi nhận diện.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ============ MASTER FLOW ============ -->
+<section>
+  <p class="sec-no">01 · Master</p>
+  <h2>Lưu đồ master — Identity → Execution → Loop</h2>
+  <p class="lead">Tầng Identity nằm dưới, nuôi toàn bộ băng chuyền. Vòng Learn không cụt: nó cập nhật ngược Rules Engine <em>và</em> Slot Allocation cho chu kỳ sau.</p>
+
+  <div class="master">
+    <div class="identity-bar">
+      <b>⚿ BRAND IDENTITY (Fixed Core)</b>
+      <span>voice · tag trắng · màu · typography · claim-safe · the "why" — đọc bởi mọi bước, không bao giờ test</span>
+    </div>
+    <p class="feeds">▼ nuôi xuống ▼</p>
+
+    <div class="flow">
+      <div class="node amber"><span class="t">Validate</span><span class="s">Theme Gate</span></div>
+      <div class="arr"><b>theme ✓</b></div>
+      <div class="node green"><span class="t">Plan</span><span class="s">Allocation + Brief</span></div>
+      <div class="arr"><b>brief</b></div>
+      <div class="node green"><span class="t">Create</span><span class="s">Copy ‖ Visual</span></div>
+      <div class="arr"><b>asset</b></div>
+      <div class="node gate"><span class="t">Review</span><span class="s">cổng cứng</span></div>
+      <div class="arr"><b>đạt</b></div>
+      <div class="node green"><span class="t">Publish</span><span class="s">IG/FB · giờ US</span></div>
+      <div class="arr"><b>live</b></div>
+      <div class="node green"><span class="t">Engage</span><span class="s">inbox · group</span></div>
+      <div class="arr"><b>signal</b></div>
+      <div class="node terra"><span class="t">Learn</span><span class="s">KPI theo mode</span></div>
+    </div>
+
+    <div class="loop-back">
+      <b>loop ↻</b>
+      <span>Learn → cập nhật <strong>Win Score weights</strong> + <strong>Rules Engine</strong> + <strong>Slot Allocation</strong> → đổi cách Plan/Create chu kỳ sau. Winner thêm slot, loser Retire. <strong>Khi stuck</strong> (mọi tầng dưới ổn vẫn không bán) → nhánh ESCAPE quay lên <strong>Theme Gate</strong> re-validate hướng, không regen thêm.</span>
+    </div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ============ KANBAN ============ -->
+<section>
+  <p class="sec-no">02 · Kanban</p>
+  <h2>Băng chuyền angle — bảng kanban</h2>
+  <p class="lead">Đơn vị chạy là <strong>angle</strong> (<code>variable_cell</code>), không phải post. Mỗi angle mang một <em>mode</em> quyết định bộ KPI chấm nó. Cột = trạng thái; thẻ = angle; nhãn giữa cột = chuyển trạng thái có điều kiện.</p>
+
+  <div class="ribbon">
+    <span class="st">Explore</span><span class="tx">—seed→</span>
+    <span class="st">Discovery</span><span class="tx">—harvest→</span>
+    <span class="st">Harvest</span><span class="tx">—exploit→</span>
+    <span class="st">Exploit</span><span class="tx">—isolate→</span>
+    <span class="st">Breakout</span><span class="tx">—scale→</span>
+    <span class="st">Scale</span><span class="tx">&nbsp;·&nbsp; retire / refresh ↺</span>
+  </div>
+
+  <div class="ribbon" style="background:var(--green-soft);border-color:var(--green-line);">
+    <span class="tx" style="color:var(--green);font-weight:600;letter-spacing:.1em;">CAMPAIGN STAGE (bọc ngoài):</span>
+    <span class="st">① Validate cheap</span><span class="tx">(Explore–Harvest)</span>
+    <span class="st">② Own whitespace</span><span class="tx">(Exploit)</span>
+    <span class="st">③ Scale &amp; defend</span><span class="tx">(Breakout–Scale)</span>
+  </div>
+
+  <div class="board">
+    <div class="col">
+      <h4>Explore</h4>
+      <p class="role">SOP 6.5: spy đối thủ → angle ứng viên + predicted Win Score</p>
+      <div class="card trust"><div class="cn">"read the label before any wellness tea"</div><div class="cm">S2 · <span class="tag trust">TRUST</span></div></div>
+      <div class="card click"><div class="cn">"prettiest iced tea on your feed"</div><div class="cm">Hibiscus · <span class="tag click">CLICK</span></div></div>
+    </div>
+    <div class="col">
+      <h4>Discovery</h4>
+      <p class="role">Test organic rẻ, format đơn giản, đo tín hiệu sớm</p>
+      <div class="card click"><div class="cn">"the 3pm reset that isn't coffee"</div><div class="cm">S3 · Ginger · <span class="tag click">CLICK</span></div></div>
+      <div class="card amber"><div class="cn">"after-dinner reset"</div><div class="cm">S5 · Peppermint · <span class="tag amber">HYBRID</span></div></div>
+    </div>
+    <div class="col">
+      <h4>Harvest</h4>
+      <p class="role">Gộp theo angle, chấm verdict bằng KPI của ĐÚNG mode</p>
+      <div class="card trust"><div class="cn">"most sleep teas don't work — here's why"</div><div class="cm">S1 · Nighty Night · <span class="tag trust">TRUST</span></div></div>
+    </div>
+    <div class="col">
+      <h4>Exploit</h4>
+      <p class="role">Angle WIN → test Execution × Context (Hub &amp; Spoke)</p>
+      <div class="card trust"><div class="cn">"3 things to check on a sleep tea label"</div><div class="cm">Carousel→Story · <span class="tag trust">TRUST</span></div></div>
+    </div>
+    <div class="col">
+      <h4>Breakout</h4>
+      <p class="role">1 post bứt phá ≥ baseline×N + sàn tuyệt đối → cô lập</p>
+      <div class="card click"><div class="cn">"send this to your most stressed friend"</div><div class="cm">IG Reel · <span class="tag click">CLICK</span></div></div>
+    </div>
+    <div class="col">
+      <h4>Scale</h4>
+      <p class="role">Promote post ID vào Advantage+ (paid, off-grid)</p>
+      <div class="card click"><div class="cn">Reel winner → A+ Shopping</div><div class="cm">+ IG→FB handoff</div></div>
+    </div>
+  </div>
+
+  <div class="flow" style="margin-top:12px;">
+    <div class="node dim"><span class="t">Retire (off-canvas)</span><span class="s">verdict LOSE → lưu trữ + thêm vào negative list (Brief Builder không đề xuất lại)</span></div>
+    <div class="arr"><b>refresh?</b></div>
+    <div class="node amber"><span class="t">Refresh</span><span class="s">NEUTRAL/fatigue → đổi 1 biến (hook-first) → quay lại Discovery</span></div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ============ DETAIL FLOWS ============ -->
+<section>
+  <p class="sec-no">03 · Chi tiết</p>
+  <h2>Lưu đồ chi tiết từng phần</h2>
+  <p class="lead">Bảy phần triển khai, mỗi phần một luồng cụ thể với điều kiện và hành động.</p>
+
+  <div class="detail-block">
+    <h3>3.1 — Plan: phân bổ slot (§4.8) → Brief</h3>
+    <p class="why">SKU không nhân content; chúng cạnh tranh pool slot cố định. Floor chống starve, Surplus dồn cho winner.</p>
+    <div class="flow">
+      <div class="node"><span class="t">Pool slot</span><span class="s">7 Reel + 3 Carousel + ~21 Story / tuần (IG)</span></div>
+      <div class="arr"><b>− floor</b></div>
+      <div class="node green"><span class="t">Floor</span><span class="s">min 2 cell / RTB × Segment</span></div>
+      <div class="arr"><b>− non-SKU</b></div>
+      <div class="node green"><span class="t">30–40% non-SKU</span><span class="s">theme/ritual/education thuần</span></div>
+      <div class="arr"><b>chia</b></div>
+      <div class="node amber"><span class="t">Surplus theo priority</span><span class="s">tier × Win Score × platform-fit × mùa × segment</span></div>
+      <div class="arr"><b>=</b></div>
+      <div class="node terra"><span class="t">Brief</span><span class="s">purpose + variable_cell + mode + channel</span></div>
+    </div>
+  </div>
+
+  <div class="detail-block">
+    <h3>3.2 — Create: hai track hội tụ</h3>
+    <p class="why">Copy và visual chạy riêng, đọc cùng một brief, hội tụ ở asset cuối. Mode chọn recipe.</p>
+    <div class="twocol">
+      <div class="lane">
+        <div class="lane-h org">Track Copy</div>
+        <div class="flow"><div class="node"><span class="t">Content Workshop</span><span class="s">recipe 5.1 (Click) / 5.2 (Trust): hook → bridge → 1 CTA · caption-as-SEO</span></div></div>
+      </div>
+      <div class="lane">
+        <div class="lane-h paid">Track Visual</div>
+        <div class="flow"><div class="node"><span class="t">Image Studio + Higgsfield</span><span class="s">ref-anchored (sản phẩm thật) · tag trắng · human layer bắt buộc · đúng format</span></div></div>
+      </div>
+    </div>
+    <div class="flow" style="margin-top:10px;">
+      <div class="node green" style="flex:0 0 100%;"><span class="t">→ Hội tụ thành asset (carry: brief_id · variable_cell · rule_version)</span></div>
+    </div>
+  </div>
+
+  <div class="detail-block">
+    <h3>3.3 — Review Desk: cổng cứng 4 lớp (§7.2)</h3>
+    <p class="why">Không qua = không vào queue. AI pre-screen, người chốt.</p>
+    <div class="flow">
+      <div class="node gate"><span class="t">Compliance</span><span class="s">claim-safe · tag đúng · no liver/detox/heart</span></div>
+      <div class="arr plain"><b>→</b></div>
+      <div class="node gate"><span class="t">Anti-AI</span><span class="s">human layer · không "đẹp vô hồn" · AI disclosure nếu ad</span></div>
+      <div class="arr plain"><b>→</b></div>
+      <div class="node gate"><span class="t">Social-credibility</span><span class="s">"derm có stitch-debunk câu này không?" (Vietnat)</span></div>
+      <div class="arr plain"><b>→</b></div>
+      <div class="node gate"><span class="t">Dedup + Continuity</span><span class="s">cửa sổ 18–36 bài · tỷ lệ format · không 2 bài giống cạnh nhau</span></div>
+      <div class="arr"><b>đạt</b></div>
+      <div class="node green"><span class="t">Content Queue</span><span class="s">không đạt → trả về Create</span></div>
+    </div>
+  </div>
+
+  <div class="detail-block">
+    <h3>3.4 — Learn: mode-split KPI → verdict → vòng học (§8)</h3>
+    <p class="why">Lỗi #1 là đo Trust bằng KPI Click. Mỗi mode một bộ thước; verdict theo matrix 5 bậc.</p>
+    <div class="twocol">
+      <div class="lane">
+        <div class="lane-h paid">KPI Click</div>
+        <div class="flow"><div class="node terra"><span class="t">Click</span><span class="s">3s-rate · watch time · sends/reach · non-follower reach</span></div></div>
+      </div>
+      <div class="lane">
+        <div class="lane-h org">KPI Trust</div>
+        <div class="flow"><div class="node green"><span class="t">Trust</span><span class="s">saves/reach · comment chất lượng · profile visit · returning · CVR (trễ)</span></div></div>
+      </div>
+    </div>
+    <div class="flow" style="margin-top:10px;">
+      <div class="node amber"><span class="t">Promotion/Kill 5 bậc</span><span class="s">promote+50% · promote+giữ · hold+refresh hook · variant refresh · kill</span></div>
+      <div class="arr"><b>correlation</b></div>
+      <div class="node"><span class="t">Win Score loop</span><span class="s">Pearson predicted-vs-actual · update weight ±10%</span></div>
+      <div class="arr"><b>ghi ngược</b></div>
+      <div class="node green"><span class="t">Rules Engine + Allocation</span><span class="s">đổi rule + tái phân bổ slot chu kỳ sau</span></div>
+    </div>
+  </div>
+
+  <div class="detail-block">
+    <h3>3.5 — Hai lane volume (§4.5 + §6.7): Organic vs Paid</h3>
+    <p class="why">Trộn hai lane là sai. Tốc độ test cao sống ở lane Paid off-grid, KHÔNG crank organic.</p>
+    <div class="twocol">
+      <div class="lane">
+        <div class="lane-h org">Lane Organic (profile)</div>
+        <div class="flow"><div class="node green"><span class="t">~1 Reel/ngày + 2–5 Story</span><span class="s">trần = sức hấp thụ audience + Originality penalty · tìm winner</span></div></div>
+      </div>
+      <div class="lane">
+        <div class="lane-h paid">Lane Paid/Test (off-grid)</div>
+        <div class="flow"><div class="node terra"><span class="t">3–5 concept mới/tuần</span><span class="s">trần = ~50 event/tuần thoát learning · A+ 70–80 / retarget 15–20 / test 5–10</span></div></div>
+      </div>
+    </div>
+    <p class="why" style="margin:12px 0 0;">Cầu nối: post ID organic thắng → <strong>promote thẳng</strong> vào Advantage+ (không làm ad mới, không repost organic &gt;10/30 ngày).</p>
+  </div>
+
+  <div class="detail-block">
+    <h3>3.6 — IG → FB handoff (§4.7 + §7.1)</h3>
+    <p class="why">Một câu chuyện, hai cửa. Adapt theo register kênh, KHÔNG copy y hệt.</p>
+    <div class="flow">
+      <div class="node terra"><span class="t">IG Reel thắng</span><span class="s">cold · discovery · craving</span></div>
+      <div class="arr"><b>adapt</b></div>
+      <div class="node green"><span class="t">FB Page Reel + Group post</span><span class="s">caption dài, mời comment (MSI)</span></div>
+      <div class="arr"><b>nuôi</b></div>
+      <div class="node green"><span class="t">Review/Story FB</span><span class="s">social proof · B1/B2</span></div>
+      <div class="arr"><b>chốt</b></div>
+      <div class="node amber"><span class="t">Convert</span><span class="s">warm · CTA mua</span></div>
+    </div>
+  </div>
+
+  <div class="detail-block">
+    <h3>3.7 — Theme Validation Gate: cổng đầu nguồn (case study Vietnat)</h3>
+    <p class="why">Validate một Big Idea/series TRƯỚC khi commit cell. Không pass = không sản xuất. Đây cũng là đích nhánh ESCAPE khi stuck.</p>
+    <div class="flow">
+      <div class="node amber"><span class="t">Theme Validation Brief</span><span class="s">Verdict · reframes-locked · staged plan</span></div>
+      <div class="arr"><b>+ kỷ luật</b></div>
+      <div class="node gate"><span class="t">3 field bắt buộc</span><span class="s">reverse-if · what-this-does-NOT-prove · caveats</span></div>
+      <div class="arr"><b>pass</b></div>
+      <div class="node green"><span class="t">Mở slot → Brief Builder</span><span class="s">gắn theme_id + campaign_stage = validate</span></div>
+    </div>
+  </div>
+
+</section>
+
+<p class="footer">LoveinTea Studio Flow Map v1.1 · đồng bộ với IA v2.1 + detail-spec + case study Vietnat · tài liệu sống — mọi ngưỡng số là default ngành, thay bằng baseline thật sau 15–20 post.</p>
+
+</div>
+</body>
+</html>
