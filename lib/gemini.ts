@@ -11,7 +11,7 @@ function getClient() {
   return _client;
 }
 
-const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+const MODELS = ['gemini-2.5-flash-preview-05-20', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
 
 async function tryGenerate(prompt: string, jsonMode: boolean): Promise<string> {
   let lastError: unknown;
