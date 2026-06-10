@@ -708,6 +708,7 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE posts ADD COLUMN review_status TEXT DEFAULT 'pending'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN review_notes TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN analysis TEXT DEFAULT ''`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE content_templates ADD COLUMN file_type TEXT DEFAULT 'image'`); } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (

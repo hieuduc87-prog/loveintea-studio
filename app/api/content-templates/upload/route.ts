@@ -11,7 +11,13 @@ export async function POST(req: NextRequest) {
     const fd = await req.formData();
     const file = fd.get('file') as File | null;
     if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
-    if (!file.type.startsWith('image/')) return NextResponse.json({ error: 'File must be an image' }, { status: 400 });
+
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    if (!isImage && !isVideo) {
+      return NextResponse.json({ error: 'File must be an image or video' }, { status: 400 });
+    }
+    const fileType = isVideo ? 'video' : 'image';
 
     const name = (fd.get('name') as string) || file.name.replace(/\.[^.]+$/, '');
     const category = (fd.get('category') as string) || 'general';
@@ -26,7 +32,7 @@ export async function POST(req: NextRequest) {
     const imagesDir = path.join(dataDir, 'images');
     fs.mkdirSync(imagesDir, { recursive: true });
 
-    const ext = file.name.split('.').pop() ?? 'png';
+    const ext = file.name.split('.').pop() ?? (isVideo ? 'mp4' : 'png');
     const id = uuid();
     const filename = `tpl-${id}.${ext}`;
     const filePath = path.join(imagesDir, filename);
@@ -34,61 +40,49 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(filePath, buffer);
 
-    const imageUrl = `/api/images/${filename}`;
+    const fileUrl = `/api/images/${filename}`;
 
-    // Generate thumbnail (resize to 400px wide)
-    let thumbnailUrl = imageUrl;
-    try {
-      const sharp = (await import('sharp')).default;
-      const thumbFilename = `tpl-${id}-thumb.webp`;
-      const thumbPath = path.join(imagesDir, thumbFilename);
-      await sharp(filePath)
-        .resize(400, undefined, { fit: 'inside' })
-        .webp({ quality: 80 })
-        .toFile(thumbPath);
-      thumbnailUrl = `/api/images/${thumbFilename}`;
-    } catch { /* skip thumbnail on error */ }
-
-    // Detect dominant color palette
+    let thumbnailUrl = fileUrl;
     let colorPalette = '';
-    try {
-      const sharp = (await import('sharp')).default;
-      const { dominant } = await sharp(filePath).stats();
-      colorPalette = `rgb(${dominant.r},${dominant.g},${dominant.b})`;
-    } catch { /* skip */ }
-
-    // Gemini Vision: analyze template layout, zones, typography, style
     let analysis = '';
-    try {
-      const mimeType = file.type || 'image/png';
-      const result = await analyzeTemplateLayout(buffer, mimeType);
-      analysis = JSON.stringify(result);
 
-      // Auto-enrich from analysis if user didn't provide
-      if (!purpose && result.best_for?.length) {
-        // Don't override user input, but set if empty
-      }
-      // Merge AI-detected style keywords into tags
+    if (isImage) {
+      // Generate thumbnail
       try {
-        const userTags: string[] = JSON.parse(tags);
-        const aiTags = result.style_keywords ?? [];
-        const merged = [...new Set([...userTags, ...aiTags])];
-        if (merged.length > userTags.length) {
-          // We'll use merged tags
-        }
+        const sharp = (await import('sharp')).default;
+        const thumbFilename = `tpl-${id}-thumb.webp`;
+        const thumbPath = path.join(imagesDir, thumbFilename);
+        await sharp(filePath)
+          .resize(400, undefined, { fit: 'inside' })
+          .webp({ quality: 80 })
+          .toFile(thumbPath);
+        thumbnailUrl = `/api/images/${thumbFilename}`;
+      } catch { /* skip thumbnail on error */ }
+
+      // Detect dominant color
+      try {
+        const sharp = (await import('sharp')).default;
+        const { dominant } = await sharp(filePath).stats();
+        colorPalette = `rgb(${dominant.r},${dominant.g},${dominant.b})`;
       } catch { /* skip */ }
-    } catch (e) {
-      console.error('Template analysis failed (non-blocking):', e);
-      // Non-blocking: template is still saved without analysis
+
+      // Gemini Vision analysis
+      try {
+        const mimeType = file.type || 'image/png';
+        const result = await analyzeTemplateLayout(buffer, mimeType);
+        analysis = JSON.stringify(result);
+      } catch (e) {
+        console.error('Template analysis failed (non-blocking):', e);
+      }
     }
 
     const db = getDb();
     db.prepare(`
-      INSERT INTO content_templates (id, brand_id, name, category, purpose, format, aspect_ratio, image_url, thumbnail_url, tags, color_palette, notes, analysis)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, brandId, name, category, purpose, format, aspectRatio, imageUrl, thumbnailUrl, tags, colorPalette, notes, analysis);
+      INSERT INTO content_templates (id, brand_id, name, category, purpose, format, aspect_ratio, image_url, thumbnail_url, tags, color_palette, notes, analysis, file_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, brandId, name, category, purpose, format, aspectRatio, fileUrl, thumbnailUrl, tags, colorPalette, notes, analysis, fileType);
 
-    return NextResponse.json({ ok: true, id, imageUrl, thumbnailUrl, analysis: analysis ? JSON.parse(analysis) : null });
+    return NextResponse.json({ ok: true, id, imageUrl: fileUrl, thumbnailUrl, analysis: analysis ? JSON.parse(analysis) : null, fileType });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

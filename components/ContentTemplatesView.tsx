@@ -31,6 +31,7 @@ interface Template {
   is_active: number;
   usage_count: number;
   created_at: string;
+  file_type?: string;
 }
 
 const CATEGORIES = [
@@ -292,14 +293,28 @@ function TemplateCard({
       }`}
     >
       {/* Thumbnail */}
-      <div className="aspect-[3/4] bg-gray-800">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={tpl.thumbnail_url || tpl.image_url}
-          alt={tpl.name}
-          className="w-full h-full object-cover"
-          loading="lazy"
-        />
+      <div className="aspect-[3/4] bg-gray-800 relative">
+        {tpl.file_type === 'video' ? (
+          <>
+            <video
+              src={tpl.image_url}
+              className="w-full h-full object-cover"
+              muted
+              preload="metadata"
+            />
+            <span className="absolute bottom-1.5 right-1.5 text-[9px] bg-black/70 text-white px-1.5 py-0.5 rounded-full font-medium">
+              VIDEO
+            </span>
+          </>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={tpl.thumbnail_url || tpl.image_url}
+            alt={tpl.name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        )}
       </div>
 
       {/* Category badge */}
@@ -403,10 +418,14 @@ function DetailPanel({
           </div>
         </div>
 
-        {/* Image */}
+        {/* Image / Video */}
         <div className="rounded-xl overflow-hidden bg-gray-800">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={tpl.image_url} alt={tpl.name} className="w-full" />
+          {tpl.file_type === 'video' ? (
+            <video src={tpl.image_url} controls className="w-full" preload="metadata" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={tpl.image_url} alt={tpl.name} className="w-full" />
+          )}
         </div>
 
         {/* Edit / View Mode */}
@@ -584,12 +603,15 @@ function UploadModal({
   const [tags, setTags] = useState('');
   const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [fileStatuses, setFileStatuses] = useState<Record<string, 'pending' | 'uploading' | 'done' | 'error'>>({});
   const [error, setError] = useState('');
+
+  const doneCount = Object.values(fileStatuses).filter(s => s === 'done').length;
+  const progress = files.length > 0 ? Math.round((doneCount / files.length) * 100) : 0;
 
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
-    const arr = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+    const arr = Array.from(fileList).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
     setFiles(arr);
     setPreviews(arr.map(f => URL.createObjectURL(f)));
     if (arr.length === 1 && !name) {
@@ -598,31 +620,51 @@ function UploadModal({
   }
 
   async function upload() {
-    if (files.length === 0) { setError('Select at least one image'); return; }
-    setUploading(true); setError(''); setProgress(0);
+    if (files.length === 0) { setError('Select at least one image or video'); return; }
+    setUploading(true); setError('');
 
-    let done = 0;
-    for (const file of files) {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('brand_id', brandId);
-      fd.append('name', files.length === 1 ? (name || file.name) : file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '));
-      fd.append('category', category);
-      fd.append('purpose', purpose);
-      fd.append('format', format);
-      fd.append('aspect_ratio', aspectRatio);
-      fd.append('tags', JSON.stringify(tags.split(',').map(t => t.trim()).filter(Boolean)));
-      fd.append('notes', notes);
+    // Initialize per-file status
+    const initial = Object.fromEntries(files.map(f => [f.name + f.size, 'pending' as const]));
+    setFileStatuses(initial);
 
-      const r = await fetch('/api/content-templates/upload', { method: 'POST', body: fd });
-      const d = await r.json();
-      if (!d.ok) { setError(d.error || 'Upload failed'); break; }
-      done++;
-      setProgress(Math.round((done / files.length) * 100));
-    }
+    // Upload ALL files in parallel
+    const results = await Promise.allSettled(
+      files.map(async (file) => {
+        const key = file.name + file.size;
+        setFileStatuses(s => ({ ...s, [key]: 'uploading' }));
+
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('brand_id', brandId);
+        fd.append('name', files.length === 1 ? (name || file.name) : file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '));
+        fd.append('category', category);
+        fd.append('purpose', purpose);
+        fd.append('format', format);
+        fd.append('aspect_ratio', aspectRatio);
+        fd.append('tags', JSON.stringify(tags.split(',').map(t => t.trim()).filter(Boolean)));
+        fd.append('notes', notes);
+
+        const r = await fetch('/api/content-templates/upload', { method: 'POST', body: fd });
+        const d = await r.json();
+        if (!d.ok) {
+          setFileStatuses(s => ({ ...s, [key]: 'error' }));
+          throw new Error(d.error || 'Upload failed');
+        }
+        setFileStatuses(s => ({ ...s, [key]: 'done' }));
+      })
+    );
 
     setUploading(false);
-    if (done === files.length) onUploaded();
+    const failed = results.filter(r => r.status === 'rejected');
+    const succeeded = results.filter(r => r.status === 'fulfilled').length;
+
+    if (failed.length === 0) {
+      onUploaded();
+    } else {
+      const errMsg = (failed[0] as PromiseRejectedResult).reason?.message ?? 'Upload failed';
+      setError(`${failed.length} file(s) failed: ${errMsg}`);
+      if (succeeded > 0) onUploaded(); // reload even on partial success
+    }
   }
 
   return (
@@ -647,20 +689,46 @@ function UploadModal({
           >
             {previews.length > 0 ? (
               <div className="grid grid-cols-4 gap-2">
-                {previews.map((p, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={i} src={p} alt="" className="w-full aspect-[3/4] object-cover rounded-lg" />
-                ))}
+                {files.map((file, i) => {
+                  const key = file.name + file.size;
+                  const status = fileStatuses[key];
+                  const isVid = file.type.startsWith('video/');
+                  return (
+                    <div key={i} className="relative">
+                      {isVid ? (
+                        <video src={previews[i]} muted preload="metadata" className="w-full aspect-[3/4] object-cover rounded-lg bg-gray-700" />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={previews[i]} alt="" className="w-full aspect-[3/4] object-cover rounded-lg" />
+                      )}
+                      {/* Per-file status overlay */}
+                      {status && (
+                        <div className={`absolute inset-0 rounded-lg flex items-center justify-center ${
+                          status === 'uploading' ? 'bg-black/40' :
+                          status === 'done' ? 'bg-green-900/40' :
+                          status === 'error' ? 'bg-red-900/50' : ''
+                        }`}>
+                          {status === 'uploading' && <span className="text-lg animate-spin">↻</span>}
+                          {status === 'done' && <span className="text-xl text-green-400">✓</span>}
+                          {status === 'error' && <span className="text-xl text-red-400">✕</span>}
+                        </div>
+                      )}
+                      {isVid && !status && (
+                        <span className="absolute bottom-1 right-1 text-[8px] bg-black/70 text-white px-1 rounded">VID</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <>
                 <p className="text-2xl mb-2">🎨</p>
-                <p className="text-sm text-gray-400">Drop images here or click to browse</p>
-                <p className="text-xs text-gray-600 mt-1">Supports multiple files. PNG, JPG, WebP</p>
+                <p className="text-sm text-gray-400">Drop images or videos here or click to browse</p>
+                <p className="text-xs text-gray-600 mt-1">Supports multiple files. PNG, JPG, WebP, MP4, MOV</p>
               </>
             )}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
+          <input ref={fileRef} type="file" accept="image/*,video/*" multiple className="hidden"
             onChange={e => handleFiles(e.target.files)} />
 
           {/* Name (only for single file) */}
@@ -735,8 +803,14 @@ function UploadModal({
 
           {/* Progress */}
           {uploading && (
-            <div className="bg-gray-800 rounded-full h-2 overflow-hidden">
-              <div className="bg-brand-500 h-full transition-all" style={{ width: `${progress}%` }} />
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[10px] text-gray-500">
+                <span>{doneCount}/{files.length} done</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="bg-gray-800 rounded-full h-2 overflow-hidden">
+                <div className="bg-brand-500 h-full transition-all duration-300" style={{ width: `${progress}%` }} />
+              </div>
             </div>
           )}
 
@@ -747,7 +821,7 @@ function UploadModal({
               disabled={uploading || files.length === 0}
               className="flex-1 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium transition-colors"
             >
-              {uploading ? `Analyzing & Uploading... ${progress}%` : `Upload ${files.length || ''} Template${files.length !== 1 ? 's' : ''}`}
+              {uploading ? `Uploading ${files.length} files in parallel...` : `Upload ${files.length || ''} Template${files.length !== 1 ? 's' : ''}`}
             </button>
             <button onClick={onClose} disabled={uploading}
               className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm transition-colors">
@@ -756,7 +830,7 @@ function UploadModal({
           </div>
           {uploading && (
             <p className="text-xs text-gray-500 text-center">
-              Gemini is analyzing layout, typography, color & zones...
+              Uploading all files simultaneously — Gemini analyzing images in parallel...
             </p>
           )}
         </div>
