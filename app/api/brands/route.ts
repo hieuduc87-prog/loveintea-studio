@@ -1,15 +1,42 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
+import { authOptions } from '@/lib/auth-options';
 
 export async function GET() {
   const db = getDb();
-  const brands = db.prepare(`
-    SELECT b.*,
-      (SELECT COUNT(*) FROM products p WHERE p.brand_id = b.id) as product_count
-    FROM brands b ORDER BY b.name
-  `).all();
+  const session = await getServerSession(authOptions);
+  const role = session?.user?.role ?? 'viewer';
+  const userId = session?.user?.id;
+
+  // Brand scoping: admins see all; members see assigned brands;
+  // users with no membership rows see all (legacy single-team behavior)
+  let brands;
+  if (role === 'admin' || role === 'root_admin' || !userId) {
+    brands = db.prepare(`
+      SELECT b.*,
+        (SELECT COUNT(*) FROM products p WHERE p.brand_id = b.id) as product_count
+      FROM brands b ORDER BY b.name
+    `).all();
+  } else {
+    const memberships = db.prepare(`SELECT brand_id FROM brand_members WHERE user_id = ?`).all(userId) as Array<{ brand_id: string }>;
+    if (memberships.length === 0) {
+      brands = db.prepare(`
+        SELECT b.*,
+          (SELECT COUNT(*) FROM products p WHERE p.brand_id = b.id) as product_count
+        FROM brands b ORDER BY b.name
+      `).all();
+    } else {
+      const placeholders = memberships.map(() => '?').join(',');
+      brands = db.prepare(`
+        SELECT b.*,
+          (SELECT COUNT(*) FROM products p WHERE p.brand_id = b.id) as product_count
+        FROM brands b WHERE b.id IN (${placeholders}) ORDER BY b.name
+      `).all(...memberships.map(m => m.brand_id));
+    }
+  }
   return NextResponse.json({ brands });
 }
 

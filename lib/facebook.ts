@@ -5,6 +5,7 @@
 
 import crypto from 'crypto';
 import { getDb } from './db';
+import { decrypt } from './crypto';
 
 const GRAPH    = 'https://graph.facebook.com/v21.0';
 const APP_ID   = '1267157968709745';  // Same app as HLT
@@ -36,6 +37,46 @@ function igAccountId(): string {
   return process.env.IG_BUSINESS_ACCOUNT_ID || getSetting('IG_BUSINESS_ACCOUNT_ID') || '';
 }
 
+// ─────────────────────────────────────────────────────────
+// Multi-brand channel credentials
+// channels.credentials JSON: { page_id, page_name, ig_account_id,
+//   token_enc, token_iv, token_tag } — page token AES-256-GCM encrypted
+// ─────────────────────────────────────────────────────────
+
+export interface ChannelCreds {
+  pageId: string;
+  pageToken: string;
+  igId: string;
+  pageName: string;
+  source: 'channel' | 'legacy';
+}
+
+/** Resolve FB/IG credentials for a brand: channels row first, legacy env/settings fallback. */
+export function getChannelCreds(brandId?: string): ChannelCreds {
+  if (brandId) {
+    try {
+      const row = getDb().prepare(
+        `SELECT credentials FROM channels
+         WHERE brand_id=? AND platform='facebook' AND status='active'
+         ORDER BY created_at DESC LIMIT 1`
+      ).get(brandId) as { credentials: string } | undefined;
+      if (row) {
+        const c = JSON.parse(row.credentials) as Record<string, string>;
+        if (c.token_enc && c.page_id) {
+          return {
+            pageId: c.page_id,
+            pageToken: decrypt(c.token_enc, c.token_iv, c.token_tag),
+            igId: c.ig_account_id || '',
+            pageName: c.page_name || '',
+            source: 'channel',
+          };
+        }
+      }
+    } catch { /* fall through to legacy */ }
+  }
+  return { pageId: pageId(), pageToken: token(), igId: igAccountId(), pageName: getSetting('FB_PAGE_NAME'), source: 'legacy' };
+}
+
 export interface PostResult {
   ok: boolean;
   postId?: string;
@@ -43,11 +84,11 @@ export interface PostResult {
 }
 
 /** Upload a photo unpublished and return media_fbid */
-async function uploadPhoto(imageUrl: string): Promise<string> {
-  const r = await fetch(`${GRAPH}/${pageId()}/photos`, {
+async function uploadPhoto(imageUrl: string, creds: ChannelCreds): Promise<string> {
+  const r = await fetch(`${GRAPH}/${creds.pageId}/photos`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: imageUrl, published: false, access_token: token() }),
+    body: JSON.stringify({ url: imageUrl, published: false, access_token: creds.pageToken }),
   });
   const d = await r.json() as { id?: string; error?: { message: string } };
   if (!d.id) throw new Error(d.error?.message ?? 'Photo upload failed');
@@ -59,17 +100,19 @@ export async function postToFacebook(opts: {
   caption: string;
   imageUrls: string[];
   scheduledAt?: Date;
+  brandId?: string;
 }): Promise<PostResult> {
   try {
-    const tok = token();
-    const pid = pageId();
+    const creds = getChannelCreds(opts.brandId);
+    const tok = creds.pageToken;
+    const pid = creds.pageId;
     if (!tok || !pid) return { ok: false, error: 'FB credentials not configured.' };
 
     const { caption, imageUrls, scheduledAt } = opts;
 
     const mediaIds: string[] = [];
     for (const url of imageUrls) {
-      if (url) mediaIds.push(await uploadPhoto(toAbsoluteUrl(url)));
+      if (url) mediaIds.push(await uploadPhoto(toAbsoluteUrl(url), creds));
     }
 
     const body: Record<string, unknown> = {
@@ -103,10 +146,12 @@ export async function postToFacebook(opts: {
 export async function postToInstagram(opts: {
   caption: string;
   imageUrls: string[];
+  brandId?: string;
 }): Promise<PostResult> {
   try {
-    const tok  = token();
-    const igId = igAccountId();
+    const creds = getChannelCreds(opts.brandId);
+    const tok  = creds.pageToken;
+    const igId = creds.igId;
     if (!tok || !igId) return { ok: false, error: 'IG credentials not configured. Go to Publisher → FB Setup.' };
 
     const { caption, imageUrls } = opts;
@@ -207,11 +252,12 @@ export interface TokenHealth {
 }
 
 /** Validate the stored page token via /debug_token (needs FB_APP_SECRET for app token). */
-export async function checkTokenHealth(): Promise<TokenHealth> {
+export async function checkTokenHealth(brandId?: string): Promise<TokenHealth> {
   const now = new Date().toISOString();
-  const tok = token();
+  const creds = getChannelCreds(brandId);
+  const tok = creds.pageToken;
   const base: TokenHealth = {
-    configured: Boolean(tok && pageId()), valid: false,
+    configured: Boolean(tok && creds.pageId), valid: false,
     expiresAt: null, daysLeft: null, pageName: '', error: '', checkedAt: now,
   };
   if (!base.configured) { base.error = 'No page token configured'; return base; }
@@ -235,7 +281,7 @@ export async function checkTokenHealth(): Promise<TokenHealth> {
       }
     }
     // Cross-check the token can actually read the page
-    const pr = await fetch(`${GRAPH}/${pageId()}?fields=id,name&access_token=${tok}`);
+    const pr = await fetch(`${GRAPH}/${creds.pageId}?fields=id,name&access_token=${tok}`);
     const pd = await pr.json() as { id?: string; name?: string; error?: { message: string } };
     if (pd.id) { base.valid = true; base.pageName = pd.name ?? ''; base.error = ''; }
     else if (pd.error) { base.valid = false; base.error = pd.error.message; }
@@ -256,9 +302,9 @@ export interface FetchedMetrics {
 }
 
 /** Fetch engagement + insights for a published FB Page post. Best-effort: insights metrics vary by API version. */
-export async function getFbPostMetrics(fbPostId: string): Promise<FetchedMetrics | null> {
+export async function getFbPostMetrics(fbPostId: string, brandId?: string): Promise<FetchedMetrics | null> {
   try {
-    const tok = token();
+    const tok = getChannelCreds(brandId).pageToken;
     if (!tok) return null;
     const m: FetchedMetrics = { reach: 0, impressions: 0, engaged: 0, reactions: 0, comments: 0, shares: 0, saves: 0 };
 
@@ -287,9 +333,9 @@ export async function getFbPostMetrics(fbPostId: string): Promise<FetchedMetrics
 }
 
 /** Fetch engagement + insights for a published IG media. */
-export async function getIgMediaMetrics(igMediaId: string): Promise<FetchedMetrics | null> {
+export async function getIgMediaMetrics(igMediaId: string, brandId?: string): Promise<FetchedMetrics | null> {
   try {
-    const tok = token();
+    const tok = getChannelCreds(brandId).pageToken;
     if (!tok) return null;
     const m: FetchedMetrics = { reach: 0, impressions: 0, engaged: 0, reactions: 0, comments: 0, shares: 0, saves: 0 };
 

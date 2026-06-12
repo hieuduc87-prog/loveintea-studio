@@ -13,8 +13,12 @@ export async function GET(req: NextRequest) {
     (db.prepare('SELECT value, updated_at FROM settings WHERE key=?').get(k) as { value: string; updated_at: string } | undefined);
 
   // ── Facebook token health (cached by scheduler every 6h, or live) ──
+  const brandId = req.nextUrl.searchParams.get('brandId') || undefined;
   let fbToken: TokenHealth | null = null;
-  if (req.nextUrl.searchParams.get('live') === '1') {
+  if (brandId && brandId !== 'loveintea') {
+    // Non-default brands: always live-check their own channel creds
+    fbToken = await checkTokenHealth(brandId);
+  } else if (req.nextUrl.searchParams.get('live') === '1') {
     fbToken = await checkTokenHealth();
     db.prepare(`INSERT INTO settings (key, value, updated_at) VALUES ('fb_token_health', ?, datetime('now'))
       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`)

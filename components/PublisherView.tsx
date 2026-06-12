@@ -9,9 +9,10 @@ interface OAuthPage {
 interface FbStatus { connected: boolean; pageId: string; pageName: string; igId: string; pageInfo: Record<string, unknown> }
 interface PublishResult { fb?: { ok: boolean; postId?: string; error?: string }; ig?: { ok: boolean; postId?: string; error?: string } }
 
-export function PublisherView({ fbSuccess, fbError }: { fbSuccess?: boolean; fbError?: string } = {}) {
+export function PublisherView({ fbSuccess, fbError, brandId }: { fbSuccess?: boolean; fbError?: string; brandId?: string } = {}) {
   const [tab, setTab] = useState<'setup' | 'post' | 'schedule'>('setup');
   const [status, setStatus] = useState<FbStatus | null>(null);
+  const bid = brandId || 'loveintea';
 
   // OAuth connection state
   const [oauthPages, setOauthPages]   = useState<OAuthPage[]>([]);
@@ -19,6 +20,14 @@ export function PublisherView({ fbSuccess, fbError }: { fbSuccess?: boolean; fbE
   const [oauthMsg, setOauthMsg]       = useState('');
   const [activating, setActivating]   = useState('');
   const [disconnecting, setDisconnecting] = useState(false);
+
+  // Manual / System User token state
+  const [manualOpen, setManualOpen]     = useState(false);
+  const [manualToken, setManualToken]   = useState('');
+  const [manualPageId, setManualPageId] = useState('');
+  const [manualPages, setManualPages]   = useState<Array<{ id: string; name: string; access_token: string }>>([]);
+  const [manualBusy, setManualBusy]     = useState(false);
+  const [manualMsg, setManualMsg]       = useState('');
 
   // Post state
   const [caption, setCaption]     = useState('');
@@ -31,11 +40,11 @@ export function PublisherView({ fbSuccess, fbError }: { fbSuccess?: boolean; fbE
   const [postError, setPostError] = useState('');
 
   const loadStatus = useCallback(async () => {
-    const r = await fetch('/api/fb-setup/status');
+    const r = await fetch(`/api/fb-setup/status?brandId=${bid}`);
     const d = await r.json() as FbStatus;
     setStatus(d);
     if (d.connected) setTab('post');
-  }, []);
+  }, [bid]);
 
   const loadOauthPages = useCallback(async () => {
     const r = await fetch('/api/auth/facebook/pages');
@@ -88,6 +97,52 @@ export function PublisherView({ fbSuccess, fbError }: { fbSuccess?: boolean; fbE
     setDisconnecting(false);
   }
 
+  /** Manual flow: page token + page ID → save directly; user token → list pages to pick */
+  async function manualLookupOrSave() {
+    if (!manualToken.trim()) { setManualMsg('❌ Dán token vào trước'); return; }
+    setManualBusy(true); setManualMsg(''); setManualPages([]);
+    try {
+      if (manualPageId.trim()) {
+        // Direct save: token + page id (System User / page token path)
+        const r = await fetch('/api/fb-setup/save', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brandId: bid, pageId: manualPageId.trim(), pageAccessToken: manualToken.trim() }),
+        });
+        const d = await r.json() as { ok?: boolean; pageName?: string; igAccountId?: string; error?: string };
+        if (d.ok) {
+          setManualMsg(`✅ Đã lưu page "${d.pageName}"${d.igAccountId ? ` + IG ${d.igAccountId}` : ''} cho brand này`);
+          setManualToken(''); setManualPageId('');
+          await loadStatus();
+        } else setManualMsg('❌ ' + (d.error ?? 'Save failed'));
+      } else {
+        // User token → list manageable pages
+        const r = await fetch('/api/fb-setup/pages', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userToken: manualToken.trim() }),
+        });
+        const d = await r.json() as { pages?: Array<{ id: string; name: string; access_token: string }>; error?: string };
+        if (d.pages?.length) { setManualPages(d.pages); setManualMsg(`Tìm thấy ${d.pages.length} page — chọn 1 page bên dưới:`); }
+        else setManualMsg('❌ ' + (d.error ?? 'Không tìm thấy page nào. Nếu đây là PAGE token (không phải user token), điền thêm Page ID rồi bấm lại.'));
+      }
+    } catch (e) { setManualMsg('❌ ' + String(e)); }
+    setManualBusy(false);
+  }
+
+  async function manualPickPage(p: { id: string; name: string; access_token: string }) {
+    setManualBusy(true);
+    const r = await fetch('/api/fb-setup/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: bid, pageId: p.id, pageAccessToken: p.access_token, pageName: p.name }),
+    });
+    const d = await r.json() as { ok?: boolean; igAccountId?: string; error?: string };
+    if (d.ok) {
+      setManualMsg(`✅ Đã kết nối page "${p.name}"${d.igAccountId ? ` + IG ${d.igAccountId}` : ''}`);
+      setManualPages([]); setManualToken('');
+      await loadStatus();
+    } else setManualMsg('❌ ' + (d.error ?? 'Save failed'));
+    setManualBusy(false);
+  }
+
   async function publish() {
     if (!caption.trim()) { setPostError('Caption required'); return; }
     setPublishing(true);
@@ -99,8 +154,9 @@ export function PublisherView({ fbSuccess, fbError }: { fbSuccess?: boolean; fbE
       body: JSON.stringify({
         caption,
         imageUrls: imageUrl ? [imageUrl] : [],
+        brandId: bid,
         platforms: [...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])],
-        scheduledAt: scheduledAt || undefined,
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       }),
     });
     const d = await r.json() as PublishResult & { error?: string };
@@ -228,6 +284,53 @@ export function PublisherView({ fbSuccess, fbError }: { fbSuccess?: boolean; fbE
               </a>
             </div>
           )}
+
+          {/* ── Manual / System User token (per-brand) ── */}
+          <div className="border-t border-gray-800 pt-4">
+            <button onClick={() => setManualOpen(o => !o)}
+              className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors">
+              <span className={`transition-transform ${manualOpen ? 'rotate-90' : ''}`}>▸</span>
+              🔧 Nhập token thủ công / System User token (khuyên dùng cho brand khách hàng)
+            </button>
+            {manualOpen && (
+              <div className="mt-3 space-y-3">
+                <div className="bg-gray-800/50 rounded-lg p-3 text-[11px] text-gray-400 space-y-1">
+                  <p><b className="text-gray-300">Cách lấy System User token (never-expire):</b> business.facebook.com → Settings → System Users → tạo system user → gán Page + App + IG (đủ 3 bước) → Generate Token với scopes pages_manage_posts, instagram_content_publish.</p>
+                  <p>Hoặc dán <b className="text-gray-300">User token</b> từ Graph API Explorer → hệ thống tự liệt kê pages để chọn.</p>
+                  <p>Token lưu mã hóa AES-256-GCM, gắn riêng cho brand: <b className="text-brand-400">{bid}</b></p>
+                </div>
+                <textarea value={manualToken} onChange={e => setManualToken(e.target.value)}
+                  placeholder="Dán token vào đây (user token hoặc page/system-user token)…"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white resize-none focus:outline-none focus:border-brand-500 h-16 font-mono" />
+                <div className="flex gap-2">
+                  <input value={manualPageId} onChange={e => setManualPageId(e.target.value)}
+                    placeholder="Page ID (chỉ cần nếu dán page/system-user token)"
+                    className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+                  <button onClick={manualLookupOrSave} disabled={manualBusy}
+                    className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors">
+                    {manualBusy ? '…' : manualPageId.trim() ? 'Xác thực & Lưu' : 'Tìm Pages'}
+                  </button>
+                </div>
+                {manualMsg && <p className={`text-xs ${manualMsg.startsWith('✅') ? 'text-green-400' : manualMsg.startsWith('❌') ? 'text-red-400' : 'text-gray-300'}`}>{manualMsg}</p>}
+                {manualPages.length > 0 && (
+                  <div className="space-y-2">
+                    {manualPages.map(p => (
+                      <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-800 border border-gray-700">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-white font-medium">{p.name}</p>
+                          <p className="text-[10px] text-gray-500">ID: {p.id}</p>
+                        </div>
+                        <button onClick={() => manualPickPage(p)} disabled={manualBusy}
+                          className="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">
+                          Dùng page này
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

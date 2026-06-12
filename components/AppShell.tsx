@@ -467,7 +467,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'image_studio'     && <ImageStudioView brandId={bid} />}
                 {id === 'blog_factory'     && <BlogFactoryView brandId={bid} />}
                 {id === 'content_queue'    && <ContentQueueView brandId={bid} />}
-                {id === 'publisher'        && <PublisherView fbSuccess={fbSuccess} fbError={fbError} />}
+                {id === 'publisher'        && <PublisherView fbSuccess={fbSuccess} fbError={fbError} brandId={bid} />}
                 {id === 'job_queue'        && <JobQueueView />}
                 {id === 'analytics'        && <AnalyticsView brandId={bid} />}
                 {id === 'asset_dam'        && <AssetDamView brandId={bid} />}

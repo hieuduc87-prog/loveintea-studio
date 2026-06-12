@@ -11,6 +11,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   const caption   = post.caption ?? '';
   const imageUrls = post.image_url ? [post.image_url] : [];
+  const brandId   = post.brand_id || 'loveintea';
   // Column is `platforms`: 'facebook' | 'instagram' | 'facebook,instagram'
   const platforms = (post.platforms ?? 'facebook').split(',').map(p => p.trim());
 
@@ -21,7 +22,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const result: Record<string, PostResult> = {};
 
   if (platforms.includes('facebook')) {
-    const fb = await postToFacebook({ caption, imageUrls });
+    const fb = await postToFacebook({ caption, imageUrls, brandId });
     result.fb = fb;
     logInsert.run(uuid(), params.id, 'facebook', fb.ok ? 'ok' : 'failed', fb.postId ?? null, fb.error ?? null);
     if (fb.ok) {
@@ -31,7 +32,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   }
 
   if (platforms.includes('instagram')) {
-    const ig = await postToInstagram({ caption, imageUrls });
+    const ig = await postToInstagram({ caption, imageUrls, brandId });
     result.ig = ig;
     logInsert.run(uuid(), params.id, 'instagram', ig.ok ? 'ok' : 'failed', ig.postId ?? null, ig.error ?? null);
     if (ig.ok) {

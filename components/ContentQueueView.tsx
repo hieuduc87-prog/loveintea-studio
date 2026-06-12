@@ -86,6 +86,7 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
         body: JSON.stringify({
           caption: post.caption,
           imageUrls: post.image_url ? [post.image_url] : [],
+          brandId,
           platforms: [...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])],
           // datetime-local input is browser-local time — convert to ISO UTC
           // so the server (UTC container) schedules at the intended moment

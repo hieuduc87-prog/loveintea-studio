@@ -4,18 +4,19 @@ import { postToFacebook, postToInstagram } from '@/lib/facebook';
 
 export async function POST(req: NextRequest) {
   try {
-    const { caption, imageUrls, platforms, scheduledAt } = await req.json() as {
+    const { caption, imageUrls, platforms, scheduledAt, brandId } = await req.json() as {
       caption: string;
       imageUrls: string[];
       platforms: string[];
       scheduledAt?: string;
+      brandId?: string;
     };
 
     const result: Record<string, unknown> = {};
     const schedDate = scheduledAt ? new Date(scheduledAt) : undefined;
 
     if (platforms?.includes('facebook')) {
-      result.fb = await postToFacebook({ caption, imageUrls, scheduledAt: schedDate });
+      result.fb = await postToFacebook({ caption, imageUrls, scheduledAt: schedDate, brandId });
     }
     if (platforms?.includes('instagram')) {
       if (schedDate) {
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
         // scheduler (lib/scheduler.ts) publishes it when scheduled_at is due.
         result.ig = { ok: true, deferred: true };
       } else {
-        result.ig = await postToInstagram({ caption, imageUrls });
+        result.ig = await postToInstagram({ caption, imageUrls, brandId });
       }
     }
 

@@ -44,7 +44,7 @@ export function DashboardView({ brandId, onNavigate }: { brandId: string; onNavi
   const load = useCallback(async (live = false) => {
     try {
       const [hr, sr] = await Promise.all([
-        fetch(`/api/health${live ? '?live=1' : ''}`),
+        fetch(`/api/health?brandId=${brandId}${live ? '&live=1' : ''}`),
         fetch(`/api/scoreboard?brandId=${brandId}`),
       ]);
       const h = await hr.json();

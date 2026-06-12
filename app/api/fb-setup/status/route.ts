@@ -1,27 +1,29 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { NextRequest, NextResponse } from 'next/server';
+import { getChannelCreds } from '@/lib/facebook';
 
-export async function GET() {
-  const db = getDb();
-  const get = (key: string) => (db.prepare('SELECT value FROM settings WHERE key=?').get(key) as { value: string } | undefined)?.value ?? '';
+export async function GET(req: NextRequest) {
+  const brandId = req.nextUrl.searchParams.get('brandId') || undefined;
+  const creds = getChannelCreds(brandId);
 
-  const pageId    = process.env.FB_PAGE_ID     || get('FB_PAGE_ID');
-  const pageToken = process.env.FB_PAGE_ACCESS_TOKEN || get('FB_PAGE_ACCESS_TOKEN');
-  const igId      = process.env.IG_BUSINESS_ACCOUNT_ID || get('IG_BUSINESS_ACCOUNT_ID');
-  const pageName  = get('FB_PAGE_NAME');
-
-  const connected = Boolean(pageId && pageToken);
+  const connected = Boolean(creds.pageId && creds.pageToken);
   let pageInfo: Record<string, unknown> = {};
 
   if (connected) {
     try {
       const r = await fetch(
-        `https://graph.facebook.com/v21.0/${pageId}?fields=id,name,fan_count,picture&access_token=${pageToken}`
+        `https://graph.facebook.com/v21.0/${creds.pageId}?fields=id,name,fan_count,picture&access_token=${creds.pageToken}`
       );
       pageInfo = await r.json() as Record<string, unknown>;
     } catch { /* ignore */ }
   }
 
-  return NextResponse.json({ connected, pageId, pageName, igId, pageInfo });
+  return NextResponse.json({
+    connected,
+    pageId: creds.pageId,
+    pageName: creds.pageName || (pageInfo.name as string) || '',
+    igId: creds.igId,
+    source: creds.source,
+    pageInfo,
+  });
 }

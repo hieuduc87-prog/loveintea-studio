@@ -11,8 +11,9 @@ export async function POST(req: NextRequest) {
     if (!userToken) return NextResponse.json({ error: 'userToken required' }, { status: 400 });
 
     // 1. Exchange short-lived user token for long-lived user token
-    const APP_ID     = process.env.FB_APP_ID     ?? '1267157968709745';
-    const APP_SECRET = process.env.FB_APP_SECRET ?? '1a7214dca7cf09db8f51ce9fe93c616a';
+    const APP_ID     = process.env.FB_APP_ID ?? '1267157968709745';
+    const APP_SECRET = process.env.FB_APP_SECRET;
+    if (!APP_SECRET) return NextResponse.json({ error: 'FB_APP_SECRET env var not set' }, { status: 500 });
 
     const llRes = await fetch(
       `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${APP_SECRET}&fb_exchange_token=${userToken}`

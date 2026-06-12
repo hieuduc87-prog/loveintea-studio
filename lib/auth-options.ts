@@ -42,12 +42,15 @@ export const authOptions: NextAuthOptions = {
     },
 
     async jwt({ token, user }) {
-      // On first sign-in, user is available — enrich token with DB data
-      if (user?.email) {
+      // On first sign-in, user is available — enrich token with DB data.
+      // Also backfill role for older JWTs issued before the role claim existed
+      // (otherwise the role middleware would treat the owner as read-only viewer).
+      const email = user?.email ?? (!token.role ? token.email : null);
+      if (email) {
         const db = getDb();
         const dbUser = db
           .prepare('SELECT id, role, is_approved FROM auth_users WHERE email = ?')
-          .get(user.email) as { id: string; role: string; is_approved: number } | undefined;
+          .get(email) as { id: string; role: string; is_approved: number } | undefined;
 
         if (dbUser) {
           token.id = dbUser.id;

@@ -64,6 +64,7 @@ export async function refreshTokenHealth() {
 interface DuePost {
   id: string; caption: string | null; image_url: string | null;
   platforms: string | null; fb_post_id: string | null; ig_post_id: string | null;
+  brand_id: string | null;
 }
 
 export async function publishDuePosts() {
@@ -71,7 +72,7 @@ export async function publishDuePosts() {
   // Heartbeat — Dashboard reads this to confirm the scheduler is alive
   upsertSetting('scheduler_last_tick', new Date().toISOString());
   const due = db.prepare(`
-    SELECT id, caption, image_url, platforms, fb_post_id, ig_post_id
+    SELECT id, caption, image_url, platforms, fb_post_id, ig_post_id, brand_id
     FROM posts
     WHERE status = 'scheduled'
       AND scheduled_at IS NOT NULL
@@ -90,6 +91,7 @@ export async function publishDuePosts() {
     const platforms = (post.platforms ?? 'facebook').split(',').map(p => p.trim());
     const caption = post.caption ?? '';
     const imageUrls = post.image_url ? [post.image_url] : [];
+    const brandId = post.brand_id || 'loveintea';
     let anyOk = false;
     let anyFail = false;
 
@@ -99,7 +101,7 @@ export async function publishDuePosts() {
       if (post.fb_post_id) {
         anyOk = true;
       } else {
-        const fb = await postToFacebook({ caption, imageUrls });
+        const fb = await postToFacebook({ caption, imageUrls, brandId });
         logInsert.run(uuid(), post.id, 'facebook', fb.ok ? 'ok' : 'failed', fb.postId ?? null, fb.error ?? null);
         if (fb.ok) {
           db.prepare('UPDATE posts SET fb_post_id = ? WHERE id = ?').run(fb.postId, post.id);
@@ -110,7 +112,7 @@ export async function publishDuePosts() {
 
     // IG: no native scheduling — publish now if not already published.
     if (platforms.includes('instagram') && !post.ig_post_id) {
-      const ig = await postToInstagram({ caption, imageUrls });
+      const ig = await postToInstagram({ caption, imageUrls, brandId });
       logInsert.run(uuid(), post.id, 'instagram', ig.ok ? 'ok' : 'failed', ig.postId ?? null, ig.error ?? null);
       if (ig.ok) {
         db.prepare('UPDATE posts SET ig_post_id = ? WHERE id = ?').run(ig.postId, post.id);
@@ -161,11 +163,11 @@ export async function syncMetrics() {
   for (const p of posts) {
     const brandId = p.brand_id || 'loveintea';
     if (p.fb_post_id) {
-      const m = await getFbPostMetrics(p.fb_post_id);
+      const m = await getFbPostMetrics(p.fb_post_id, brandId);
       if (m) { upsertMetrics(p.id, brandId, 'facebook', m); synced++; }
     }
     if (p.ig_post_id) {
-      const m = await getIgMediaMetrics(p.ig_post_id);
+      const m = await getIgMediaMetrics(p.ig_post_id, brandId);
       if (m) { upsertMetrics(p.id, brandId, 'instagram', m); synced++; }
     }
   }

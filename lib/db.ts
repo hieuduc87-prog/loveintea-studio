@@ -692,6 +692,18 @@ function initSchema(db: Database.Database) {
       UNIQUE(brand_id, angle, channel)
     );
 
+    -- Brand membership: which users can access which brands.
+    -- Admins/root_admins see all brands. Non-admins with rows here are
+    -- scoped to those brands; non-admins with NO rows see all (legacy).
+    CREATE TABLE IF NOT EXISTS brand_members (
+      user_id    TEXT NOT NULL,
+      brand_id   TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+      role       TEXT DEFAULT 'member',
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, brand_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_brand_members_user ON brand_members(user_id);
+
     CREATE INDEX IF NOT EXISTS idx_briefs_brand   ON briefs(brand_id);
     CREATE INDEX IF NOT EXISTS idx_briefs_status   ON briefs(status);
     CREATE INDEX IF NOT EXISTS idx_rules_brand     ON content_rules(brand_id, status);
