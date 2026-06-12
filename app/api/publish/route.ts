@@ -18,8 +18,13 @@ export async function POST(req: NextRequest) {
       result.fb = await postToFacebook({ caption, imageUrls, scheduledAt: schedDate });
     }
     if (platforms?.includes('instagram')) {
-      // IG doesn't support scheduling via API — post immediately
-      result.ig = await postToInstagram({ caption, imageUrls });
+      if (schedDate) {
+        // IG doesn't support scheduling via Graph API — the background
+        // scheduler (lib/scheduler.ts) publishes it when scheduled_at is due.
+        result.ig = { ok: true, deferred: true };
+      } else {
+        result.ig = await postToInstagram({ caption, imageUrls });
+      }
     }
 
     return NextResponse.json(result);

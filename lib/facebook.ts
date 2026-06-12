@@ -192,6 +192,76 @@ export async function getIgInsights() {
   return r.json();
 }
 
+// ─────────────────────────────────────────────────────────
+// Metrics fetchers — feed the Intelligence layer (post_metrics)
+// ─────────────────────────────────────────────────────────
+
+export interface FetchedMetrics {
+  reach: number; impressions: number; engaged: number;
+  reactions: number; comments: number; shares: number; saves: number;
+}
+
+/** Fetch engagement + insights for a published FB Page post. Best-effort: insights metrics vary by API version. */
+export async function getFbPostMetrics(fbPostId: string): Promise<FetchedMetrics | null> {
+  try {
+    const tok = token();
+    if (!tok) return null;
+    const m: FetchedMetrics = { reach: 0, impressions: 0, engaged: 0, reactions: 0, comments: 0, shares: 0, saves: 0 };
+
+    const r = await fetch(
+      `${GRAPH}/${fbPostId}?fields=reactions.summary(true).limit(0),comments.summary(true).limit(0),shares&access_token=${tok}`
+    );
+    const d = await r.json() as Record<string, { summary?: { total_count?: number }; count?: number }> & { error?: { message: string } };
+    if (d.error) return null;
+    m.reactions = d.reactions?.summary?.total_count ?? 0;
+    m.comments  = d.comments?.summary?.total_count ?? 0;
+    m.shares    = d.shares?.count ?? 0;
+
+    try {
+      const ir = await fetch(`${GRAPH}/${fbPostId}/insights?metric=post_impressions,post_impressions_unique&access_token=${tok}`);
+      const idata = await ir.json() as { data?: Array<{ name: string; values?: Array<{ value: number }> }> };
+      for (const row of idata.data ?? []) {
+        const v = Number(row.values?.[0]?.value ?? 0);
+        if (row.name === 'post_impressions') m.impressions = v;
+        if (row.name === 'post_impressions_unique') m.reach = v;
+      }
+    } catch { /* insights optional */ }
+
+    m.engaged = m.reactions + m.comments + m.shares;
+    return m;
+  } catch { return null; }
+}
+
+/** Fetch engagement + insights for a published IG media. */
+export async function getIgMediaMetrics(igMediaId: string): Promise<FetchedMetrics | null> {
+  try {
+    const tok = token();
+    if (!tok) return null;
+    const m: FetchedMetrics = { reach: 0, impressions: 0, engaged: 0, reactions: 0, comments: 0, shares: 0, saves: 0 };
+
+    const r = await fetch(`${GRAPH}/${igMediaId}?fields=like_count,comments_count&access_token=${tok}`);
+    const d = await r.json() as { like_count?: number; comments_count?: number; error?: { message: string } };
+    if (d.error) return null;
+    m.reactions = d.like_count ?? 0;
+    m.comments  = d.comments_count ?? 0;
+
+    try {
+      const ir = await fetch(`${GRAPH}/${igMediaId}/insights?metric=reach,saved,shares,views&access_token=${tok}`);
+      const idata = await ir.json() as { data?: Array<{ name: string; values?: Array<{ value: number }> }> };
+      for (const row of idata.data ?? []) {
+        const v = Number(row.values?.[0]?.value ?? 0);
+        if (row.name === 'reach')  m.reach = v;
+        if (row.name === 'saved')  m.saves = v;
+        if (row.name === 'shares') m.shares = v;
+        if (row.name === 'views')  m.impressions = v;
+      }
+    } catch { /* insights optional */ }
+
+    m.engaged = m.reactions + m.comments + m.shares + m.saves;
+    return m;
+  } catch { return null; }
+}
+
 // expose app id for OAuth URL construction
 export { APP_ID };
 

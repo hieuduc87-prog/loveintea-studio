@@ -87,7 +87,9 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
           caption: post.caption,
           imageUrls: post.image_url ? [post.image_url] : [],
           platforms: [...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])],
-          scheduledAt: scheduledAt || undefined,
+          // datetime-local input is browser-local time — convert to ISO UTC
+          // so the server (UTC container) schedules at the intended moment
+          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
         }),
       });
       const d = await r.json() as typeof pubResult & { error?: string };
@@ -103,8 +105,9 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
           body: JSON.stringify({
             status: newStatus,
             fb_post_id: fbPostId,
+            platforms: [...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])].join(','),
             published_at: newStatus === 'published' ? new Date().toISOString() : null,
-            scheduled_at: scheduledAt || null,
+            scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
           }),
         });
         setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: newStatus } : p));

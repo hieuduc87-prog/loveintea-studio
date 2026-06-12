@@ -11,7 +11,16 @@ function getClient() {
   return _client;
 }
 
-const MODELS = ['gemini-2.5-flash-preview-05-20', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
+// Stable GA models only — preview models get retired without notice
+// (gemini-2.0-flash deprecation already broke production once, commit 6e80b52)
+const MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+
+/** Retryable = transient (503/429) OR model gone (404/deprecated) — fall through to next model */
+function isRetryable(e: unknown): boolean {
+  const msg = String(e).toLowerCase();
+  return ['503', 'unavailable', 'overloaded', '429', 'quota', 'rate limit',
+    '404', 'not found', 'deprecated', 'no longer available'].some(s => msg.includes(s));
+}
 
 async function tryGenerate(prompt: string, jsonMode: boolean): Promise<string> {
   let lastError: unknown;
@@ -26,9 +35,7 @@ async function tryGenerate(prompt: string, jsonMode: boolean): Promise<string> {
       return result.response.text().trim();
     } catch (e) {
       lastError = e;
-      // 503 = model overloaded, try next
-      const msg = String(e);
-      if (!msg.includes('503') && !msg.includes('unavailable') && !msg.includes('overloaded')) throw e;
+      if (!isRetryable(e)) throw e;
     }
   }
   throw lastError;
@@ -60,8 +67,7 @@ export async function analyzeImage(imageBuffer: Buffer, mimeType: string, prompt
       return result.response.text().trim();
     } catch (e) {
       lastError = e;
-      const msg = String(e);
-      if (!msg.includes('503') && !msg.includes('unavailable') && !msg.includes('overloaded')) throw e;
+      if (!isRetryable(e)) throw e;
     }
   }
   throw lastError;
