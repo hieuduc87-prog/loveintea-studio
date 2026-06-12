@@ -29,6 +29,7 @@ import { KnowledgeHubView }  from './KnowledgeHubView';
 import { ScoreboardView }   from './ScoreboardView';
 import { RulesEngineView }  from './RulesEngineView';
 import { ContentTemplatesView } from './ContentTemplatesView';
+import { DashboardView }      from './DashboardView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ interface BrandSummary {
 }
 
 type TabId =
+  | 'dashboard'
   | 'brands' | 'brand_dna' | 'products' | 'knowledge_hub' | 'rules_engine' | 'scoreboard'
   | 'import_plan' | 'calendar' | 'schedule'
   | 'content_workshop' | 'image_studio' | 'blog_factory'
@@ -52,6 +54,8 @@ type TabId =
 // Navigation restructured to match Closed-Loop Content Engine:
 // Brain → Plan → Create → Review → Publish → Engage → Learn → (loop)
 const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
+  // HOME — Dashboard tổng quan + system health
+  { id: 'dashboard',        label: 'Dashboard',        icon: '🏠', group: 'Home' },
   // BRAIN — Brand identity + knowledge + rules (Fixed Core)
   { id: 'knowledge_hub',    label: 'Knowledge Hub',    icon: '🧠', group: 'Brain' },
   { id: 'brand_dna',        label: 'Brand DNA',        icon: '🌿', group: 'Brain' },
@@ -88,7 +92,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
 ];
 
 // Closed-loop pipeline order
-const NAV_GROUPS = ['Brain', 'Plan', 'Create', 'Publish', 'Engage', 'Learn', 'Library', 'System'];
+const NAV_GROUPS = ['Home', 'Brain', 'Plan', 'Create', 'Publish', 'Engage', 'Learn', 'Library', 'System'];
 
 const TAB_LABELS: Record<TabId, string> = Object.fromEntries(TABS.map(t => [t.id, t.label])) as Record<TabId, string>;
 
@@ -246,9 +250,9 @@ function SidebarContent({
         {NAV_GROUPS.map((group, gi) => {
           const items = TABS.filter(t => t.group === group);
           if (!items.length) return null;
-          // Pipeline groups (first 6) get step numbers + flow line
-          const isPipeline = gi < 6;
-          const stepNum = isPipeline ? gi + 1 : 0;
+          // Pipeline groups (Brain → Learn, indices 1-6) get step numbers + flow line
+          const isPipeline = gi >= 1 && gi <= 6;
+          const stepNum = isPipeline ? gi : 0;
           const groupHasActive = items.some(t => t.id === tab);
           return (
             <div key={group} className={isPipeline ? 'relative' : ''}>
@@ -304,11 +308,11 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
   initialTab?: string; fbSuccess?: boolean; fbError?: string;
 }) {
   const validInitialTab = TABS.find(t => t.id === initialTab) ? (initialTab as TabId) : null;
-  const [tab, setTab]           = useState<TabId>(validInitialTab || 'products');
+  const [tab, setTab]           = useState<TabId>(validInitialTab || 'dashboard');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   // Keep-alive: track which tabs have been visited so they stay mounted
-  const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set([validInitialTab || 'products']));
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set([validInitialTab || 'dashboard']));
 
   // Brand state
   const [brands, setBrands]           = useState<BrandSummary[]>([]);
@@ -448,6 +452,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
             const isActive = tab === id;
             return (
               <div key={id} className={`absolute inset-0 overflow-auto ${isActive ? '' : 'hidden'}`}>
+                {id === 'dashboard'        && <DashboardView brandId={bid} onNavigate={t => changeTab(t as TabId)} />}
                 {id === 'brands'           && <BrandsView onSelectBrand={bId => { const b = brands.find(x => x.id === bId); if (b) setActiveBrand(b); changeTab('products'); }} />}
                 {id === 'knowledge_hub'    && <KnowledgeHubView brandId={bid} />}
                 {id === 'rules_engine'     && <RulesEngineView brandId={bid} />}

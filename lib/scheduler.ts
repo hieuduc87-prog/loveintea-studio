@@ -12,6 +12,7 @@ import { getDb } from './db';
 import {
   postToFacebook, postToInstagram,
   getFbPostMetrics, getIgMediaMetrics, FetchedMetrics,
+  checkTokenHealth,
 } from './facebook';
 import { recomputeScoreboard } from './scoreboard-engine';
 
@@ -34,12 +35,30 @@ export function startScheduler() {
 
   setInterval(() => {
     syncMetrics().catch(e => console.error('[scheduler] metrics error:', e));
+    refreshTokenHealth().catch(e => console.error('[scheduler] token health error:', e));
   }, METRICS_INTERVAL_MS);
 
   // First metrics sync 2 min after boot (let the server settle)
   setTimeout(() => {
     syncMetrics().catch(e => console.error('[scheduler] initial metrics error:', e));
+    refreshTokenHealth().catch(e => console.error('[scheduler] initial token health error:', e));
   }, 120_000);
+}
+
+function upsertSetting(key: string, value: string) {
+  getDb().prepare(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`).run(key, value);
+}
+
+/** Re-validate the FB page token and cache the result for the Dashboard / health API. */
+export async function refreshTokenHealth() {
+  const health = await checkTokenHealth();
+  upsertSetting('fb_token_health', JSON.stringify(health));
+  if (health.configured && !health.valid) {
+    console.error(`[scheduler] FB token INVALID: ${health.error}`);
+  } else if (health.daysLeft !== null && health.daysLeft < 7) {
+    console.warn(`[scheduler] FB token expires in ${health.daysLeft} day(s)`);
+  }
 }
 
 interface DuePost {
@@ -49,6 +68,8 @@ interface DuePost {
 
 export async function publishDuePosts() {
   const db = getDb();
+  // Heartbeat — Dashboard reads this to confirm the scheduler is alive
+  upsertSetting('scheduler_last_tick', new Date().toISOString());
   const due = db.prepare(`
     SELECT id, caption, image_url, platforms, fb_post_id, ig_post_id
     FROM posts

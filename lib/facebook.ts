@@ -193,6 +193,60 @@ export async function getIgInsights() {
 }
 
 // ─────────────────────────────────────────────────────────
+// Token health — debug_token check for the page access token
+// ─────────────────────────────────────────────────────────
+
+export interface TokenHealth {
+  configured: boolean;
+  valid: boolean;
+  expiresAt: string | null;   // ISO or null = never-expiring
+  daysLeft: number | null;    // null = never-expiring
+  pageName: string;
+  error: string;
+  checkedAt: string;
+}
+
+/** Validate the stored page token via /debug_token (needs FB_APP_SECRET for app token). */
+export async function checkTokenHealth(): Promise<TokenHealth> {
+  const now = new Date().toISOString();
+  const tok = token();
+  const base: TokenHealth = {
+    configured: Boolean(tok && pageId()), valid: false,
+    expiresAt: null, daysLeft: null, pageName: '', error: '', checkedAt: now,
+  };
+  if (!base.configured) { base.error = 'No page token configured'; return base; }
+
+  try {
+    const appSecret = process.env.FB_APP_SECRET;
+    if (appSecret) {
+      const r = await fetch(
+        `${GRAPH}/debug_token?input_token=${tok}&access_token=${APP_ID}|${appSecret}`
+      );
+      const d = await r.json() as { data?: { is_valid?: boolean; expires_at?: number; error?: { message: string } }; error?: { message: string } };
+      if (d.data) {
+        base.valid = Boolean(d.data.is_valid);
+        if (d.data.expires_at && d.data.expires_at > 0) {
+          base.expiresAt = new Date(d.data.expires_at * 1000).toISOString();
+          base.daysLeft = Math.floor((d.data.expires_at * 1000 - Date.now()) / 86_400_000);
+        }
+        if (!base.valid) base.error = d.data.error?.message ?? 'Token invalid';
+      } else {
+        base.error = d.error?.message ?? 'debug_token failed';
+      }
+    }
+    // Cross-check the token can actually read the page
+    const pr = await fetch(`${GRAPH}/${pageId()}?fields=id,name&access_token=${tok}`);
+    const pd = await pr.json() as { id?: string; name?: string; error?: { message: string } };
+    if (pd.id) { base.valid = true; base.pageName = pd.name ?? ''; base.error = ''; }
+    else if (pd.error) { base.valid = false; base.error = pd.error.message; }
+    return base;
+  } catch (e) {
+    base.error = String(e);
+    return base;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // Metrics fetchers — feed the Intelligence layer (post_metrics)
 // ─────────────────────────────────────────────────────────
 

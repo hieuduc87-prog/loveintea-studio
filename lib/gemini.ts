@@ -22,6 +22,36 @@ function isRetryable(e: unknown): boolean {
     '404', 'not found', 'deprecated', 'no longer available'].some(s => msg.includes(s));
 }
 
+/**
+ * Last-resort backup: when EVERY Gemini model fails (quota exhausted, outage,
+ * all models deprecated), fall back to OpenAI text — the OPENAI_API_KEY is
+ * already required for image generation, so it's always available.
+ * Records the fallback in settings so the Dashboard can surface it.
+ */
+async function openAiFallback(prompt: string, jsonMode: boolean): Promise<string> {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error('Gemini failed and no OPENAI_API_KEY for fallback');
+
+  const { default: OpenAI } = await import('openai');
+  const client = new OpenAI({ apiKey: key });
+  const res = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: prompt }],
+    ...(jsonMode ? { response_format: { type: 'json_object' as const } } : {}),
+  });
+  const text = res.choices[0]?.message?.content?.trim();
+  if (!text) throw new Error('OpenAI fallback returned empty response');
+
+  try {
+    const { getDb } = await import('./db');
+    getDb().prepare(`INSERT INTO settings (key, value, updated_at) VALUES ('ai_text_fallback_at', ?, datetime('now'))
+      ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`)
+      .run(new Date().toISOString());
+  } catch { /* telemetry only */ }
+  console.warn('[gemini] all models failed — served by OpenAI gpt-4o-mini fallback');
+  return text;
+}
+
 async function tryGenerate(prompt: string, jsonMode: boolean): Promise<string> {
   let lastError: unknown;
   for (const modelName of MODELS) {
@@ -38,7 +68,12 @@ async function tryGenerate(prompt: string, jsonMode: boolean): Promise<string> {
       if (!isRetryable(e)) throw e;
     }
   }
-  throw lastError;
+  // All Gemini models failed — try the OpenAI backup before giving up
+  try {
+    return await openAiFallback(prompt, jsonMode);
+  } catch {
+    throw lastError;
+  }
 }
 
 export async function generateCaption(prompt: string): Promise<string> {

@@ -16,6 +16,7 @@ import path from 'path';
 import { upscaleImage } from './upscale';
 
 let _client: OpenAI | null = null;
+let _backupClient: OpenAI | null = null;
 
 function getClient(): OpenAI {
   if (!_client) {
@@ -24,6 +25,29 @@ function getClient(): OpenAI {
     _client = new OpenAI({ apiKey: key });
   }
   return _client;
+}
+
+function isQuotaError(e: unknown): boolean {
+  const msg = String(e).toLowerCase();
+  return ['insufficient_quota', 'billing', 'exceeded your current quota', '429', 'rate limit']
+    .some(s => msg.includes(s));
+}
+
+/**
+ * Run an OpenAI call; on quota/billing exhaustion retry once with
+ * OPENAI_API_KEY_BACKUP (optional second account) so image generation
+ * keeps working when the primary key runs dry.
+ */
+async function withQuotaFallback<T>(fn: (client: OpenAI) => Promise<T>): Promise<T> {
+  try {
+    return await fn(getClient());
+  } catch (e) {
+    const backupKey = process.env.OPENAI_API_KEY_BACKUP;
+    if (!backupKey || !isQuotaError(e)) throw e;
+    console.warn('[openai-image] primary key quota exhausted — retrying with OPENAI_API_KEY_BACKUP');
+    if (!_backupClient) _backupClient = new OpenAI({ apiKey: backupKey });
+    return await fn(_backupClient);
+  }
 }
 
 export type ImageSize = '1024x1024' | '1024x1536' | '1536x1024';
@@ -40,7 +64,6 @@ export async function editProductImage(opts: {
   size?: ImageSize;
   quality?: ImageQuality;
 }): Promise<string> {
-  const client = getClient();
   const { productImagePath, prompt, size = '1024x1536', quality = 'low' } = opts;
 
   if (!fs.existsSync(productImagePath)) {
@@ -54,14 +77,14 @@ export async function editProductImage(opts: {
     { type: 'image/png' }
   );
 
-  const response = await client.images.edit({
+  const response = await withQuotaFallback(client => client.images.edit({
     model: 'gpt-image-2',
     image: imageFile,
     prompt,
     size,
     quality,
     n: 1,
-  } as Parameters<typeof client.images.edit>[0]);
+  } as Parameters<typeof client.images.edit>[0]));
 
   const imageData = response.data?.[0];
   if (!imageData) throw new Error('No image returned from OpenAI');
@@ -81,16 +104,15 @@ export async function generateImage(opts: {
   size?: ImageSize;
   quality?: ImageQuality;
 }): Promise<string> {
-  const client = getClient();
   const { prompt, size = '1024x1536', quality = 'low' } = opts;
 
-  const response = await client.images.generate({
+  const response = await withQuotaFallback(client => client.images.generate({
     model: 'gpt-image-2',
     prompt,
     size,
     quality,
     n: 1,
-  } as Parameters<typeof client.images.generate>[0]);
+  } as Parameters<typeof client.images.generate>[0]));
 
   const imageData = response.data?.[0];
   if (!imageData) throw new Error('No image returned from OpenAI');
