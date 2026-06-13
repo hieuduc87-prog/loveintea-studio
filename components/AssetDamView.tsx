@@ -12,6 +12,7 @@ interface Asset {
   status: 'unused' | 'scheduled' | 'aired';
   source: 'generated' | 'upload' | 'product_photo';
   notes: string | null; created_at: string;
+  folder?: string | null;
   tags: Tag[];
 }
 interface Product { id: string; name: string; color: string; slug: string; }
@@ -65,6 +66,21 @@ export function AssetDamView({ brandId = 'loveintea' }: { brandId?: string }) {
   // Lightbox
   const [lightbox, setLightbox] = useState<Asset | null>(null);
 
+  // Folders (drag-to-group)
+  const [filterFolder, setFilterFolder] = useState<string | null>(null); // null=all, '__none__'=ungrouped
+  const [folders, setFolders] = useState<Array<{ folder: string; n: number }>>([]);
+  const [ungrouped, setUngrouped] = useState(0);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [dragAssetId, setDragAssetId] = useState<string | null>(null);
+  const [dropFolder, setDropFolder] = useState<string | null>(null);
+
+  const loadFolders = useCallback(async () => {
+    const r = await fetch(`/api/hub/assets/folder?brand=${brandId}`);
+    const d = await r.json() as { folders: Array<{ folder: string; n: number }>; ungrouped: number };
+    setFolders(d.folders ?? []); setUngrouped(d.ungrouped ?? 0);
+  }, [brandId]);
+
   const loadAssets = useCallback(async () => {
     setLoading(true);
     const p = new URLSearchParams({ brand: brandId, limit: '200' });
@@ -72,12 +88,32 @@ export function AssetDamView({ brandId = 'loveintea' }: { brandId?: string }) {
     if (filterStatus)  p.set('status', filterStatus);
     if (filterSource)  p.set('source', filterSource);
     if (filterTags.length) p.set('tags', filterTags.join(','));
+    if (filterFolder) p.set('folder', filterFolder);
     const r = await fetch(`/api/hub/assets?${p}`);
     const d = await r.json() as { assets: Asset[]; total: number };
     setAssets(d.assets ?? []);
     setTotal(d.total ?? 0);
     setLoading(false);
-  }, [filterProduct, filterStatus, filterSource, filterTags]);
+  }, [filterProduct, filterStatus, filterSource, filterTags, filterFolder, brandId]);
+
+  // Move assets into a folder ('' = ungroup). Drag a card (or selected set) onto a folder chip.
+  async function moveToFolder(ids: string[], folder: string) {
+    if (!ids.length) return;
+    await fetch('/api/hub/assets/folder', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, folder }),
+    });
+    setSelectedIds(new Set());
+    await Promise.all([loadAssets(), loadFolders()]);
+  }
+  async function createFolderFromSelection() {
+    const name = prompt('Tên folder mới:')?.trim();
+    if (!name) return;
+    await moveToFolder([...selectedIds], name);
+  }
+  function toggleSelect(id: string) {
+    setSelectedIds(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
 
   const loadMeta = useCallback(async () => {
     const [tr, pr] = await Promise.all([
@@ -90,7 +126,7 @@ export function AssetDamView({ brandId = 'loveintea' }: { brandId?: string }) {
     })));
   }, []);
 
-  useEffect(() => { loadMeta(); }, [loadMeta]);
+  useEffect(() => { loadMeta(); loadFolders(); }, [loadMeta, loadFolders]);
   useEffect(() => { loadAssets(); }, [loadAssets]);
 
   function openDetail(asset: Asset) {
@@ -289,13 +325,47 @@ export function AssetDamView({ brandId = 'loveintea' }: { brandId?: string }) {
             <h2 className="text-sm font-semibold text-white">Asset Library</h2>
             <p className="text-xs text-gray-500">{total} assets total</p>
           </div>
-          {(filterProduct || filterStatus || filterSource || filterTags.length > 0) && (
-            <button
-              onClick={() => { setFilterProduct(''); setFilterStatus(''); setFilterSource(''); setFilterTags([]); }}
-              className="text-xs text-gray-500 hover:text-white border border-gray-700 hover:border-gray-600 px-2 py-1 rounded"
-            >
-              Clear all filters
+          <div className="flex items-center gap-2">
+            <button onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()); }}
+              className={`text-xs px-2 py-1 rounded border ${selectMode ? 'bg-brand-600 text-white border-brand-500' : 'text-gray-400 border-gray-700 hover:text-white'}`}>
+              {selectMode ? '✓ Đang chọn' : '☑ Chọn nhiều'}
             </button>
+            {(filterProduct || filterStatus || filterSource || filterTags.length > 0) && (
+              <button
+                onClick={() => { setFilterProduct(''); setFilterStatus(''); setFilterSource(''); setFilterTags([]); }}
+                className="text-xs text-gray-500 hover:text-white border border-gray-700 hover:border-gray-600 px-2 py-1 rounded"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Folder bar — drag images (or selected set) onto a folder to group ── */}
+        <div className="flex items-center gap-1.5 flex-wrap mb-3">
+          {[{ key: null as string | null, label: '📂 Tất cả', n: total }, { key: '__none__', label: '• Chưa gom', n: ungrouped },
+            ...folders.map(f => ({ key: f.folder, label: `🗂 ${f.folder}`, n: f.n }))].map(chip => (
+            <button key={chip.key ?? 'all'}
+              onClick={() => setFilterFolder(chip.key)}
+              onDragOver={e => { if (dragAssetId || selectedIds.size) { e.preventDefault(); setDropFolder(chip.key ?? 'all'); } }}
+              onDragLeave={() => setDropFolder(null)}
+              onDrop={e => { e.preventDefault(); const ids = selectedIds.size ? [...selectedIds] : dragAssetId ? [dragAssetId] : []; const target = chip.key === '__none__' || chip.key === null ? (chip.key === '__none__' ? '' : '') : chip.key; if (chip.key && chip.key !== '__none__') moveToFolder(ids, chip.key); else if (chip.key === '__none__') moveToFolder(ids, ''); setDropFolder(null); setDragAssetId(null); }}
+              className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                (dropFolder === (chip.key ?? 'all')) ? 'border-brand-400 bg-brand-600/30 text-white ring-1 ring-brand-400' :
+                filterFolder === chip.key ? 'bg-brand-600/20 text-brand-300 border-brand-600/40' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white'}`}>
+              {chip.label} <span className="text-gray-500">({chip.n})</span>
+            </button>
+          ))}
+          {selectMode && selectedIds.size > 0 && (
+            <>
+              <span className="text-[11px] text-gray-400 ml-1">{selectedIds.size} đã chọn →</span>
+              <button onClick={createFolderFromSelection} className="text-xs px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold">+ Gom vào folder mới</button>
+              {folders.map(f => (
+                <button key={'mv' + f.folder} onClick={() => moveToFolder([...selectedIds], f.folder)}
+                  className="text-xs px-2 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300">→ {f.folder}</button>
+              ))}
+              <button onClick={() => moveToFolder([...selectedIds], '')} className="text-xs px-2 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-500">Bỏ gom</button>
+            </>
           )}
         </div>
 
@@ -312,13 +382,25 @@ export function AssetDamView({ brandId = 'loveintea' }: { brandId?: string }) {
             {assets.map(asset => (
               <div
                 key={asset.id}
-                onClick={() => openDetail(asset)}
+                draggable
+                onDragStart={() => setDragAssetId(asset.id)}
+                onDragEnd={() => setDragAssetId(null)}
+                onClick={() => { if (selectMode) toggleSelect(asset.id); else openDetail(asset); }}
                 className={`group relative rounded-xl overflow-hidden border cursor-pointer transition-all ${
+                  selectedIds.has(asset.id) ? 'border-brand-400 ring-2 ring-brand-400' :
                   selected?.id === asset.id
                     ? 'border-brand-500 ring-1 ring-brand-500'
                     : 'border-gray-800 hover:border-gray-600'
-                }`}
+                } ${dragAssetId === asset.id ? 'opacity-40' : ''}`}
               >
+                {(selectMode || selectedIds.has(asset.id)) && (
+                  <div className={`absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] ${selectedIds.has(asset.id) ? 'bg-brand-500 border-brand-400 text-white' : 'bg-black/50 border-gray-400'}`}>
+                    {selectedIds.has(asset.id) ? '✓' : ''}
+                  </div>
+                )}
+                {asset.folder && (
+                  <span className="absolute bottom-1.5 right-1.5 z-10 text-[8px] bg-black/70 text-brand-300 px-1 rounded">🗂 {asset.folder}</span>
+                )}
                 <div className="aspect-square bg-gray-900">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img

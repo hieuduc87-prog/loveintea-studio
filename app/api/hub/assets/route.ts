@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   const productId = p.get('product') || '';
   const status   = p.get('status')  || '';
   const source   = p.get('source')  || '';
+  const folder   = p.get('folder');   // null = all; '__none__' = ungrouped; else exact folder
   const tagIds   = p.get('tags')?.split(',').filter(Boolean) || [];
   const limit    = Math.min(Number(p.get('limit') || 120), 500);
   const offset   = Number(p.get('offset') || 0);
@@ -19,6 +20,8 @@ export async function GET(req: NextRequest) {
   if (productId) { where.push('a.product_id = ?'); params.push(productId); }
   if (status)    { where.push('a.status = ?');     params.push(status); }
   if (source)    { where.push('a.source = ?');     params.push(source); }
+  if (folder === '__none__') { where.push("COALESCE(a.folder,'') = ''"); }
+  else if (folder)           { where.push('a.folder = ?'); params.push(folder); }
   if (tagIds.length) {
     where.push(`EXISTS (
       SELECT 1 FROM asset_tags at3

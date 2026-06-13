@@ -778,6 +778,9 @@ function initSchema(db: Database.Database) {
   // Content templates: single vs collection (ordered multi-image)
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN kind TEXT DEFAULT 'single'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN slides_json TEXT DEFAULT '[]'`); } catch { /* already exists */ }
+  // Asset library: group loose images into folders (drag-to-group)
+  try { db.exec(`ALTER TABLE assets ADD COLUMN folder TEXT DEFAULT ''`); } catch { /* already exists */ }
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_folder ON assets(brand_id, folder)`); } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (

@@ -30,6 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     status?: string;
     notes?: string;
     product_id?: string | null;
+    folder?: string;
     add_tags?: string[];
     remove_tags?: string[];
   };
@@ -40,6 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.status !== undefined) { sets.push('status = ?'); vals.push(body.status); }
   if (body.notes  !== undefined) { sets.push('notes = ?');  vals.push(body.notes); }
   if (body.product_id !== undefined) { sets.push('product_id = ?'); vals.push(body.product_id); }
+  if (body.folder !== undefined) { sets.push('folder = ?'); vals.push(body.folder); }
   if (sets.length) {
     sets.push("updated_at = datetime('now')");
     vals.push(id);
