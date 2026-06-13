@@ -612,6 +612,28 @@ function UploadModal({
   const [fileStatuses, setFileStatuses] = useState<Record<string, 'pending' | 'uploading' | 'done' | 'error'>>({});
   const [error, setError] = useState('');
   const [asCollection, setAsCollection] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+
+  // Reorder the image tray (drag a thumbnail onto another) — sets slide order
+  function moveFile(from: number, to: number) {
+    if (from === to || from < 0 || to < 0) return;
+    setFiles(fs => { const a = [...fs]; const [m] = a.splice(from, 1); a.splice(to, 0, m); return a; });
+    setPreviews(ps => { const a = [...ps]; const [m] = a.splice(from, 1); a.splice(to, 0, m); return a; });
+  }
+  function removeFile(i: number) {
+    setFiles(fs => fs.filter((_, x) => x !== i));
+    setPreviews(ps => ps.filter((_, x) => x !== i));
+  }
+
+  // Common preset templates — pre-fill the form (user then drops images in)
+  const PRESETS = [
+    { label: '🛍️ Sản phẩm 1 ảnh', category: 'product', format: 'post', aspect: '4:5', slides: 1 },
+    { label: '🔥 Flash Sale', category: 'promo', format: 'post', aspect: '1:1', slides: 1 },
+    { label: '📖 Carousel kể chuyện', category: 'story', format: 'carousel', aspect: '4:5', slides: 5 },
+    { label: '💬 Quote / Tip', category: 'quote', format: 'post', aspect: '1:1', slides: 1 },
+    { label: '🔄 Before / After', category: 'product', format: 'carousel', aspect: '4:5', slides: 2 },
+    { label: '🎬 Reel cover', category: 'story', format: 'reel_cover', aspect: '9:16', slides: 1 },
+  ];
 
   const doneCount = Object.values(fileStatuses).filter(s => s === 'done').length;
   const progress = files.length > 0 ? Math.round((doneCount / files.length) * 100) : 0;
@@ -619,9 +641,11 @@ function UploadModal({
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
     const arr = Array.from(fileList).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
-    setFiles(arr);
-    setPreviews(arr.map(f => URL.createObjectURL(f)));
-    if (arr.length === 1 && !name) {
+    if (!arr.length) return;
+    setFiles(prev => [...prev, ...arr]);                                   // append (drop + "Thêm ảnh")
+    setPreviews(prev => [...prev, ...arr.map(f => URL.createObjectURL(f))]);
+    setFiles(prev => { if (prev.length > 1) setAsCollection(true); return prev; }); // auto-collection when multi
+    if (files.length === 0 && arr.length === 1 && !name) {
       setName(arr[0].name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '));
     }
   }
@@ -704,8 +728,22 @@ function UploadModal({
       >
         <div className="p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-white font-semibold text-sm">Upload Content Template</h3>
+            <h3 className="text-white font-semibold text-sm">🎨 Tạo Content Template</h3>
             <button onClick={onClose} className="text-gray-500 hover:text-white">✕</button>
+          </div>
+
+          {/* Preset picker — common template types */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-1.5">Mẫu phổ biến (chọn để điền nhanh)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {PRESETS.map(p => (
+                <button key={p.label} onClick={() => { setCategory(p.category); setFormat(p.format); setAspectRatio(p.aspect); setAsCollection(p.slides > 1); if (!name) setName(p.label.replace(/^\S+\s/, '')); }}
+                  className="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-brand-600/30 border border-gray-700 hover:border-brand-500 text-[11px] text-gray-200 transition-colors"
+                  title={`${p.format} · ${p.aspect} · ${p.slides} ảnh`}>
+                  {p.label}{p.slides > 1 ? ` (${p.slides})` : ''}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Drop zone */}
@@ -717,18 +755,33 @@ function UploadModal({
             className="border-2 border-dashed border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-gray-500 transition-colors"
           >
             {previews.length > 0 ? (
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-2" onClick={e => e.stopPropagation()}>
                 {files.map((file, i) => {
                   const key = file.name + file.size;
                   const status = fileStatuses[key];
                   const isVid = file.type.startsWith('video/');
+                  const ordered = files.length > 1;
                   return (
-                    <div key={i} className="relative">
+                    <div key={i} className={`relative group ${dragIdx === i ? 'opacity-40' : ''}`}
+                      draggable={ordered}
+                      onDragStart={e => { e.stopPropagation(); setDragIdx(i); }}
+                      onDragOver={e => { if (ordered) { e.preventDefault(); e.stopPropagation(); } }}
+                      onDrop={e => { if (ordered && dragIdx !== null) { e.preventDefault(); e.stopPropagation(); moveFile(dragIdx, i); setDragIdx(null); } }}
+                      onDragEnd={() => setDragIdx(null)}>
                       {isVid ? (
                         <video src={previews[i]} muted preload="metadata" className="w-full aspect-[3/4] object-cover rounded-lg bg-gray-700" />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={previews[i]} alt="" className="w-full aspect-[3/4] object-cover rounded-lg" />
+                        <img src={previews[i]} alt="" className={`w-full aspect-[3/4] object-cover rounded-lg ${ordered ? 'cursor-grab active:cursor-grabbing' : ''}`} />
+                      )}
+                      {/* Order badge for collections */}
+                      {ordered && !status && (
+                        <span className="absolute top-1 left-1 w-4 h-4 bg-brand-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{i + 1}</span>
+                      )}
+                      {/* Remove */}
+                      {!status && (
+                        <button onClick={ev => { ev.stopPropagation(); removeFile(i); }}
+                          className="absolute top-1 right-1 w-4 h-4 bg-black/70 hover:bg-red-700 text-white text-[9px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                       )}
                       {/* Per-file status overlay */}
                       {status && (
@@ -748,12 +801,17 @@ function UploadModal({
                     </div>
                   );
                 })}
+                {/* Add-more tile */}
+                <button onClick={e => { e.stopPropagation(); fileRef.current?.click(); }}
+                  className="aspect-[3/4] rounded-lg border-2 border-dashed border-gray-700 hover:border-brand-500 flex flex-col items-center justify-center text-gray-600 hover:text-brand-400 transition-colors">
+                  <span className="text-xl">+</span><span className="text-[9px]">Thêm ảnh</span>
+                </button>
               </div>
             ) : (
               <>
                 <p className="text-2xl mb-2">🎨</p>
-                <p className="text-sm text-gray-400">Drop images or videos here or click to browse</p>
-                <p className="text-xs text-gray-600 mt-1">Supports multiple files. PNG, JPG, WebP, MP4, MOV</p>
+                <p className="text-sm text-gray-400">Kéo thả ảnh/video vào đây để tạo template</p>
+                <p className="text-xs text-gray-600 mt-1">1 ảnh = template đơn · nhiều ảnh = collection (kéo để sắp thứ tự)</p>
               </>
             )}
           </div>
@@ -859,7 +917,7 @@ function UploadModal({
               disabled={uploading || files.length === 0}
               className="flex-1 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium transition-colors"
             >
-              {uploading ? `Uploading ${files.length} files in parallel...` : `Upload ${files.length || ''} Template${files.length !== 1 ? 's' : ''}`}
+              {uploading ? `Đang tạo…` : (asCollection && files.length > 1) ? `Tạo template collection (${files.length} ảnh)` : `Tạo ${files.length || ''} template${files.length > 1 ? ' riêng' : ''}`}
             </button>
             <button onClick={onClose} disabled={uploading}
               className="px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm transition-colors">
