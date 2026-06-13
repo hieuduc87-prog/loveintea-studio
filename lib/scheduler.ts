@@ -18,6 +18,9 @@ import { recomputeScoreboard } from './scoreboard-engine';
 
 const PUBLISH_INTERVAL_MS = 60_000;
 const METRICS_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const VIDEO_QUEUE_INTERVAL_MS = 30_000;
+
+let videoRendering = false;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -38,11 +41,40 @@ export function startScheduler() {
     refreshTokenHealth().catch(e => console.error('[scheduler] token health error:', e));
   }, METRICS_INTERVAL_MS);
 
+  setInterval(() => {
+    processVideoQueue().catch(e => console.error('[scheduler] video queue error:', e));
+  }, VIDEO_QUEUE_INTERVAL_MS);
+
   // First metrics sync 2 min after boot (let the server settle)
   setTimeout(() => {
     syncMetrics().catch(e => console.error('[scheduler] initial metrics error:', e));
     refreshTokenHealth().catch(e => console.error('[scheduler] initial token health error:', e));
   }, 120_000);
+}
+
+/** Render queued video projects — strictly one at a time (2 vCPU server). */
+export async function processVideoQueue() {
+  if (videoRendering) return;
+  const db = getDb();
+  // Recover projects stuck in 'rendering' from a previous crashed process
+  db.prepare(`UPDATE video_projects SET status='failed', error='render interrupted (server restart)'
+    WHERE status='rendering' AND updated_at < datetime('now', '-30 minutes')`).run();
+  const next = db.prepare(`SELECT id FROM video_projects WHERE status='queued' ORDER BY updated_at ASC LIMIT 1`)
+    .get() as { id: string } | undefined;
+  if (!next) return;
+
+  videoRendering = true;
+  db.prepare(`UPDATE video_projects SET status='rendering', updated_at=datetime('now') WHERE id=?`).run(next.id);
+  console.log(`[scheduler] video render start: ${next.id}`);
+  try {
+    const { renderProject } = await import('./video/render');
+    await renderProject(next.id);
+    console.log(`[scheduler] video render done: ${next.id}`);
+  } catch (e) {
+    console.error(`[scheduler] video render failed: ${next.id}:`, e);
+  } finally {
+    videoRendering = false;
+  }
 }
 
 function upsertSetting(key: string, value: string) {

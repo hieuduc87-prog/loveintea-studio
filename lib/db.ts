@@ -692,6 +692,44 @@ function initSchema(db: Database.Database) {
       UNIQUE(brand_id, angle, channel)
     );
 
+    -- ═══ VIDEO STUDIO — per-brand clip library + short-video projects ═══
+    CREATE TABLE IF NOT EXISTS video_clips (
+      id          TEXT PRIMARY KEY,
+      brand_id    TEXT NOT NULL DEFAULT 'loveintea',
+      url         TEXT NOT NULL,           -- /api/images/vidclip_*.mp4
+      filename    TEXT NOT NULL,
+      duration_s  REAL DEFAULT 0,
+      width       INTEGER DEFAULT 0,
+      height      INTEGER DEFAULT 0,
+      tags_json   TEXT DEFAULT '{}',       -- Gemini autotag-lite: subject, scene, mood, motion, colors, has_product, has_text, quality
+      source      TEXT DEFAULT 'upload',   -- upload | ai_video
+      status      TEXT DEFAULT 'ready',    -- ready | tagging | failed
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_video_clips_brand ON video_clips(brand_id);
+
+    CREATE TABLE IF NOT EXISTS video_projects (
+      id                TEXT PRIMARY KEY,
+      brand_id          TEXT NOT NULL DEFAULT 'loveintea',
+      title             TEXT,
+      purpose           TEXT,              -- promo | educate | ritual | launch | testimonial
+      product_id        TEXT,
+      platform          TEXT DEFAULT 'reels',
+      aspect            TEXT DEFAULT '9:16',
+      target_duration_s INTEGER DEFAULT 20,
+      bgm_url           TEXT,
+      bpm               REAL,
+      script_json       TEXT DEFAULT '{}', -- director storyboard
+      status            TEXT DEFAULT 'draft', -- draft | queued | rendering | done | failed
+      output_url        TEXT,
+      render_log        TEXT,
+      error             TEXT,
+      created_at        TEXT DEFAULT (datetime('now')),
+      updated_at        TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_video_projects_brand  ON video_projects(brand_id);
+    CREATE INDEX IF NOT EXISTS idx_video_projects_status ON video_projects(status);
+
     -- Brand membership: which users can access which brands.
     -- Admins/root_admins see all brands. Non-admins with rows here are
     -- scoped to those brands; non-admins with NO rows see all (legacy).

@@ -30,6 +30,7 @@ import { ScoreboardView }   from './ScoreboardView';
 import { RulesEngineView }  from './RulesEngineView';
 import { ContentTemplatesView } from './ContentTemplatesView';
 import { DashboardView }      from './DashboardView';
+import { VideoStudioView }    from './VideoStudioView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ type TabId =
   | 'dashboard'
   | 'brands' | 'brand_dna' | 'products' | 'knowledge_hub' | 'rules_engine' | 'scoreboard'
   | 'import_plan' | 'calendar' | 'schedule'
-  | 'content_workshop' | 'image_studio' | 'blog_factory'
+  | 'content_workshop' | 'image_studio' | 'video_studio' | 'blog_factory'
   | 'content_queue' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
@@ -68,6 +69,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   // CREATE — Copy track + Visual track + Blog
   { id: 'content_workshop', label: 'Content Workshop', icon: '✍️', group: 'Create' },
   { id: 'image_studio',     label: 'Image Studio',     icon: '🖼️', group: 'Create' },
+  { id: 'video_studio',     label: 'Video Studio',     icon: '🎬', group: 'Create' },
   { id: 'blog_factory',     label: 'Blog Factory',     icon: '📝', group: 'Create' },
   // REVIEW & PUBLISH — Queue (review desk), Schedule, Channels
   { id: 'content_queue',    label: 'Review & Queue',   icon: '✅', group: 'Publish' },
@@ -465,6 +467,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'schedule'         && <ScheduleView brandId={bid} />}
                 {id === 'content_workshop' && <ContentWorkshopView brandId={bid} />}
                 {id === 'image_studio'     && <ImageStudioView brandId={bid} />}
+                {id === 'video_studio'     && <VideoStudioView brandId={bid} />}
                 {id === 'blog_factory'     && <BlogFactoryView brandId={bid} />}
                 {id === 'content_queue'    && <ContentQueueView brandId={bid} />}
                 {id === 'publisher'        && <PublisherView fbSuccess={fbSuccess} fbError={fbError} brandId={bid} />}
