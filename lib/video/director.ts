@@ -5,6 +5,7 @@
  */
 import { getDb } from '../db';
 import { generateJSON } from '../gemini';
+import { getExpertKnowledgeBlock } from '../brand-knowledge';
 
 export interface Segment {
   dur_s: number;
@@ -80,6 +81,7 @@ BRAND DNA (follow strictly):
 - Target audience: ${dna?.target_audience ?? ''} | Insight: ${dna?.insight ?? ''} | Behavior: ${dna?.behavior ?? ''}
 - COMPLIANCE (neverSay / alwaysSay): ${compliance}
 ${dna?.brand_rules ? `- BRAND RULES (mandatory): ${dna.brand_rules}` : ''}
+${getExpertKnowledgeBlock(brandId)}
 
 AVAILABLE BRAND CLIPS (use their id; never exceed max_dur_s):
 ${JSON.stringify(clipCatalog).slice(0, 6000)}

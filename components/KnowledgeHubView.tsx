@@ -493,6 +493,23 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
+  // Quick-add knowledge (expert injection → fast learning loop)
+  const [qaOpen, setQaOpen]       = useState(false);
+  const [qaType, setQaType]       = useState('expert_tip');
+  const [qaTitle, setQaTitle]     = useState('');
+  const [qaContent, setQaContent] = useState('');
+  const [qaSaving, setQaSaving]   = useState(false);
+  const [qaMsg, setQaMsg]         = useState('');
+
+  const QA_TYPES = [
+    { v: 'expert_tip', label: '💡 Mẹo chuyên gia' },
+    { v: 'real_case',  label: '📌 Case thực tế' },
+    { v: 'rule',       label: '📏 Rule' },
+    { v: 'insight',    label: '🔍 Insight' },
+    { v: 'guideline',  label: '📋 Guideline' },
+    { v: 'research',   label: '🔬 Research' },
+  ];
+
   const loadDocs = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -539,6 +556,25 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
 
   function toggleExpand(id: string) {
     setExpandedId(prev => prev === id ? null : id);
+  }
+
+  async function quickAdd() {
+    if (!qaTitle.trim()) { setQaMsg('Cần tiêu đề'); return; }
+    setQaSaving(true); setQaMsg('');
+    try {
+      const r = await fetch('/api/knowledge', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId, type: qaType, title: qaTitle.trim(), content: qaContent.trim() }),
+      });
+      const d = await r.json() as { ok?: boolean; error?: string };
+      if (d.ok) {
+        setQaMsg('✓ Đã thêm vào tri thức — sẽ áp dụng ngay khi sinh content');
+        setQaTitle(''); setQaContent('');
+        await loadDocs();
+      } else setQaMsg('✗ ' + (d.error ?? 'Lỗi'));
+    } catch (e) { setQaMsg('✗ ' + String(e)); }
+    setQaSaving(false);
+    setTimeout(() => setQaMsg(''), 4000);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -600,7 +636,36 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
             </button>
           )}
         </div>
+        <button onClick={() => setQaOpen(o => !o)}
+          className="flex-shrink-0 px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold self-start">
+          {qaOpen ? '✕ Đóng' : '⚡ Thêm nhanh tri thức'}
+        </button>
       </div>
+
+      {/* Quick-add knowledge — expert injection into the production loop */}
+      {qaOpen && (
+        <div className="mb-6 bg-gray-900 border border-brand-600/30 rounded-xl p-4 space-y-2">
+          <p className="text-xs text-gray-400">Nhập mẹo / case thực tế / rule / insight — AI sẽ <b>áp dụng ngay</b> khi sinh content (Workshop, Plan, Video). Mọi lần thêm đều được ghi log.</p>
+          <div className="flex gap-2 flex-wrap">
+            <select value={qaType} onChange={e => setQaType(e.target.value)}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white">
+              {QA_TYPES.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+            </select>
+            <input value={qaTitle} onChange={e => setQaTitle(e.target.value)} placeholder="Tiêu đề ngắn (vd: Hook giờ vàng tối CN)"
+              className="flex-1 min-w-[200px] bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white" />
+          </div>
+          <textarea value={qaContent} onChange={e => setQaContent(e.target.value)}
+            placeholder="Nội dung chi tiết: ví dụ thực tế, quy tắc, điều nên/không nên… (AI nhồi vào prompt)"
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white resize-none h-24" />
+          <div className="flex items-center gap-2">
+            <button onClick={quickAdd} disabled={qaSaving || !qaTitle.trim()}
+              className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white text-xs font-bold">
+              {qaSaving ? '⟳ Đang lưu…' : '💾 Thêm vào tri thức'}
+            </button>
+            {qaMsg && <span className={`text-xs ${qaMsg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>{qaMsg}</span>}
+          </div>
+        </div>
+      )}
 
       {/* ── Reading Flow Banner ── */}
       {docs.length > 0 && !loading && (

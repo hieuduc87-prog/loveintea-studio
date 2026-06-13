@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { getDb } from './db';
 import { generateJSON } from './gemini';
+import { getExpertKnowledgeBlock } from './brand-knowledge';
 
 export interface PlanItemRow {
   id: string; plan_id: string; brand_id: string; date: string; day_of_week: string;
@@ -77,6 +78,7 @@ BRAND DNA:
 - COMPLIANCE (obey strictly): ${dna?.compliance_json ?? '{}'}
 ${dna?.brand_rules ? `- RULE RIÊNG BRAND (bắt buộc): ${dna.brand_rules}` : ''}
 ${rules.length ? `ACTIVE RULES:\n${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}` : ''}
+${getExpertKnowledgeBlock(brandId)}
 
 REQUIREMENTS:
 1. caption: Vietnamese, on-brand voice, benefit-led, follows the hook + copy direction, obeys compliance neverSay/alwaysSay. Natural length for the surface (Reel cover = short; feed = 2-4 short paragraphs). Include 1 clear CTA.

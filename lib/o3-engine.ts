@@ -96,7 +96,11 @@ function getKnowledgeContext(brandId: string): string {
       }
     }
 
-    return sections.length ? `\n\n═══ BRAND KNOWLEDGE (from strategy docs) ═══\n${sections.join('\n\n')}\n═══ END KNOWLEDGE ═══` : '';
+    const docBlock = sections.length ? `\n\n═══ BRAND KNOWLEDGE (from strategy docs) ═══\n${sections.join('\n\n')}\n═══ END KNOWLEDGE ═══` : '';
+    // Human-injected expert knowledge (fast learning loop)
+    let expertBlock = '';
+    try { const { getExpertKnowledgeBlock } = require('./brand-knowledge'); expertBlock = getExpertKnowledgeBlock(brandId); } catch { /* */ }
+    return docBlock + expertBlock;
   } catch {
     return ''; // DB not available — graceful fallback
   }

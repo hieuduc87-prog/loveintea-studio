@@ -802,6 +802,22 @@ function initSchema(db: Database.Database) {
       CREATE INDEX IF NOT EXISTS idx_post_tags_dim  ON post_tags(brand_id, dimension, value);
     `);
   } catch { /* already exists */ }
+  // Knowledge log — audit trail of knowledge added to the production loop
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS knowledge_log (
+        id         TEXT PRIMARY KEY,
+        brand_id   TEXT NOT NULL DEFAULT 'loveintea',
+        doc_id     TEXT,
+        action     TEXT DEFAULT 'add',  -- add | edit | delete
+        type       TEXT,
+        title      TEXT,
+        actor      TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_knowledge_log_brand ON knowledge_log(brand_id, created_at);
+    `);
+  } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (

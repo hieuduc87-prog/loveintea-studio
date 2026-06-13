@@ -97,6 +97,12 @@ export async function POST(req: NextRequest) {
        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
     ).run(id, brandId, type, title, content ?? null, fileUrl ?? null);
 
+    // Audit log for the knowledge that feeds the production loop
+    try {
+      db.prepare(`INSERT INTO knowledge_log (id, brand_id, doc_id, action, type, title) VALUES (?,?,?, 'add', ?, ?)`)
+        .run(uuid(), brandId, id, type, title);
+    } catch { /* log best-effort */ }
+
     const created = db
       .prepare('SELECT * FROM knowledge_docs WHERE id = ?')
       .get(id) as Record<string, unknown>;
