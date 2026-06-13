@@ -77,7 +77,9 @@ ${notes ? `- Extra notes from the marketer: ${notes}` : ''}
 BRAND DNA (follow strictly):
 - Tagline: ${dna?.tagline ?? ''} | Archetype: ${dna?.archetype ?? ''}
 - Voice: ${dna?.voice_traits ?? '[]'}
+- Target audience: ${dna?.target_audience ?? ''} | Insight: ${dna?.insight ?? ''} | Behavior: ${dna?.behavior ?? ''}
 - COMPLIANCE (neverSay / alwaysSay): ${compliance}
+${dna?.brand_rules ? `- BRAND RULES (mandatory): ${dna.brand_rules}` : ''}
 
 AVAILABLE BRAND CLIPS (use their id; never exceed max_dur_s):
 ${JSON.stringify(clipCatalog).slice(0, 6000)}

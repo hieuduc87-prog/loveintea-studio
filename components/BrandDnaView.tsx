@@ -7,6 +7,7 @@ interface BrandDna {
   tagline: string; archetype: string;
   colors_json: string; voice_traits: string;
   compliance_json: string; hashtags: string;
+  target_audience?: string; insight?: string; behavior?: string; brand_rules?: string;
 }
 interface ProductRow {
   id: string; name: string; display_name: string; theme: string;
@@ -47,6 +48,12 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
   const [voiceMsg, setVoiceMsg]         = useState('');
   const [voiceUploading, setVoiceUploading] = useState(false);
 
+  // Editable strategy fields
+  const [strategy, setStrategy] = useState({ target_audience: '', insight: '', behavior: '', brand_rules: '' });
+  const [stratDirty, setStratDirty] = useState(false);
+  const [stratSaving, setStratSaving] = useState(false);
+  const [stratMsg, setStratMsg] = useState('');
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
@@ -56,10 +63,27 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
       setBrand(bd.brand || null);
       setDna(bd.dna || null);
       setProducts(bd.products || []);
+      setStrategy({
+        target_audience: bd.dna?.target_audience || '', insight: bd.dna?.insight || '',
+        behavior: bd.dna?.behavior || '', brand_rules: bd.dna?.brand_rules || '',
+      });
+      setStratDirty(false);
       if (bv.content) setVoiceContent(bv.content);
       setLoading(false);
     });
   }, [bid]);
+
+  async function saveStrategy() {
+    setStratSaving(true); setStratMsg('');
+    const r = await fetch(`/api/brands/${bid}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dna: strategy }),
+    });
+    const d = await r.json() as { ok?: boolean; error?: string };
+    setStratMsg(d.ok ? '✓ Đã lưu' : '✗ ' + (d.error ?? 'Lỗi'));
+    setStratDirty(false); setStratSaving(false);
+    setTimeout(() => setStratMsg(''), 2500);
+  }
 
   async function uploadVoice(file: File) {
     setVoiceUploading(true); setVoiceMsg('');
@@ -129,6 +153,33 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
           </div>
         </Section>
       )}
+
+      {/* Audience & Strategy — editable, feeds every AI prompt */}
+      <Section title="Đối tượng & Chiến lược (đưa vào mọi prompt AI)">
+        <Card>
+          <div className="grid md:grid-cols-2 gap-3">
+            {([
+              ['target_audience', '🎯 Khách hàng mục tiêu', 'Độ tuổi, giới tính, nghề nghiệp, nhu cầu…'],
+              ['insight', '💡 Insight', 'Sự thật ngầm hiểu / nỗi đau / mong muốn sâu của khách'],
+              ['behavior', '📲 Hành vi', 'Thói quen lướt mạng, giờ vàng, cách họ tương tác, mua hàng'],
+              ['brand_rules', '📏 Rule riêng của brand', 'Quy tắc bắt buộc khi làm content cho brand này'],
+            ] as const).map(([key, label, hint]) => (
+              <div key={key}>
+                <label className="block text-[11px] text-gray-400 mb-1">{label} <span className="text-gray-600">— {hint}</span></label>
+                <textarea value={strategy[key]} onChange={e => { setStrategy(s => ({ ...s, [key]: e.target.value })); setStratDirty(true); }}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white resize-none h-24 focus:border-brand-500 focus:outline-none" />
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 mt-3">
+            <button onClick={saveStrategy} disabled={stratSaving || !stratDirty}
+              className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white text-xs font-bold">
+              {stratSaving ? '⟳' : stratDirty ? '💾 Lưu chiến lược' : '✓ Đã lưu'}
+            </button>
+            {stratMsg && <span className={`text-xs ${stratMsg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>{stratMsg}</span>}
+          </div>
+        </Card>
+      </Section>
 
       {/* Products / SKUs */}
       {products.length > 0 && (

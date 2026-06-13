@@ -45,6 +45,20 @@ export interface O3Result {
 function getKnowledgeContext(brandId: string): string {
   try {
     const db = getDb();
+    const sections: string[] = [];
+
+    // Brand strategy fields (audience / insight / behavior / brand rules)
+    const dna = db.prepare('SELECT target_audience, insight, behavior, brand_rules FROM brand_dna WHERE brand_id=?')
+      .get(brandId) as { target_audience?: string; insight?: string; behavior?: string; brand_rules?: string } | undefined;
+    if (dna) {
+      const strat: string[] = [];
+      if (dna.target_audience) strat.push(`Target audience: ${dna.target_audience}`);
+      if (dna.insight) strat.push(`Insight: ${dna.insight}`);
+      if (dna.behavior) strat.push(`Behavior: ${dna.behavior}`);
+      if (dna.brand_rules) strat.push(`BRAND RULES (mandatory): ${dna.brand_rules}`);
+      if (strat.length) sections.push(`[BRAND STRATEGY]\n${strat.join('\n')}`);
+    }
+
     // Get playbook excerpts (compliance, voice, content rules)
     const docs = db.prepare(
       `SELECT type, title, content FROM knowledge_docs
@@ -52,9 +66,6 @@ function getKnowledgeContext(brandId: string): string {
        ORDER BY uploaded_at ASC`
     ).all(brandId) as { type: string; title: string; content: string }[];
 
-    if (!docs.length) return '';
-
-    const sections: string[] = [];
     for (const doc of docs) {
       if (!doc.content) continue;
       // Extract key sections — compliance rules, content recipes, voice guidelines

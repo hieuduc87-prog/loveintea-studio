@@ -32,6 +32,8 @@ interface Template {
   usage_count: number;
   created_at: string;
   file_type?: string;
+  kind?: string;
+  slides_json?: string;
 }
 
 const CATEGORIES = [
@@ -315,6 +317,10 @@ function TemplateCard({
             loading="lazy"
           />
         )}
+        {tpl.kind === 'collection' && (() => {
+          let n = 0; try { n = (JSON.parse(tpl.slides_json || '[]') as unknown[]).length; } catch { /* */ }
+          return <span className="absolute bottom-1.5 left-1.5 text-[9px] bg-purple-600/90 text-white px-1.5 py-0.5 rounded-full font-medium">📚 {n || 'collection'}</span>;
+        })()}
       </div>
 
       {/* Category badge */}
@@ -605,6 +611,7 @@ function UploadModal({
   const [uploading, setUploading] = useState(false);
   const [fileStatuses, setFileStatuses] = useState<Record<string, 'pending' | 'uploading' | 'done' | 'error'>>({});
   const [error, setError] = useState('');
+  const [asCollection, setAsCollection] = useState(false);
 
   const doneCount = Object.values(fileStatuses).filter(s => s === 'done').length;
   const progress = files.length > 0 ? Math.round((doneCount / files.length) * 100) : 0;
@@ -622,6 +629,28 @@ function UploadModal({
   async function upload() {
     if (files.length === 0) { setError('Select at least one image or video'); return; }
     setUploading(true); setError('');
+
+    // Collection mode: all files → ONE ordered template (carousel)
+    if (asCollection && files.length > 1) {
+      try {
+        const fd = new FormData();
+        files.forEach(f => fd.append('files', f));
+        fd.append('brand_id', brandId);
+        fd.append('name', name || files[0].name.replace(/\.[^.]+$/, ''));
+        fd.append('category', category);
+        fd.append('purpose', purpose);
+        fd.append('format', format === 'post' ? 'carousel' : format);
+        fd.append('aspect_ratio', aspectRatio);
+        fd.append('tags', JSON.stringify(tags.split(',').map(t => t.trim()).filter(Boolean)));
+        fd.append('notes', notes);
+        const r = await fetch('/api/content-templates/upload', { method: 'POST', body: fd });
+        const d = await r.json();
+        setUploading(false);
+        if (!d.ok) { setError(d.error || 'Upload failed'); return; }
+        onUploaded();
+      } catch (e) { setUploading(false); setError(String(e)); }
+      return;
+    }
 
     // Initialize per-file status
     const initial = Object.fromEntries(files.map(f => [f.name + f.size, 'pending' as const]));
@@ -731,8 +760,17 @@ function UploadModal({
           <input ref={fileRef} type="file" accept="image/*,video/*" multiple className="hidden"
             onChange={e => handleFiles(e.target.files)} />
 
-          {/* Name (only for single file) */}
-          {files.length <= 1 && (
+          {/* Collection toggle (when >1 file) */}
+          {files.length > 1 && (
+            <label className="flex items-center gap-2 cursor-pointer bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2">
+              <input type="checkbox" checked={asCollection} onChange={e => setAsCollection(e.target.checked)} className="accent-brand-500" />
+              <span className="text-xs text-gray-300">📚 Gộp {files.length} ảnh thành <b>1 collection</b> (carousel có thứ tự)</span>
+              <span className="text-[10px] text-gray-600 ml-auto">{asCollection ? '→ 1 template' : `→ ${files.length} template riêng`}</span>
+            </label>
+          )}
+
+          {/* Name (single file OR collection) */}
+          {(files.length <= 1 || asCollection) && (
             <div>
               <label className="block text-xs text-gray-500 mb-1">Template Name</label>
               <input value={name} onChange={e => setName(e.target.value)}

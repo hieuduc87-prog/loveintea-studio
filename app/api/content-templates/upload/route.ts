@@ -9,8 +9,12 @@ import { analyzeTemplateLayout } from '@/lib/gemini';
 export async function POST(req: NextRequest) {
   try {
     const fd = await req.formData();
-    const file = fd.get('file') as File | null;
-    if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
+    // Collection = multiple ordered images (carousel); single = one image/video
+    const multi = (fd.getAll('files') as File[]).filter(Boolean);
+    const single = fd.get('file') as File | null;
+    const files = multi.length ? multi : (single ? [single] : []);
+    if (!files.length) return NextResponse.json({ error: 'No file' }, { status: 400 });
+    const file = files[0];
 
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
@@ -18,6 +22,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File must be an image or video' }, { status: 400 });
     }
     const fileType = isVideo ? 'video' : 'image';
+    const kind = files.length > 1 ? 'collection' : 'single';
 
     const name = (fd.get('name') as string) || file.name.replace(/\.[^.]+$/, '');
     const category = (fd.get('category') as string) || 'general';
@@ -76,13 +81,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Collection: save the remaining ordered slides
+    const slides: Array<{ url: string; order: number }> = [{ url: fileUrl, order: 0 }];
+    if (kind === 'collection') {
+      for (let i = 1; i < files.length; i++) {
+        const f = files[i];
+        const sExt = f.name.split('.').pop() ?? 'png';
+        const sName = `tpl-${id}-${i}.${sExt}`;
+        fs.writeFileSync(path.join(imagesDir, sName), Buffer.from(await f.arrayBuffer()));
+        slides.push({ url: `/api/images/${sName}`, order: i });
+      }
+    }
+    const slidesJson = JSON.stringify(slides);
+
     const db = getDb();
     db.prepare(`
-      INSERT INTO content_templates (id, brand_id, name, category, purpose, format, aspect_ratio, image_url, thumbnail_url, tags, color_palette, notes, analysis, file_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, brandId, name, category, purpose, format, aspectRatio, fileUrl, thumbnailUrl, tags, colorPalette, notes, analysis, fileType);
+      INSERT INTO content_templates (id, brand_id, name, category, purpose, format, aspect_ratio, image_url, thumbnail_url, tags, color_palette, notes, analysis, file_type, kind, slides_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, brandId, name, category, purpose, format, aspectRatio, fileUrl, thumbnailUrl, tags, colorPalette, notes, analysis, fileType, kind, slidesJson);
 
-    return NextResponse.json({ ok: true, id, imageUrl: fileUrl, thumbnailUrl, analysis: analysis ? JSON.parse(analysis) : null, fileType });
+    return NextResponse.json({ ok: true, id, imageUrl: fileUrl, thumbnailUrl, analysis: analysis ? JSON.parse(analysis) : null, fileType, kind, slides });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

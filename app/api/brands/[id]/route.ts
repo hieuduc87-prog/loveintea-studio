@@ -12,19 +12,40 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json({ brand, products, dna });
 }
 
+const DNA_COLUMNS = ['tagline', 'archetype', 'through_line', 'voice_traits', 'compliance_json',
+  'hashtags', 'colors_json', 'typography_json', 'target_audience', 'insight', 'behavior', 'brand_rules'];
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
-  const body = await req.json() as Record<string, unknown>;
+  const body = await req.json() as Record<string, unknown> & { dna?: Record<string, unknown> };
+
+  // Brand fields
   const allowed = ['name', 'slug', 'logo_url', 'domain'];
-  const sets: string[] = [];
-  const vals: unknown[] = [];
+  const sets: string[] = []; const vals: unknown[] = [];
   for (const [k, v] of Object.entries(body)) {
     if (allowed.includes(k)) { sets.push(`${k} = ?`); vals.push(v); }
   }
-  if (!sets.length) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
-  vals.push(id);
-  db.prepare(`UPDATE brands SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  if (sets.length) { db.prepare(`UPDATE brands SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id); }
+
+  // Brand DNA fields (upsert)
+  if (body.dna && typeof body.dna === 'object') {
+    const dnaSets: string[] = []; const dnaVals: unknown[] = [];
+    for (const [k, v] of Object.entries(body.dna)) {
+      if (DNA_COLUMNS.includes(k)) { dnaSets.push(`${k} = ?`); dnaVals.push(typeof v === 'object' ? JSON.stringify(v) : v); }
+    }
+    if (dnaSets.length) {
+      const exists = db.prepare('SELECT 1 FROM brand_dna WHERE brand_id=?').get(id);
+      if (exists) {
+        db.prepare(`UPDATE brand_dna SET ${dnaSets.join(', ')}, updated_at=datetime('now') WHERE brand_id=?`).run(...dnaVals, id);
+      } else {
+        db.prepare(`INSERT INTO brand_dna (id, brand_id, ${Object.keys(body.dna).filter(k => DNA_COLUMNS.includes(k)).join(', ')})
+          VALUES (?, ?, ${dnaVals.map(() => '?').join(', ')})`).run(`dna-${id}`, id, ...dnaVals);
+      }
+    }
+  }
+
+  if (!sets.length && !body.dna) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
 

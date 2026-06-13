@@ -67,7 +67,11 @@ PLAN ITEM:
 BRAND DNA:
 - Tagline: ${dna?.tagline ?? ''} | Archetype: ${dna?.archetype ?? ''}
 - Voice: ${dna?.voice_traits ?? '[]'}
+- Khách hàng mục tiêu: ${dna?.target_audience ?? ''}
+- Insight: ${dna?.insight ?? ''}
+- Hành vi: ${dna?.behavior ?? ''}
 - COMPLIANCE (obey strictly): ${dna?.compliance_json ?? '{}'}
+${dna?.brand_rules ? `- RULE RIÊNG BRAND (bắt buộc): ${dna.brand_rules}` : ''}
 ${rules.length ? `ACTIVE RULES:\n${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}` : ''}
 
 REQUIREMENTS:

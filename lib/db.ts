@@ -770,6 +770,14 @@ function initSchema(db: Database.Database) {
   // Product knowledge template + photo shot-list requirements
   try { db.exec(`ALTER TABLE products ADD COLUMN knowledge_json TEXT DEFAULT '{}'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE products ADD COLUMN shot_req_json TEXT DEFAULT ''`); } catch { /* already exists */ }
+  // Brand DNA: audience / insight / behavior / brand-specific rules
+  try { db.exec(`ALTER TABLE brand_dna ADD COLUMN target_audience TEXT DEFAULT ''`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE brand_dna ADD COLUMN insight TEXT DEFAULT ''`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE brand_dna ADD COLUMN behavior TEXT DEFAULT ''`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE brand_dna ADD COLUMN brand_rules TEXT DEFAULT ''`); } catch { /* already exists */ }
+  // Content templates: single vs collection (ordered multi-image)
+  try { db.exec(`ALTER TABLE content_templates ADD COLUMN kind TEXT DEFAULT 'single'`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE content_templates ADD COLUMN slides_json TEXT DEFAULT '[]'`); } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (
