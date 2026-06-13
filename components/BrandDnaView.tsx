@@ -85,6 +85,20 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
     setTimeout(() => setStratMsg(''), 2500);
   }
 
+  const [extracting, setExtracting] = useState(false);
+  async function extractFromDocs() {
+    setExtracting(true); setStratMsg('');
+    try {
+      const r = await fetch(`/api/brands/${bid}/dna/extract`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const d = await r.json() as { ok?: boolean; fields?: typeof strategy; sources?: string[]; error?: string };
+      if (d.ok && d.fields) {
+        setStrategy(d.fields); setStratDirty(true);
+        setStratMsg(`✓ Đã tổng hợp từ ${d.sources?.length ?? 0} tài liệu — xem lại rồi bấm Lưu`);
+      } else setStratMsg('✗ ' + (d.error ?? 'Lỗi'));
+    } catch (e) { setStratMsg('✗ ' + String(e)); }
+    setExtracting(false);
+  }
+
   async function uploadVoice(file: File) {
     setVoiceUploading(true); setVoiceMsg('');
     const fd = new FormData(); fd.append('file', file);
@@ -157,6 +171,14 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
       {/* Audience & Strategy — editable, feeds every AI prompt */}
       <Section title="Đối tượng & Chiến lược (đưa vào mọi prompt AI)">
         <Card>
+          <div className="flex items-center gap-2 mb-3 flex-wrap bg-brand-900/20 border border-brand-700/30 rounded-lg px-3 py-2">
+            <span className="text-[11px] text-gray-300">Đã có tài liệu trong hệ thống? Không cần gõ tay —</span>
+            <button onClick={extractFromDocs} disabled={extracting}
+              className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-bold">
+              {extracting ? '⟳ AI đang đọc tài liệu…' : '✨ Tổng hợp từ tài liệu đã có'}
+            </button>
+            <span className="text-[10px] text-gray-500">(đọc Playbook + Communication Direction + segment khách hàng đã nhập)</span>
+          </div>
           <div className="grid md:grid-cols-2 gap-3">
             {([
               ['target_audience', '🎯 Khách hàng mục tiêu', 'Độ tuổi, giới tính, nghề nghiệp, nhu cầu…'],
