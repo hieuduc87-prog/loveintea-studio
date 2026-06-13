@@ -65,3 +65,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
+
+// PATCH — set an image's shot type (for shot-list coverage) or hero flag.
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: productId } = await params;
+  const db = getDb();
+  const { imageId, type, isHero } = await req.json() as { imageId?: string; type?: string; isHero?: boolean };
+  if (!imageId) return NextResponse.json({ error: 'imageId required' }, { status: 400 });
+  if (type) db.prepare('UPDATE product_images SET type=? WHERE id=? AND product_id=?').run(type, imageId, productId);
+  if (isHero !== undefined) {
+    if (isHero) db.prepare('UPDATE product_images SET is_hero=0 WHERE product_id=?').run(productId);
+    db.prepare('UPDATE product_images SET is_hero=? WHERE id=? AND product_id=?').run(isHero ? 1 : 0, imageId, productId);
+  }
+  return NextResponse.json({ ok: true });
+}
+
+// DELETE — remove an image (?imageId=)
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: productId } = await params;
+  const db = getDb();
+  const imageId = req.nextUrl.searchParams.get('imageId');
+  if (!imageId) return NextResponse.json({ error: 'imageId required' }, { status: 400 });
+  const row = db.prepare('SELECT image_url FROM product_images WHERE id=? AND product_id=?').get(imageId, productId) as { image_url: string } | undefined;
+  if (row?.image_url?.startsWith('/api/images/')) {
+    try { fs.unlinkSync(path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'images', row.image_url.replace('/api/images/', ''))); } catch { /* gone */ }
+  }
+  db.prepare('DELETE FROM product_images WHERE id=? AND product_id=?').run(imageId, productId);
+  return NextResponse.json({ ok: true });
+}

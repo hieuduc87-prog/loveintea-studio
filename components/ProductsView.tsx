@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { chunkedUpload } from '@/lib/chunk-upload';
+import { ProductKnowledgePanel } from './ProductKnowledgePanel';
 
 interface ProductVideo {
   id: string; url: string; duration_s: number; status: string; tags_json: string;
@@ -47,6 +48,25 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
 
   // Lightbox
   const [lightbox, setLightbox] = useState<ProductImage | null>(null);
+
+  // Detail tab: media gallery vs brief & knowledge
+  const [detailTab, setDetailTab] = useState<'media' | 'brief'>('media');
+
+  async function setImageType(imageId: string, type: string) {
+    if (!selected) return;
+    await fetch(`/api/products/${selected.id}/images`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageId, type }),
+    });
+    setImages(imgs => imgs.map(im => im.id === imageId ? { ...im, type } : im));
+    setLightbox(lb => lb && lb.id === imageId ? { ...lb, type } : lb);
+  }
+  async function deleteImage(imageId: string) {
+    if (!selected || !confirm('Xóa ảnh này?')) return;
+    await fetch(`/api/products/${selected.id}/images?imageId=${imageId}`, { method: 'DELETE' });
+    setImages(imgs => imgs.filter(im => im.id !== imageId));
+    setLightbox(null);
+  }
 
   // Add product form
   const [showAddForm, setShowAddForm] = useState(false);
@@ -222,6 +242,15 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
           {/* Product detail + asset library */}
           {selected && (
             <div className="flex-1 overflow-y-auto space-y-5">
+              {/* Detail tab toggle */}
+              <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-0.5 w-fit">
+                {([['media', '📦 Ảnh & Video'], ['brief', '📋 Brief & Knowledge']] as const).map(([t, label]) => (
+                  <button key={t} onClick={() => setDetailTab(t)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${detailTab === t ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
               {/* Product header */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                 <div className="flex items-start gap-4">
@@ -250,6 +279,9 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
                 </div>
               </div>
 
+              {detailTab === 'brief' && <ProductKnowledgePanel productId={selected.id} productName={selected.name} />}
+
+              {detailTab === 'media' && (<>
               {/* Upload zone — images + videos, up to 200MB each */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
@@ -343,6 +375,7 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
                   </div>
                 )}
               </div>
+              </>)}
             </div>
           )}
 
@@ -377,8 +410,13 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
               </button>
             </div>
             <div className="absolute bottom-3 left-3 right-3 flex items-center gap-2 bg-black/70 rounded-lg px-3 py-2 backdrop-blur">
-              <span className="text-xs text-gray-300 capitalize">{lightbox.type}</span>
-              {lightbox.is_hero ? <span className="text-xs text-yellow-400">★ Hero image</span> : null}
+              <span className="text-[11px] text-gray-400">Loại:</span>
+              <select value={lightbox.type} onChange={e => setImageType(lightbox.id, e.target.value)}
+                className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white">
+                {IMAGE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              {lightbox.is_hero ? <span className="text-xs text-yellow-400">★ Hero</span> : null}
+              <button onClick={() => deleteImage(lightbox.id)} className="ml-auto text-xs text-red-400 hover:text-red-300">🗑 Xóa</button>
             </div>
           </div>
         </div>
