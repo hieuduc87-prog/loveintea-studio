@@ -9,14 +9,12 @@ import { BrandDnaView }       from './BrandDnaView';
 import { ProductsView }       from './ProductsView';
 import { ContentWorkshopView } from './ContentWorkshopView';
 import { ImageStudioView }    from './ImageStudioView';
-import { ImageLibraryView }   from './ImageLibraryView';
 import { JobQueueView }       from './JobQueueView';
 import { ContentQueueView }   from './ContentQueueView';
 import { PublisherView }      from './PublisherView';
 import { BlogFactoryView }    from './BlogFactoryView';
 import { InboxView }          from './InboxView';
 import { AnalyticsView }      from './AnalyticsView';
-import { ScheduleView }       from './ScheduleView';
 import { PlanCalendarView }   from './PlanCalendarView';
 import { UserGuideView }      from './UserGuideView';
 import { UserManagementView } from './UserManagementView';
@@ -41,13 +39,13 @@ interface BrandSummary {
 type TabId =
   | 'dashboard'
   | 'brands' | 'brand_dna' | 'products' | 'knowledge_hub' | 'rules_engine' | 'scoreboard'
-  | 'plan_calendar' | 'schedule'
+  | 'plan_calendar'
   | 'content_workshop' | 'image_studio' | 'video_studio' | 'blog_factory'
   | 'content_queue' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
   | 'content_templates'
-  | 'asset_dam' | 'image_library' | 'content_log'
+  | 'asset_dam' | 'content_log'
   | 'payment'
   | 'guide' | 'team';
 
@@ -71,7 +69,6 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'blog_factory',     label: 'Blog Factory',     icon: '📝', group: 'Create' },
   // REVIEW & PUBLISH — Queue (review desk), Schedule, Channels
   { id: 'content_queue',    label: 'Review & Queue',   icon: '✅', group: 'Publish' },
-  { id: 'schedule',         label: 'Schedule',         icon: '📅', group: 'Publish' },
   { id: 'publisher',        label: 'Channels',         icon: '📡', group: 'Publish' },
   // ENGAGE — Community, inbox
   { id: 'inbox',            label: 'Inbox & Comments',  icon: '💬', group: 'Engage' },
@@ -79,8 +76,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'analytics',        label: 'Analytics',        icon: '📊', group: 'Learn' },
   { id: 'scoreboard',       label: 'Scoreboard',       icon: '🏆', group: 'Learn' },
   // LIBRARY — Assets, images, logs
-  { id: 'asset_dam',        label: 'Asset DAM',        icon: '🗃️', group: 'Library' },
-  { id: 'image_library',    label: 'Image Library',    icon: '🖼️', group: 'Library' },
+  { id: 'asset_dam',        label: 'Library',          icon: '🗃️', group: 'Library' },
   { id: 'content_log',      label: 'Content Log',      icon: '📜', group: 'Library' },
   { id: 'job_queue',        label: 'Job Queue',        icon: '⏳', group: 'Library' },
   // SYSTEM — Billing, guide, team
@@ -461,7 +457,6 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}
                 {id === 'products'         && <ProductsView brandId={bid} />}
                 {id === 'plan_calendar'    && <PlanCalendarView brandId={bid} />}
-                {id === 'schedule'         && <ScheduleView brandId={bid} />}
                 {id === 'content_workshop' && <ContentWorkshopView brandId={bid} />}
                 {id === 'image_studio'     && <ImageStudioView brandId={bid} />}
                 {id === 'video_studio'     && <VideoStudioView brandId={bid} />}
@@ -471,7 +466,6 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'job_queue'        && <JobQueueView />}
                 {id === 'analytics'        && <AnalyticsView brandId={bid} />}
                 {id === 'asset_dam'        && <AssetDamView brandId={bid} />}
-                {id === 'image_library'    && <ImageLibraryView brandId={bid} />}
                 {id === 'content_log'      && <ContentLogView brandId={bid} />}
                 {id === 'payment'          && <PaymentView />}
                 {id === 'inbox'            && <InboxView />}
