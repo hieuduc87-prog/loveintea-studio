@@ -168,27 +168,66 @@ export async function renderProject(projectId: string): Promise<void> {
       path.join(work, 'frames'), totalFrames
     );
 
-    // S6 — composite + audio
+    // S5.5 — voiceover TTS (optional). Mixed under the video with BGM ducking.
+    let voFile: string | null = null;
+    const voScript = String(project.vo_script || '').trim();
+    if (Number(project.use_voiceover) === 1 && voScript) {
+      try {
+        const { synthesizeVoice } = await import('./tts');
+        const voice = (String(project.vo_voice || 'nova')) as 'nova';
+        const buf = await synthesizeVoice(voScript, voice);
+        voFile = path.join(work, 'vo.mp3');
+        fs.writeFileSync(voFile, buf);
+        log(logs, `voiceover synthesized (${voScript.length} chars, voice=${voice})`);
+      } catch (e) { log(logs, `voiceover TTS failed (continuing without): ${e}`); voFile = null; }
+    }
+
+    // S6 — composite video + audio mix
     const final = path.join(work, 'final.mp4');
     const overlayInput = path.join(work, 'frames', 'f_%05d.png');
-    if (bgmFile && fs.existsSync(bgmFile)) {
-      const fadeStart = Math.max(0, durS - 1);
+    const D = durS.toFixed(2);
+    const fadeStart = Math.max(0, durS - 1).toFixed(2);
+    const hasBgm = Boolean(bgmFile && fs.existsSync(bgmFile));
+    const baseInputs = ['-i', bg, '-framerate', String(FPS), '-i', overlayInput];
+    const vOverlay = '[0:v][1:v]overlay=0:0:format=auto[v]';
+    const LN = 'loudnorm=I=-16:TP=-1.5:LRA=11';
+
+    if (hasBgm && voFile) {
+      // VO + BGM with sidechain ducking (BGM dips when narration speaks) — hubframe audio rule
       await ffmpeg([
-        '-i', bg, '-framerate', String(FPS), '-i', overlayInput, '-i', bgmFile,
+        ...baseInputs, '-i', bgmFile!, '-i', voFile,
         '-filter_complex',
-        `[0:v][1:v]overlay=0:0:format=auto[v];[2:a]atrim=0:${durS.toFixed(2)},afade=t=out:st=${fadeStart.toFixed(2)}:d=1,loudnorm=I=-16:TP=-1.5:LRA=11[a]`,
+        `${vOverlay};` +
+        `[3:a]asplit=2[voa][vob];` +
+        `[2:a]volume=0.8,atrim=0:${D},afade=t=out:st=${fadeStart}:d=1[bgmt];` +
+        `[bgmt][voa]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=300[duck];` +
+        `[duck][vob]amix=inputs=2:duration=first:normalize=0[mx];[mx]${LN}[a]`,
         '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
-        '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-b:a', '160k', '-shortest', final,
+        '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-b:a', '160k', '-t', D, final,
+      ]);
+    } else if (voFile) {
+      // VO only — pad to full video length
+      await ffmpeg([
+        ...baseInputs, '-i', voFile,
+        '-filter_complex', `${vOverlay};[2:a]apad,atrim=0:${D},${LN}[a]`,
+        '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+        '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-b:a', '160k', '-t', D, final,
+      ]);
+    } else if (hasBgm) {
+      await ffmpeg([
+        ...baseInputs, '-i', bgmFile!,
+        '-filter_complex', `${vOverlay};[2:a]atrim=0:${D},afade=t=out:st=${fadeStart}:d=1,${LN}[a]`,
+        '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+        '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-b:a', '160k', '-t', D, final,
       ]);
     } else {
       await ffmpeg([
-        '-i', bg, '-framerate', String(FPS), '-i', overlayInput,
-        '-filter_complex', '[0:v][1:v]overlay=0:0:format=auto[v]',
+        ...baseInputs, '-filter_complex', vOverlay,
         '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
         '-pix_fmt', 'yuv420p', '-r', String(FPS), final,
       ]);
     }
-    log(logs, 'composite done');
+    log(logs, `composite done (bgm=${hasBgm}, vo=${Boolean(voFile)})`);
 
     // S7 — QA (exit 0 ≠ video đúng)
     const qaFrames = await extractFrames(final, path.join(work, 'qa'), 6);

@@ -21,6 +21,7 @@ export interface Storyboard {
   hook: string;            // big text first ~2.5s
   segments: Segment[];
   cta_text: string;        // end card
+  voiceover: string;       // narration script paced to the duration (~2.3 words/sec)
 }
 
 export async function buildStoryboard(opts: {
@@ -39,9 +40,16 @@ export async function buildStoryboard(opts: {
     : [];
   if (product?.image_url) productImages.unshift({ image_url: product.image_url });
 
-  const clips = db.prepare(
-    `SELECT id, duration_s, tags_json FROM video_clips WHERE brand_id=? AND status='ready' ORDER BY created_at DESC LIMIT 60`
-  ).all(brandId) as Array<{ id: string; duration_s: number; tags_json: string }>;
+  // Prefer this product's own footage; fall back to brand-level clips (no product).
+  const clips = productId
+    ? db.prepare(
+        `SELECT id, duration_s, tags_json FROM video_clips
+         WHERE brand_id=? AND status='ready' AND (product_id=? OR product_id IS NULL)
+         ORDER BY (product_id=?) DESC, created_at DESC LIMIT 60`
+      ).all(brandId, productId, productId) as Array<{ id: string; duration_s: number; tags_json: string }>
+    : db.prepare(
+        `SELECT id, duration_s, tags_json FROM video_clips WHERE brand_id=? AND status='ready' ORDER BY created_at DESC LIMIT 60`
+      ).all(brandId) as Array<{ id: string; duration_s: number; tags_json: string }>;
 
   const clipCatalog = clips.map(c => {
     let t: Record<string, unknown> = {};
@@ -84,9 +92,10 @@ RULES (proven editing knowledge):
 4. text: short Vietnamese caption (max 8 words), benefit-led, follows compliance. Not every segment needs text.
 5. hook: max 7 words, creates curiosity, Vietnamese.
 6. cta_text: short CTA aligned with the purpose, Vietnamese.
+7. voiceover: a smooth Vietnamese narration read over the whole video. Length ≈ ${Math.round(targetDurationS * 2.3)} words (≈2.3 words/sec for ${targetDurationS}s). Warm, on-brand, follows compliance, complements (does NOT just repeat) the on-screen text. One flowing paragraph, no timestamps.
 
 Return ONLY JSON:
-{"title":"...","hook":"...","segments":[{"dur_s":2.0,"source":"clip|image|ai_image","clip_id":"...","image_url":"...","image_prompt":"...","text":"...","text_anim":"fade|pop|slide"}],"cta_text":"..."}`;
+{"title":"...","hook":"...","segments":[{"dur_s":2.0,"source":"clip|image|ai_image","clip_id":"...","image_url":"...","image_prompt":"...","text":"...","text_anim":"fade|pop|slide"}],"cta_text":"...","voiceover":"..."}`;
 
   const board = await generateJSON<Storyboard>(prompt);
   if (!board?.segments?.length) throw new Error('Director returned empty storyboard');

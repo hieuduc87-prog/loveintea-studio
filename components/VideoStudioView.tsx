@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { chunkedUpload } from '@/lib/chunk-upload';
 
 interface Clip {
   id: string; url: string; duration_s: number; width: number; height: number;
@@ -41,13 +42,18 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
   const [notes, setNotes] = useState('');
   const [bgmUrl, setBgmUrl] = useState('');
   const [bgmName, setBgmName] = useState('');
+  const [useVoiceover, setUseVoiceover] = useState(true);
+  const [voVoice, setVoVoice] = useState('nova');
 
   const load = useCallback(async () => {
     try {
+      const clipUrl = productId
+        ? `/api/video/clips?brandId=${brandId}&productId=${productId}`
+        : `/api/video/clips?brandId=${brandId}`;
       const [cr, pr, prods] = await Promise.all([
-        fetch(`/api/video/clips?brandId=${brandId}`),
+        fetch(clipUrl),
         fetch(`/api/video/projects?brandId=${brandId}`),
-        fetch(`/api/brands/${brandId}/products`).catch(() => null),
+        fetch(`/api/products?brand=${brandId}`).catch(() => null),
       ]);
       setClips(((await cr.json()).clips ?? []) as Clip[]);
       setProjects(((await pr.json()).projects ?? []) as Project[]);
@@ -56,7 +62,7 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
         setProducts(d.products ?? []);
       }
     } catch { /* keep */ }
-  }, [brandId]);
+  }, [brandId, productId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -68,16 +74,44 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
     return () => clearInterval(t);
   }, [projects, load]);
 
-  async function upload(file: File, kind: 'video' | 'audio') {
+  // Upload a brand-level clip (when no product selected; product clips upload in Products tab)
+  async function uploadClip(file: File) {
     setUploading(true); setMsg('');
     try {
-      const fd = new FormData();
-      fd.append('file', file); fd.append('brandId', brandId);
-      const r = await fetch('/api/video/clips', { method: 'POST', body: fd });
-      const d = await r.json() as { ok?: boolean; url?: string; error?: string };
-      if (!d.ok) setMsg('❌ ' + (d.error ?? 'Upload failed'));
-      else if (kind === 'audio') { setBgmUrl(d.url!); setBgmName(file.name); setMsg('✅ Đã chọn nhạc: ' + file.name); }
-      else { setMsg('✅ Clip đã vào kho (đã autotag)'); await load(); }
+      if (productId) {
+        const res = await chunkedUpload(file, 'product_media', { productId });
+        if (res.error) setMsg('❌ ' + res.error);
+        else { setMsg('✅ Clip vào kho sản phẩm (AI đang phân tích…)'); await load(); }
+      } else {
+        const fd = new FormData();
+        fd.append('file', file); fd.append('brandId', brandId);
+        const r = await fetch('/api/video/clips', { method: 'POST', body: fd });
+        const d = await r.json() as { ok?: boolean; error?: string };
+        if (!d.ok) setMsg('❌ ' + (d.error ?? 'Upload failed'));
+        else { setMsg('✅ Clip đã vào kho (đã autotag)'); await load(); }
+      }
+    } catch (e) { setMsg('❌ ' + String(e)); }
+    setUploading(false);
+  }
+
+  // BGM: accept an audio file (direct) OR a video file (auto-extract its audio track)
+  async function uploadBgm(file: File) {
+    setUploading(true); setMsg('');
+    try {
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v|mkv)$/i.test(file.name);
+      if (isVideo) {
+        setMsg('⏳ Đang bóc nhạc nền từ video…');
+        const res = await chunkedUpload(file, 'bgm_video', {});
+        if (res.error || !res.url) setMsg('❌ ' + (res.error ?? 'Bóc nhạc thất bại'));
+        else { setBgmUrl(res.url); setBgmName(file.name + ' (audio)'); setMsg('✅ Đã bóc nhạc nền từ video'); }
+      } else {
+        const fd = new FormData();
+        fd.append('file', file); fd.append('brandId', brandId);
+        const r = await fetch('/api/video/clips', { method: 'POST', body: fd });
+        const d = await r.json() as { ok?: boolean; url?: string; error?: string };
+        if (!d.ok || !d.url) setMsg('❌ ' + (d.error ?? 'Upload failed'));
+        else { setBgmUrl(d.url); setBgmName(file.name); setMsg('✅ Đã chọn nhạc: ' + file.name); }
+      }
     } catch (e) { setMsg('❌ ' + String(e)); }
     setUploading(false);
   }
@@ -87,7 +121,7 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
     try {
       const r = await fetch('/api/video/projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, purpose, productId: productId || undefined, targetDurationS: duration, bgmUrl: bgmUrl || undefined, notes: notes || undefined }),
+        body: JSON.stringify({ brandId, purpose, productId: productId || undefined, targetDurationS: duration, bgmUrl: bgmUrl || undefined, notes: notes || undefined, useVoiceover, voVoice }),
       });
       const d = await r.json() as { ok?: boolean; bpm?: number; error?: string };
       if (!d.ok) setMsg('❌ ' + (d.error ?? 'Tạo storyboard thất bại'));
@@ -137,14 +171,29 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
             <span className="text-xs text-white w-8">{duration}s</span>
           </div>
           <label className="block">
-            <span className="text-[11px] text-gray-400">Nhạc nền (mp3 — cắt cảnh theo beat)</span>
-            <input type="file" accept="audio/*" disabled={uploading}
-              onChange={e => e.target.files?.[0] && upload(e.target.files[0], 'audio')}
+            <span className="text-[11px] text-gray-400">Nhạc nền — mp3 hoặc <b>video</b> (tự bóc nhạc), cắt cảnh theo beat</span>
+            <input type="file" accept="audio/*,video/*" disabled={uploading}
+              onChange={e => e.target.files?.[0] && uploadBgm(e.target.files[0])}
               className="mt-1 block w-full text-[11px] text-gray-400 file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-200 file:text-xs" />
             {bgmName && <span className="text-[10px] text-emerald-400">♪ {bgmName}</span>}
           </label>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ghi chú cho AI director (tùy chọn): thông điệp chính, ưu đãi, không khí…"
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white resize-none h-16" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" checked={useVoiceover} onChange={e => setUseVoiceover(e.target.checked)} className="rounded accent-brand-500" />
+              <span className="text-[11px] text-gray-300">🎙️ Lồng tiếng (TTS, ducking nhạc nền)</span>
+            </label>
+            {useVoiceover && (
+              <select value={voVoice} onChange={e => setVoVoice(e.target.value)}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-[11px] text-white">
+                <option value="nova">Nova (nữ ấm)</option>
+                <option value="shimmer">Shimmer (nữ nhẹ)</option>
+                <option value="alloy">Alloy (trung tính)</option>
+                <option value="onyx">Onyx (nam trầm)</option>
+              </select>
+            )}
+          </div>
           <button onClick={createProject} disabled={creating}
             className="w-full py-2.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-bold transition-colors">
             {creating ? '🧠 AI đang dựng storyboard…' : '🧠 Tạo storyboard'}
@@ -155,11 +204,11 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
         {/* ── Clip library ── */}
         <div className="lg:col-span-2 rounded-xl border border-gray-800 bg-gray-900/60 p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wide">📼 Kho clip brand ({clips.length})</h3>
+            <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wide">📼 Kho clip {productId ? `của ${products.find(p => p.id === productId)?.name ?? 'sản phẩm'}` : 'brand'} ({clips.length})</h3>
             <label className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-[11px] font-semibold cursor-pointer">
-              {uploading ? 'Đang xử lý…' : '+ Upload clip (≤80MB)'}
+              {uploading ? 'Đang xử lý…' : '+ Upload clip (≤200MB)'}
               <input type="file" accept="video/*" className="hidden" disabled={uploading}
-                onChange={e => e.target.files?.[0] && upload(e.target.files[0], 'video')} />
+                onChange={e => e.target.files?.[0] && uploadClip(e.target.files[0])} />
             </label>
           </div>
           {clips.length === 0 ? (

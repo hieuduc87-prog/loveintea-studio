@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as {
       brandId?: string; title?: string; purpose?: string; productId?: string;
       targetDurationS?: number; bgmUrl?: string; notes?: string;
+      useVoiceover?: boolean; voVoice?: string;
     };
     const brandId = body.brandId || 'loveintea';
     const purpose = body.purpose || 'promo';
@@ -45,11 +46,14 @@ export async function POST(req: NextRequest) {
     });
 
     const id = uuid();
+    const voVoice = ['nova', 'shimmer', 'alloy', 'echo', 'fable', 'onyx'].includes(body.voVoice || '') ? body.voVoice : 'nova';
     getDb().prepare(`INSERT INTO video_projects
-      (id, brand_id, title, purpose, product_id, target_duration_s, bgm_url, bpm, script_json, status)
-      VALUES (?,?,?,?,?,?,?,?,?, 'draft')`)
+      (id, brand_id, title, purpose, product_id, target_duration_s, bgm_url, bpm, script_json, status,
+       use_voiceover, vo_script, vo_voice)
+      VALUES (?,?,?,?,?,?,?,?,?, 'draft', ?,?,?)`)
       .run(id, brandId, body.title || board.title, purpose, body.productId ?? null,
-        targetDurationS, body.bgmUrl ?? null, bpm, JSON.stringify(board));
+        targetDurationS, body.bgmUrl ?? null, bpm, JSON.stringify(board),
+        body.useVoiceover ? 1 : 0, board.voiceover ?? '', voVoice);
 
     return NextResponse.json({ ok: true, id, bpm, storyboard: board });
   } catch (e) {

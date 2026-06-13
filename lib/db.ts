@@ -759,6 +759,14 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE posts ADD COLUMN review_notes TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN analysis TEXT DEFAULT ''`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN file_type TEXT DEFAULT 'image'`); } catch { /* already exists */ }
+  // Video Studio: per-product clip library + Gemini video analysis + voiceover
+  try { db.exec(`ALTER TABLE video_clips ADD COLUMN product_id TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_clips ADD COLUMN analysis_json TEXT DEFAULT '{}'`); } catch { /* already exists */ }
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_video_clips_product ON video_clips(product_id)`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN use_voiceover INTEGER DEFAULT 0`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN vo_script TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN voiceover_url TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN vo_voice TEXT DEFAULT 'nova'`); } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (

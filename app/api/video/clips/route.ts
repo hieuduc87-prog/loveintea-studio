@@ -10,27 +10,26 @@ import { v4 as uuid } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
-import { probe, extractFrames, IMAGES_DIR, TMP_DIR } from '@/lib/video/ffmpeg';
-import { analyzeImage } from '@/lib/gemini';
+import { probe, IMAGES_DIR } from '@/lib/video/ffmpeg';
+import { analyzeClip } from '@/lib/video/analyze';
 
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get('brandId') || 'loveintea';
-  const clips = getDb().prepare(
-    'SELECT * FROM video_clips WHERE brand_id=? ORDER BY created_at DESC LIMIT 200'
-  ).all(brandId);
+  const productId = req.nextUrl.searchParams.get('productId');
+  const db = getDb();
+  const clips = productId
+    ? db.prepare(`SELECT * FROM video_clips WHERE brand_id=? AND (product_id=? OR product_id IS NULL)
+                  ORDER BY (product_id=?) DESC, created_at DESC LIMIT 200`).all(brandId, productId, productId)
+    : db.prepare('SELECT * FROM video_clips WHERE brand_id=? ORDER BY created_at DESC LIMIT 200').all(brandId);
   return NextResponse.json({ clips });
 }
-
-const TAG_PROMPT = `Tag this video frame for a brand footage library. Return ONLY JSON:
-{"subject":"main subject, 2-5 words","scene":"location/setting","mood":"calm|energetic|cozy|fresh|dramatic|joyful",
-"motion":"static|slow|medium|fast","colors":["dominant","colors"],"has_product":true/false,
-"has_text":true/false,"quality":"high|medium|low","time_of_day":"morning|afternoon|evening|night|studio","shot":"close-up|medium|wide"}`;
 
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get('file') as File | null;
     const brandId = (form.get('brandId') as string) || 'loveintea';
+    const productId = (form.get('productId') as string) || null;
     if (!file) return NextResponse.json({ error: 'file required' }, { status: 400 });
 
     const id = uuid();
@@ -43,25 +42,22 @@ export async function POST(req: NextRequest) {
 
     if (isAudio) return NextResponse.json({ ok: true, url, kind: 'audio' });
 
-    const meta = await probe(path.join(IMAGES_DIR, filename));
+    const full = path.join(IMAGES_DIR, filename);
+    const meta = await probe(full);
     const db = getDb();
-    db.prepare(`INSERT INTO video_clips (id, brand_id, url, filename, duration_s, width, height, status)
-      VALUES (?,?,?,?,?,?,?, 'tagging')`)
-      .run(id, brandId, url, filename, meta.duration, meta.width, meta.height);
+    db.prepare(`INSERT INTO video_clips (id, brand_id, product_id, url, filename, duration_s, width, height, status)
+      VALUES (?,?,?,?,?,?,?,?, 'tagging')`)
+      .run(id, brandId, productId, url, filename, meta.duration, meta.width, meta.height);
 
-    // Autotag from middle frame (lite version of bigai 47-field tagger)
-    let tags: Record<string, unknown> = {};
-    try {
-      const qaDir = path.join(TMP_DIR, `tag_${id}`);
-      const frames = await extractFrames(path.join(IMAGES_DIR, filename), qaDir, 3);
-      const raw = await analyzeImage(fs.readFileSync(frames[1]), 'image/jpeg', TAG_PROMPT);
-      const m = raw.match(/\{[\s\S]*\}/);
-      tags = JSON.parse(m ? m[0] : raw);
-      fs.rmSync(qaDir, { recursive: true, force: true });
-    } catch (e) { console.warn('[clips] autotag failed:', e); }
-    db.prepare(`UPDATE video_clips SET tags_json=?, status='ready' WHERE id=?`).run(JSON.stringify(tags), id);
+    // Async clip analysis (Gemini video understanding → tags + scenes) — don't block
+    const mime = ext === '.mov' ? 'video/quicktime' : ext === '.webm' ? 'video/webm' : 'video/mp4';
+    void analyzeClip(full, mime, id).then(a => {
+      if (a) db.prepare(`UPDATE video_clips SET tags_json=?, analysis_json=?, status='ready' WHERE id=?`)
+        .run(JSON.stringify(a), JSON.stringify(a.scenes ?? []), id);
+      else db.prepare(`UPDATE video_clips SET status='ready' WHERE id=?`).run(id);
+    }).catch(() => db.prepare(`UPDATE video_clips SET status='ready' WHERE id=?`).run(id));
 
-    return NextResponse.json({ ok: true, id, url, duration_s: meta.duration, tags, kind: 'video' });
+    return NextResponse.json({ ok: true, id, url, duration_s: meta.duration, kind: 'video', status: 'tagging' });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

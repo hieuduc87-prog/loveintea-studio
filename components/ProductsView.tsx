@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
+import { chunkedUpload } from '@/lib/chunk-upload';
+
+interface ProductVideo {
+  id: string; url: string; duration_s: number; status: string; tags_json: string;
+}
 
 interface Product {
   id: string; brand_id: string; slug: string; name: string;
@@ -31,13 +36,14 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
   const [loading, setLoading]   = useState(true);
   const [selected, setSelected] = useState<Product | null>(null);
   const [images, setImages]     = useState<ProductImage[]>([]);
+  const [videos, setVideos]     = useState<ProductVideo[]>([]);
   const [imgLoading, setImgLoading] = useState(false);
 
-  // Upload
+  // Upload (unified images + videos, chunked up to 200MB)
   const uploadRef = useRef<HTMLInputElement>(null);
-  const [uploadType, setUploadType] = useState('photo');
   const [uploading, setUploading]   = useState(false);
   const [uploadMsg, setUploadMsg]   = useState('');
+  const [uploadPct, setUploadPct]   = useState(0);
 
   // Lightbox
   const [lightbox, setLightbox] = useState<ProductImage | null>(null);
@@ -58,32 +64,53 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
+  const loadMedia = useCallback(async (productId: string) => {
+    setImgLoading(true);
+    const [ir, vr] = await Promise.all([
+      fetch(`/api/products/${productId}/images`),
+      fetch(`/api/products/${productId}/videos`),
+    ]);
+    setImages(((await ir.json()).images ?? []) as ProductImage[]);
+    setVideos(((await vr.json()).clips ?? []) as ProductVideo[]);
+    setImgLoading(false);
+  }, []);
+
   async function selectProduct(p: Product) {
     setSelected(p);
-    setImgLoading(true);
-    const r = await fetch(`/api/products/${p.id}/images`);
-    const d = await r.json() as { images: ProductImage[] };
-    setImages(d.images ?? []);
-    setImgLoading(false);
+    await loadMedia(p.id);
   }
 
+  // Chunked upload (images + videos) up to ~200MB, bypassing the CF 100MB limit
   async function uploadFiles(files: File[]) {
     if (!selected || !files.length) return;
     setUploading(true); setUploadMsg('');
-    const fd = new FormData();
-    files.forEach(f => fd.append('files', f));
-    fd.append('type', uploadType);
-    const r = await fetch(`/api/products/${selected.id}/images`, { method: 'POST', body: fd });
-    const d = await r.json() as { ok?: boolean; uploaded?: { id: string }[]; error?: string };
-    if (d.ok) {
-      setUploadMsg(`✓ ${d.uploaded?.length ?? 0} images uploaded`);
-      await selectProduct(selected);
-      await loadProducts();
-    } else {
-      setUploadMsg('✗ ' + d.error);
+    let ok = 0; let hasTagging = false;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (f.size > 210 * 1024 * 1024) { setUploadMsg(`✗ ${f.name} > 200MB`); continue; }
+      try {
+        setUploadPct(0);
+        const res = await chunkedUpload(f, 'product_media', { productId: selected.id }, setUploadPct);
+        if (res.error) { setUploadMsg('✗ ' + res.error); continue; }
+        ok++;
+        if (res.status === 'tagging') hasTagging = true;
+        setUploadMsg(`⬆ ${i + 1}/${files.length} xong`);
+      } catch (e) { setUploadMsg('✗ ' + String(e)); }
     }
+    setUploadPct(0);
+    if (ok) setUploadMsg(`✓ ${ok} file đã tải lên${hasTagging ? ' (AI đang phân tích video…)' : ''}`);
+    await loadMedia(selected.id);
+    await loadProducts();
     setUploading(false);
-    setTimeout(() => setUploadMsg(''), 3000);
+    // Poll a couple times if videos are still tagging
+    if (hasTagging) setTimeout(() => selected && loadMedia(selected.id), 12000);
+    setTimeout(() => setUploadMsg(''), 6000);
+  }
+
+  async function deleteVideo(clipId: string) {
+    if (!selected || !confirm('Xóa video này?')) return;
+    await fetch(`/api/products/${selected.id}/videos?clipId=${clipId}`, { method: 'DELETE' });
+    setVideos(v => v.filter(x => x.id !== clipId));
   }
 
   async function addProduct() {
@@ -223,21 +250,22 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
                 </div>
               </div>
 
-              {/* Upload zone */}
+              {/* Upload zone — images + videos, up to 200MB each */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Product Photography</p>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Kho ảnh & video sản phẩm</p>
                   <div className="ml-auto flex items-center gap-2">
-                    {uploadMsg && <span className={`text-xs ${uploadMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{uploadMsg}</span>}
-                    <select value={uploadType} onChange={e => setUploadType(e.target.value)}
-                      className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none">
-                      {IMAGE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                    <input ref={uploadRef} type="file" accept="image/*" className="hidden" multiple
+                    {uploadMsg && <span className={`text-xs ${uploadMsg.startsWith('✓') || uploadMsg.startsWith('⬆') ? 'text-green-400' : 'text-red-400'}`}>{uploadMsg}</span>}
+                    {uploading && uploadPct > 0 && (
+                      <span className="text-[10px] text-gray-400 w-24 bg-gray-800 rounded-full overflow-hidden h-2 relative">
+                        <span className="absolute inset-y-0 left-0 bg-brand-500" style={{ width: `${uploadPct}%` }} />
+                      </span>
+                    )}
+                    <input ref={uploadRef} type="file" accept="image/*,video/*" className="hidden" multiple
                       onChange={e => { uploadFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
                     <button onClick={() => uploadRef.current?.click()} disabled={uploading}
                       className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">
-                      {uploading ? '⟳ Uploading…' : '⬆ Upload Photos'}
+                      {uploading ? `⟳ ${uploadPct || ''}%` : '⬆ Upload ảnh / video (≤200MB)'}
                     </button>
                   </div>
                 </div>
@@ -278,6 +306,40 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
                       <span className="text-2xl text-gray-600 mb-1">+</span>
                       <span className="text-[10px] text-gray-600">Add more</span>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Video clip library for this product */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">🎬 Kho video sản phẩm ({videos.length})</p>
+                  <p className="text-[10px] text-gray-600 ml-auto">AI tự phân tích cảnh/mood để Video Studio dùng đúng footage</p>
+                </div>
+                {videos.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center cursor-pointer hover:border-gray-600 transition-colors"
+                    onClick={() => uploadRef.current?.click()}>
+                    <p className="text-3xl mb-2">🎥</p>
+                    <p className="text-gray-400 text-sm">Upload video footage của sản phẩm này</p>
+                    <p className="text-[10px] text-gray-600 mt-1">Quay tay, b-roll, hậu trường — tối đa 200MB/clip</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                    {videos.map(v => {
+                      let t: Record<string, unknown> = {}; try { t = JSON.parse(v.tags_json); } catch { /* */ }
+                      return (
+                        <div key={v.id} className="group relative rounded-lg overflow-hidden border border-gray-800 hover:border-gray-600 transition-colors">
+                          <video src={v.url} muted playsInline preload="metadata" className="w-full aspect-[9/16] object-cover bg-black"
+                            onMouseEnter={e => e.currentTarget.play().catch(() => {})} onMouseLeave={e => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }} />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1.5">
+                            <p className="text-[9px] text-gray-200 truncate">{String(t.subject ?? (v.status === 'tagging' ? '⏳ đang phân tích…' : '—'))}</p>
+                            <p className="text-[8px] text-gray-400">{Math.round(v.duration_s)}s · {String(t.mood ?? '')}</p>
+                          </div>
+                          <button onClick={() => deleteVideo(v.id)}
+                            className="absolute top-1 right-1 w-6 h-6 bg-black/60 hover:bg-red-900/80 text-gray-300 hover:text-red-300 rounded opacity-0 group-hover:opacity-100 transition-opacity text-xs">✕</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
