@@ -17,8 +17,7 @@ import { BlogFactoryView }    from './BlogFactoryView';
 import { InboxView }          from './InboxView';
 import { AnalyticsView }      from './AnalyticsView';
 import { ScheduleView }       from './ScheduleView';
-import { ContentPlansView }   from './ContentPlansView';
-import { CalendarView }       from './CalendarView';
+import { PlanCalendarView }   from './PlanCalendarView';
 import { UserGuideView }      from './UserGuideView';
 import { UserManagementView } from './UserManagementView';
 import { AssetDamView }       from './AssetDamView';
@@ -42,7 +41,7 @@ interface BrandSummary {
 type TabId =
   | 'dashboard'
   | 'brands' | 'brand_dna' | 'products' | 'knowledge_hub' | 'rules_engine' | 'scoreboard'
-  | 'import_plan' | 'calendar' | 'schedule'
+  | 'plan_calendar' | 'schedule'
   | 'content_workshop' | 'image_studio' | 'video_studio' | 'blog_factory'
   | 'content_queue' | 'publisher' | 'job_queue'
   | 'analytics'
@@ -64,8 +63,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'rules_engine',     label: 'Rules Engine',     icon: '⚙️', group: 'Brain' },
   { id: 'content_templates', label: 'Content Templates', icon: '🎨', group: 'Brain' },
   // PLAN — Calendar, content plans, slot allocation
-  { id: 'import_plan',      label: 'Content Plans',    icon: '📋', group: 'Plan' },
-  { id: 'calendar',         label: 'Post Calendar',    icon: '🗓️', group: 'Plan' },
+  { id: 'plan_calendar',    label: 'Plan & Lịch',      icon: '🗓️', group: 'Plan' },
   // CREATE — Copy track + Visual track + Blog
   { id: 'content_workshop', label: 'Content Workshop', icon: '✍️', group: 'Create' },
   { id: 'image_studio',     label: 'Image Studio',     icon: '🖼️', group: 'Create' },
@@ -462,8 +460,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'scoreboard'       && <ScoreboardView brandId={bid} />}
                 {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}
                 {id === 'products'         && <ProductsView brandId={bid} />}
-                {id === 'import_plan'      && <ContentPlansView brandId={bid} />}
-                {id === 'calendar'         && <CalendarView brandId={bid} />}
+                {id === 'plan_calendar'    && <PlanCalendarView brandId={bid} />}
                 {id === 'schedule'         && <ScheduleView brandId={bid} />}
                 {id === 'content_workshop' && <ContentWorkshopView brandId={bid} />}
                 {id === 'image_studio'     && <ImageStudioView brandId={bid} />}

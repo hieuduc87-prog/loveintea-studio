@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   ).all(id);
 
   const posts = db.prepare(
-    'SELECT id, sku_id, status, scheduled_at, published_at, caption, platforms FROM posts WHERE plan_id = ? ORDER BY scheduled_at'
+    'SELECT id, sku_id, status, scheduled_at, published_at, caption, platforms, plan_item_id, review_status, image_url, hashtags FROM posts WHERE plan_id = ? ORDER BY scheduled_at'
   ).all(id);
 
   const stats = {

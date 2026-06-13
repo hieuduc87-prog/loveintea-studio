@@ -248,7 +248,7 @@ export function DashboardView({ brandId, onNavigate }: { brandId: string; onNavi
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => go('content_workshop')} className="px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold transition-colors">✍️ Tạo content</button>
             <button onClick={() => go('content_queue')} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors">✅ Duyệt queue</button>
-            <button onClick={() => go('calendar')} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors">🗓️ Lịch đăng</button>
+            <button onClick={() => go('plan_calendar')} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors">🗓️ Lịch đăng</button>
             <button onClick={() => go('publisher')} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition-colors">📡 Kênh & token</button>
           </div>
         </div>
