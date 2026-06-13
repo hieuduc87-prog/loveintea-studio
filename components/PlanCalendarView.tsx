@@ -62,6 +62,7 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
   // run options
   const [withImage, setWithImage] = useState(true);
   const [autoSchedule, setAutoSchedule] = useState(true);
+  const [useTemplate, setUseTemplate] = useState(true);
   const [running, setRunning] = useState(false);
   const [runProgress, setRunProgress] = useState('');
 
@@ -157,7 +158,7 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
       try {
         const r = await fetch(`/api/plans/${selectedPlanId}/generate`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ itemIds: [itemId], withImage, schedule: autoSchedule }),
+          body: JSON.stringify({ itemIds: [itemId], withImage, schedule: autoSchedule, useTemplate }),
         });
         const d = await r.json() as { created?: unknown[]; errors?: unknown[] };
         if (d.created?.length) done++; else fail++;
@@ -299,6 +300,7 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
           <div className="ml-auto flex items-center gap-2 flex-wrap">
             <label className="flex items-center gap-1 text-[11px] text-gray-400"><input type="checkbox" checked={withImage} onChange={e => setWithImage(e.target.checked)} className="accent-brand-500" /> tạo ảnh</label>
             <label className="flex items-center gap-1 text-[11px] text-gray-400"><input type="checkbox" checked={autoSchedule} onChange={e => setAutoSchedule(e.target.checked)} className="accent-brand-500" /> lên lịch theo plan</label>
+            <label className="flex items-center gap-1 text-[11px] text-gray-400" title="Tự chọn template theo cơ chế rotate + ưu tiên template win cao"><input type="checkbox" checked={useTemplate} onChange={e => setUseTemplate(e.target.checked)} className="accent-brand-500" /> dùng template (rotate)</label>
             <button onClick={() => runItems(ungeneratedItems())} disabled={running || ungeneratedItems().length === 0}
               className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white text-xs font-bold">
               {running ? `⟳ Đang chạy ${runProgress}` : `▶ Run All (${ungeneratedItems().length})`}

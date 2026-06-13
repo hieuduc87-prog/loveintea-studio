@@ -14,14 +14,25 @@ import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
 import { generateFromPlanItem, planItemDateToISO, resolveProductImagePath, PlanItemRow } from '@/lib/plan-generate';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
+import { pickTemplate, recordTemplateUse } from '@/lib/template-picker';
+
+function surfaceToFormat(surface: string): string | undefined {
+  const s = (surface || '').toLowerCase();
+  if (s.includes('reel')) return 'reel_cover';
+  if (s.includes('carousel')) return 'carousel';
+  if (s.includes('story')) return 'story';
+  if (s.includes('still') || s.includes('post') || s.includes('feed')) return 'post';
+  return undefined;
+}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: planId } = await params;
   const db = getDb();
   try {
-    const body = await req.json().catch(() => ({})) as { itemIds?: string[]; withImage?: boolean; schedule?: boolean };
+    const body = await req.json().catch(() => ({})) as { itemIds?: string[]; withImage?: boolean; schedule?: boolean; useTemplate?: boolean };
     const withImage = Boolean(body.withImage);
     const schedule = Boolean(body.schedule);
+    const useTemplate = Boolean(body.useTemplate);
 
     const plan = db.prepare('SELECT brand_id FROM content_plans WHERE id=?').get(planId) as { brand_id: string } | undefined;
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
@@ -45,6 +56,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       try {
         const gen = await generateFromPlanItem(item);
+
+        // Template operating flow: pick a template (rotation + win-bias) for this surface
+        let templateId: string | null = null;
+        let imagePrompt = gen.image_prompt;
+        if (useTemplate) {
+          const tpl = pickTemplate(plan.brand_id, { format: surfaceToFormat(item.surface) });
+          if (tpl) {
+            templateId = tpl.id;
+            // Bias the generated image toward the picked template's layout/style
+            let styleHint = '';
+            try { const a = JSON.parse(tpl.analysis || '{}') as { style_keywords?: string[]; layout?: { description?: string } };
+              styleHint = [a.style_keywords?.join(', '), a.layout?.description].filter(Boolean).join('. '); } catch { /* */ }
+            if (styleHint) imagePrompt = `${gen.image_prompt}\n\nFollow this template style/layout: ${styleHint}`;
+          }
+        }
+
         let imageUrl = '';
         if (withImage) {
           const product = item.product_id
@@ -52,8 +79,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             : undefined;
           const productPath = resolveProductImagePath(product?.image_url);
           let raw: string;
-          if (productPath) raw = await editProductImage({ productImagePath: productPath, prompt: gen.image_prompt, size: '1024x1536' });
-          else raw = await generateImage({ prompt: gen.image_prompt, size: '1024x1536' });
+          if (productPath) raw = await editProductImage({ productImagePath: productPath, prompt: imagePrompt, size: '1024x1536' });
+          else raw = await generateImage({ prompt: imagePrompt, size: '1024x1536' });
           imageUrl = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
         }
 
@@ -62,10 +89,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const postId = uuid();
         db.prepare(`INSERT INTO posts
           (id, brand_id, plan_id, plan_item_id, sku_id, caption, hashtags, image_url, image_prompt,
-           platforms, status, scheduled_at, review_status)
-          VALUES (?,?,?,?,?,?,?,?,?, 'facebook,instagram', ?, ?, 'pending')`)
+           platforms, status, scheduled_at, review_status, template_id)
+          VALUES (?,?,?,?,?,?,?,?,?, 'facebook,instagram', ?, ?, 'pending', ?)`)
           .run(postId, plan.brand_id, planId, item.id, item.product_id ?? '',
-            gen.caption, gen.hashtags, imageUrl, gen.image_prompt, status, scheduledAt);
+            gen.caption, gen.hashtags, imageUrl, imagePrompt, status, scheduledAt, templateId);
+        if (templateId) recordTemplateUse(templateId);
         created.push({ itemId: item.id, postId });
       } catch (e) {
         errors.push({ itemId: item.id, error: String(e).slice(0, 200) });

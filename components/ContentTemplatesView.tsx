@@ -67,6 +67,7 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
   const [selected, setSelected] = useState<Template | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [perf, setPerf] = useState<Record<string, { posts: number; avg_engaged: number; win: boolean }>>({});
 
   const bid = brandId || 'loveintea';
 
@@ -83,6 +84,14 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
   }, [bid, catFilter, fmtFilter, search]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetch(`/api/templates/performance?brand=${bid}`).then(r => r.json()).then((d: { templates?: Array<{ id: string; posts: number; avg_engaged: number; win: boolean }> }) => {
+      const m: Record<string, { posts: number; avg_engaged: number; win: boolean }> = {};
+      for (const t of d.templates ?? []) m[t.id] = { posts: t.posts, avg_engaged: t.avg_engaged, win: t.win };
+      setPerf(m);
+    }).catch(() => {});
+  }, [bid]);
 
   async function deleteTemplate(id: string) {
     if (!confirm('Delete this template?')) return;
@@ -231,6 +240,7 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
                 <TemplateCard
                   key={tpl.id}
                   tpl={tpl}
+                  perf={perf[tpl.id]}
                   isSelected={selected?.id === tpl.id}
                   catColor={catColor}
                   catLabel={catLabel}
@@ -276,9 +286,10 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
 
 // ─── Template Card ──────────────────────────────────────────
 function TemplateCard({
-  tpl, isSelected, catColor, catLabel, parseTags, onSelect, onDelete,
+  tpl, perf, isSelected, catColor, catLabel, parseTags, onSelect, onDelete,
 }: {
   tpl: Template;
+  perf?: { posts: number; avg_engaged: number; win: boolean };
   isSelected: boolean;
   catColor: (c: string) => string;
   catLabel: (c: string) => string;
@@ -324,10 +335,16 @@ function TemplateCard({
       </div>
 
       {/* Category badge */}
-      <div className="absolute top-1.5 left-1.5">
+      <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
         <span className={`text-[9px] text-white px-1.5 py-0.5 rounded-full font-medium ${catColor(tpl.category)}`}>
           {catLabel(tpl.category)}
         </span>
+        {perf && perf.posts > 0 && (
+          <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${perf.win ? 'bg-emerald-600/90 text-white' : 'bg-gray-700/90 text-gray-300'}`}
+            title={`${perf.posts} bài đã đăng · TB engaged ${Math.round(perf.avg_engaged)}`}>
+            {perf.win ? '🏆 win' : '📊'} {Math.round(perf.avg_engaged)}
+          </span>
+        )}
       </div>
 
       {/* Usage count */}

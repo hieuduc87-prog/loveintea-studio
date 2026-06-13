@@ -781,6 +781,10 @@ function initSchema(db: Database.Database) {
   // Asset library: group loose images into folders (drag-to-group)
   try { db.exec(`ALTER TABLE assets ADD COLUMN folder TEXT DEFAULT ''`); } catch { /* already exists */ }
   try { db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_folder ON assets(brand_id, folder)`); } catch { /* already exists */ }
+  // Template operating flow: link posts to the template used + rotation timestamp
+  try { db.exec(`ALTER TABLE posts ADD COLUMN template_id TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE content_templates ADD COLUMN last_used_at TEXT`); } catch { /* already exists */ }
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_posts_template ON posts(template_id) WHERE template_id IS NOT NULL`); } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (
