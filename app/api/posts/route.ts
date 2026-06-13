@@ -44,6 +44,14 @@ export async function POST(req: NextRequest) {
       body.ruleVersion ?? body.rule_version ?? 'v1.0',
       body.planItemId ?? body.plan_item_id ?? null,
     );
+    // Multi-tag from the start (from structured columns) for win-rate aggregation
+    try {
+      const { autoTagPost } = await import('@/lib/post-tags');
+      const extra = [];
+      if (body.insight)  extra.push({ dimension: 'insight',  value: String(body.insight),  source: 'auto' as const });
+      if (body.behavior) extra.push({ dimension: 'behavior', value: String(body.behavior), source: 'auto' as const });
+      autoTagPost(id, extra);
+    } catch { /* best-effort */ }
     return NextResponse.json({ id, ok: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });

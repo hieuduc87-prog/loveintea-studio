@@ -15,6 +15,7 @@ import { getDb } from '@/lib/db';
 import { generateFromPlanItem, planItemDateToISO, resolveProductImagePath, PlanItemRow } from '@/lib/plan-generate';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
 import { pickTemplate, recordTemplateUse } from '@/lib/template-picker';
+import { autoTagPost, PostTag } from '@/lib/post-tags';
 
 function surfaceToFormat(surface: string): string | undefined {
   const s = (surface || '').toLowerCase();
@@ -94,6 +95,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           .run(postId, plan.brand_id, planId, item.id, item.product_id ?? '',
             gen.caption, gen.hashtags, imageUrl, imagePrompt, status, scheduledAt, templateId);
         if (templateId) recordTemplateUse(templateId);
+
+        // Multi-tag the post from the start (product/template via structured cols + AI targeting + plan dims)
+        const extra: PostTag[] = [];
+        if (item.product_id) extra.push({ dimension: 'product', value: item.product_id, source: 'auto' });
+        if (templateId) extra.push({ dimension: 'template', value: templateId, source: 'auto' });
+        if (item.audience_code) extra.push({ dimension: 'segment', value: item.audience_code, source: 'auto' });
+        if (item.usp_code) extra.push({ dimension: 'usp', value: item.usp_code, source: 'auto' });
+        if (item.rtb_code) extra.push({ dimension: 'rtb', value: item.rtb_code, source: 'auto' });
+        if (item.pillar) extra.push({ dimension: 'pillar', value: item.pillar, source: 'auto' });
+        if (item.purpose) extra.push({ dimension: 'purpose', value: item.purpose, source: 'auto' });
+        const fmt = surfaceToFormat(item.surface); if (fmt) extra.push({ dimension: 'format', value: fmt, source: 'auto' });
+        const t = gen.targeting ?? {};
+        if (t.segment)  extra.push({ dimension: 'segment',  value: t.segment,  source: 'auto' });
+        if (t.insight)  extra.push({ dimension: 'insight',  value: t.insight,  source: 'auto' });
+        if (t.behavior) extra.push({ dimension: 'behavior', value: t.behavior, source: 'auto' });
+        autoTagPost(postId, extra);
+
         created.push({ itemId: item.id, postId });
       } catch (e) {
         errors.push({ itemId: item.id, error: String(e).slice(0, 200) });

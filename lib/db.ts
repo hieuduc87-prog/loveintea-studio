@@ -785,6 +785,23 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE posts ADD COLUMN template_id TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN last_used_at TEXT`); } catch { /* already exists */ }
   try { db.exec(`CREATE INDEX IF NOT EXISTS idx_posts_template ON posts(template_id) WHERE template_id IS NOT NULL`); } catch { /* already exists */ }
+  // Multi-tag every post across dimensions (segment/insight/behavior/usp/...) for win-rate aggregation
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS post_tags (
+        post_id    TEXT NOT NULL,
+        brand_id   TEXT NOT NULL DEFAULT 'loveintea',
+        dimension  TEXT NOT NULL,   -- segment | insight | behavior | usp | rtb | narrative | context | product | template | format | pillar | custom
+        value      TEXT NOT NULL,   -- machine value / code
+        label      TEXT DEFAULT '', -- human-readable
+        source     TEXT DEFAULT 'auto', -- auto | manual
+        created_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (post_id, dimension, value)
+      );
+      CREATE INDEX IF NOT EXISTS idx_post_tags_post ON post_tags(post_id);
+      CREATE INDEX IF NOT EXISTS idx_post_tags_dim  ON post_tags(brand_id, dimension, value);
+    `);
+  } catch { /* already exists */ }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS momo_payments (

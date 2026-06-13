@@ -75,6 +75,39 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
   const [composeDay, setComposeDay] = useState<Date | null>(null);
   const [composeProduct, setComposeProduct] = useState('');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [postTags, setPostTags] = useState<Array<{ dimension: string; value: string; label?: string; source?: string }>>([]);
+  const [newTagDim, setNewTagDim] = useState('segment');
+  const [newTagVal, setNewTagVal] = useState('');
+
+  useEffect(() => {
+    if (!selectedPost) { setPostTags([]); return; }
+    fetch(`/api/posts/${selectedPost.id}/tags`).then(r => r.json()).then(d => setPostTags(d.tags ?? [])).catch(() => setPostTags([]));
+  }, [selectedPost]);
+
+  async function saveTags(next: Array<{ dimension: string; value: string; label?: string }>) {
+    if (!selectedPost) return;
+    // keep auto tags, replace manual set
+    const manual = next.filter(t => true).map(t => ({ dimension: t.dimension, value: t.value, label: t.label }));
+    const r = await fetch(`/api/posts/${selectedPost.id}/tags`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tags: manual }),
+    });
+    const d = await r.json() as { tags?: typeof postTags };
+    setPostTags(d.tags ?? []);
+  }
+  function addTag() {
+    if (!newTagVal.trim()) return;
+    const manualNow = postTags.filter(t => t.source === 'manual').map(t => ({ dimension: t.dimension, value: t.value, label: t.label }));
+    saveTags([...manualNow, { dimension: newTagDim, value: newTagVal.trim() }]);
+    setNewTagVal('');
+  }
+  function removeTag(dim: string, val: string) {
+    const manualNow = postTags.filter(t => t.source === 'manual' && !(t.dimension === dim && t.value === val))
+      .map(t => ({ dimension: t.dimension, value: t.value, label: t.label }));
+    saveTags(manualNow);
+  }
+
+  const DIM_LABEL: Record<string, string> = { segment: 'Segment', insight: 'Insight', behavior: 'Hành vi', usp: 'USP', rtb: 'RTB', narrative: 'Narrative', context: 'Context', product: 'Sản phẩm', template: 'Template', format: 'Format', pillar: 'Pillar', purpose: 'Mục đích', custom: 'Khác' };
+  const DIM_COLOR: Record<string, string> = { segment: 'bg-sky-900/40 text-sky-300', insight: 'bg-amber-900/40 text-amber-300', behavior: 'bg-purple-900/40 text-purple-300', usp: 'bg-emerald-900/40 text-emerald-300', product: 'bg-brand-900/40 text-brand-300', template: 'bg-pink-900/40 text-pink-300', format: 'bg-gray-800 text-gray-300' };
 
   // ── Loaders ──
   const loadPlans = useCallback(async () => {
@@ -393,6 +426,26 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
                 {selectedPost.image_url && /* eslint-disable-next-line @next/next/no-img-element */ <img src={selectedPost.image_url} alt="" className="w-full rounded-lg" />}
                 <p className="text-xs text-gray-300 line-clamp-5">{selectedPost.caption || '(chưa có caption)'}</p>
                 {selectedPost.scheduled_at && <p className="text-[10px] text-gray-500">🗓 {new Date(selectedPost.scheduled_at).toLocaleString('vi-VN')}</p>}
+                {/* Multi-tags (auto + manual) — for win-rate aggregation */}
+                <div className="border-t border-gray-800 pt-2">
+                  <p className="text-[9px] font-bold text-gray-500 uppercase mb-1">Tags (segment / insight / hành vi…)</p>
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {postTags.length === 0 && <span className="text-[10px] text-gray-600">chưa có tag</span>}
+                    {postTags.map((t, i) => (
+                      <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded-full flex items-center gap-1 ${DIM_COLOR[t.dimension] ?? 'bg-gray-800 text-gray-400'}`}>
+                        <span className="opacity-70">{DIM_LABEL[t.dimension] ?? t.dimension}:</span>{(t.label || t.value).slice(0, 24)}
+                        {t.source === 'manual' && <button onClick={() => removeTag(t.dimension, t.value)} className="hover:text-red-300">✕</button>}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1">
+                    <select value={newTagDim} onChange={e => setNewTagDim(e.target.value)} className="bg-gray-800 border border-gray-700 rounded px-1 py-1 text-[10px] text-white">
+                      {['segment','insight','behavior','usp','format','pillar','custom'].map(d => <option key={d} value={d}>{DIM_LABEL[d]}</option>)}
+                    </select>
+                    <input value={newTagVal} onChange={e => setNewTagVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTag()} placeholder="giá trị tag" className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-[10px] text-white" />
+                    <button onClick={addTag} className="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-[10px] text-gray-200">+</button>
+                  </div>
+                </div>
                 {selectedPost.status === 'published'
                   ? <p className="text-[10px] text-green-500">🔒 Đã đăng — khóa lịch</p>
                   : <p className="text-[10px] text-gray-600">Kéo thả trên lịch để đổi ngày</p>}

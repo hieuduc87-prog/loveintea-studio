@@ -16,7 +16,11 @@ export interface PlanItemRow {
   hashtags: string;
 }
 
-export interface GeneratedContent { caption: string; hashtags: string; image_prompt: string }
+export interface GeneratedContent {
+  caption: string; hashtags: string; image_prompt: string;
+  // Targeting the AI declares (grounded in brand strategy) — used for multi-tagging
+  targeting?: { segment?: string; insight?: string; behavior?: string };
+}
 
 const MONTH_IDX: Record<string, number> = {
   Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
@@ -78,13 +82,15 @@ REQUIREMENTS:
 1. caption: Vietnamese, on-brand voice, benefit-led, follows the hook + copy direction, obeys compliance neverSay/alwaysSay. Natural length for the surface (Reel cover = short; feed = 2-4 short paragraphs). Include 1 clear CTA.
 2. hashtags: 5-10 relevant Vietnamese/English hashtags, space-separated, each starting with #.
 3. image_prompt: a 50-90 word English prompt for an image generator matching the visual direction — describe the product scene, lighting, mood, composition (vertical). NO text/letters in the image.
+4. targeting: which audience SEGMENT this post speaks to, the INSIGHT it leverages, and the BEHAVIOR it targets — short Vietnamese phrases drawn from the brand's strategy${dna?.target_audience ? `\n   (Khách hàng: ${dna.target_audience})` : ''}${dna?.insight ? `\n   (Insight brand: ${dna.insight})` : ''}${dna?.behavior ? `\n   (Hành vi: ${dna.behavior})` : ''}.
 
-Return ONLY JSON: {"caption":"...","hashtags":"#a #b","image_prompt":"..."}`;
+Return ONLY JSON: {"caption":"...","hashtags":"#a #b","image_prompt":"...","targeting":{"segment":"...","insight":"...","behavior":"..."}}`;
 
   const out = await generateJSON<GeneratedContent>(prompt);
   return {
     caption: out.caption ?? '',
     hashtags: out.hashtags ?? '',
     image_prompt: out.image_prompt ?? '',
+    targeting: out.targeting ?? {},
   };
 }
