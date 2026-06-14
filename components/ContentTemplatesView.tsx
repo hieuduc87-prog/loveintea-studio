@@ -387,10 +387,13 @@ function TemplateCard({
         </div>
       )}
 
-      {/* Category badge */}
+      {/* Category + type badge */}
       <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
         <span className={`text-[9px] text-white px-1.5 py-0.5 rounded-full font-medium ${catColor(tpl.category)}`}>
           {catLabel(tpl.category)}
+        </span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium bg-black/70 text-gray-200">
+          {tpl.file_type === 'video' ? '🎬 Video' : innerSlides.length > 1 ? `📚 Collection ${innerSlides.length}` : '🖼 1 ảnh'}
         </span>
         {perf && perf.posts > 0 && (
           <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${perf.win ? 'bg-emerald-600/90 text-white' : 'bg-gray-700/90 text-gray-300'}`}

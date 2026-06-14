@@ -150,29 +150,20 @@ function getScoreboardContext(brandId: string): string {
 // ── Main content generation ────────────────────────────────────────────────
 
 export async function generateO3Content(config: O3Config): Promise<O3Result> {
-  const sku_      = SKUS.find(s => s.id === config.skuId);
-  const segment_  = SEGMENTS.find(s => s.id === config.segmentId);
-  const rtb_      = RTBS.find(r => r.id === config.rtbId);
-  const usp_      = USP_ANCHORS.find(u => u.id === config.uspId);
-  const narrative_= NARRATIVES.find(n => n.id === config.narrativeId);
-  const context_  = CONTEXTS.find(c => c.id === config.contextId);
+  const sku_ = SKUS.find(s => s.id === config.skuId);
+  // Only SKU is required. Any variable not selected is AUTO-PICKED (relevant to the
+  // SKU when possible, else the first option) so 2-3 selections are enough to run.
+  if (!sku_) throw new Error('Vui lòng chọn sản phẩm (SKU) trước khi generate.');
+  const sku = sku_;
 
-  const missing: string[] = [];
-  if (!sku_)       missing.push('SKU');
-  if (!segment_)   missing.push('Segment');
-  if (!rtb_)       missing.push('Reason to Buy (RTB)');
-  if (!usp_)       missing.push('USP Anchor');
-  if (!narrative_) missing.push('Narrative');
-  if (!context_)   missing.push('Scene / Context');
-  if (missing.length) {
-    throw new Error(`Thiếu: ${missing.join(', ')}. Vui lòng chọn đầy đủ trước khi generate.`);
-  }
-
-  const sku = sku_!;
-  const segment = segment_!;
-  const rtb = rtb_!;
-  const usp = usp_!;
-  const narrative = narrative_!;
+  const skuKey = (sku.id || '').replace(/^prod-/, '');
+  const segment  = SEGMENTS.find(s => s.id === config.segmentId)
+    || SEGMENTS.find(s => (s as unknown as { leadSkus?: string[] }).leadSkus?.some(k => k === skuKey || k === sku.id)) || SEGMENTS[0];
+  const rtb       = RTBS.find(r => r.id === config.rtbId) || RTBS[0];
+  const usp       = USP_ANCHORS.find(u => u.id === config.uspId) || USP_ANCHORS[0];
+  const narrative = NARRATIVES.find(n => n.id === config.narrativeId) || NARRATIVES[0];
+  const context_  = CONTEXTS.find(c => c.id === config.contextId)
+    || CONTEXTS.find(c => sku.bestMoment && JSON.stringify(c).toLowerCase().includes(String(sku.bestMoment).toLowerCase())) || CONTEXTS[0];
   const context = context_!;
 
   const brandId = config.brandId || 'loveintea';

@@ -6,8 +6,7 @@ import { KanbanSquare } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { BrandDnaView }       from './BrandDnaView';
 import { ProductsView }       from './ProductsView';
-import { ContentWorkshopView } from './ContentWorkshopView';
-import { ImageStudioView }    from './ImageStudioView';
+import { CreateStudioView }   from './CreateStudioView';
 import { JobQueueView }       from './JobQueueView';
 import { ContentQueueView }   from './ContentQueueView';
 import { PublisherView }      from './PublisherView';
@@ -25,7 +24,6 @@ import { ScoreboardView }   from './ScoreboardView';
 import { ContentTemplatesView } from './ContentTemplatesView';
 import { DashboardView }      from './DashboardView';
 import { VideoStudioView }    from './VideoStudioView';
-import { CrateLabView }       from './CrateLabView';
 import { CostView }           from './CostView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,7 +37,7 @@ type TabId =
   | 'dashboard'
   | 'brands' | 'brand_dna' | 'products' | 'scoreboard'
   | 'plan_calendar'
-  | 'content_workshop' | 'image_studio' | 'video_studio' | 'blog_factory' | 'cratelab' | 'cost'
+  | 'create_studio' | 'video_studio' | 'blog_factory' | 'cost'
   | 'content_queue' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
@@ -60,9 +58,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   // PLAN — Calendar, content plans, slot allocation
   { id: 'plan_calendar',    label: 'Plan & Lịch',      icon: '🗓️', group: 'Plan' },
   // CREATE — Copy track + Visual track + Blog
-  { id: 'cratelab',         label: 'CrateLab',         icon: '🧪', group: 'Create' },
-  { id: 'content_workshop', label: 'Content Workshop', icon: '✍️', group: 'Create' },
-  { id: 'image_studio',     label: 'Image Studio',     icon: '🖼️', group: 'Create' },
+  { id: 'create_studio',    label: 'Tạo Content',      icon: '✨', group: 'Create' },
   { id: 'video_studio',     label: 'Video Studio',     icon: '🎬', group: 'Create' },
   { id: 'blog_factory',     label: 'Blog Factory',     icon: '📝', group: 'Create' },
   // REVIEW & PUBLISH — Queue (review desk), Schedule, Channels
@@ -464,10 +460,8 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}
                 {id === 'products'         && <ProductsView brandId={bid} />}
                 {id === 'plan_calendar'    && <PlanCalendarView brandId={bid} />}
-                {id === 'cratelab'         && <CrateLabView brandId={bid} />}
+                {id === 'create_studio'    && <CreateStudioView brandId={bid} />}
                 {id === 'cost'             && <CostView brandId={bid} />}
-                {id === 'content_workshop' && <ContentWorkshopView brandId={bid} />}
-                {id === 'image_studio'     && <ImageStudioView brandId={bid} />}
                 {id === 'video_studio'     && <VideoStudioView brandId={bid} />}
                 {id === 'blog_factory'     && <BlogFactoryView brandId={bid} />}
                 {id === 'content_queue'    && <ContentQueueView brandId={bid} />}
