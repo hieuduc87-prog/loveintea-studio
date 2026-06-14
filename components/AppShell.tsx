@@ -28,6 +28,8 @@ import { RulesEngineView }  from './RulesEngineView';
 import { ContentTemplatesView } from './ContentTemplatesView';
 import { DashboardView }      from './DashboardView';
 import { VideoStudioView }    from './VideoStudioView';
+import { CrateLabView }       from './CrateLabView';
+import { CostView }           from './CostView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +42,7 @@ type TabId =
   | 'dashboard'
   | 'brands' | 'brand_dna' | 'products' | 'knowledge_hub' | 'rules_engine' | 'scoreboard'
   | 'plan_calendar'
-  | 'content_workshop' | 'image_studio' | 'video_studio' | 'blog_factory'
+  | 'content_workshop' | 'image_studio' | 'video_studio' | 'blog_factory' | 'cratelab' | 'cost'
   | 'content_queue' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
@@ -63,6 +65,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   // PLAN — Calendar, content plans, slot allocation
   { id: 'plan_calendar',    label: 'Plan & Lịch',      icon: '🗓️', group: 'Plan' },
   // CREATE — Copy track + Visual track + Blog
+  { id: 'cratelab',         label: 'CrateLab',         icon: '🧪', group: 'Create' },
   { id: 'content_workshop', label: 'Content Workshop', icon: '✍️', group: 'Create' },
   { id: 'image_studio',     label: 'Image Studio',     icon: '🖼️', group: 'Create' },
   { id: 'video_studio',     label: 'Video Studio',     icon: '🎬', group: 'Create' },
@@ -75,6 +78,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   // LEARN — Analytics, feedback loop
   { id: 'analytics',        label: 'Analytics',        icon: '📊', group: 'Learn' },
   { id: 'scoreboard',       label: 'Scoreboard',       icon: '🏆', group: 'Learn' },
+  { id: 'cost',             label: 'Cost & P&L',       icon: '💰', group: 'Learn' },
   // LIBRARY — Assets, images, logs
   { id: 'asset_dam',        label: 'Library',          icon: '🗃️', group: 'Library' },
   { id: 'content_log',      label: 'Content Log',      icon: '📜', group: 'Library' },
@@ -457,6 +461,8 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}
                 {id === 'products'         && <ProductsView brandId={bid} />}
                 {id === 'plan_calendar'    && <PlanCalendarView brandId={bid} />}
+                {id === 'cratelab'         && <CrateLabView brandId={bid} />}
+                {id === 'cost'             && <CostView brandId={bid} />}
                 {id === 'content_workshop' && <ContentWorkshopView brandId={bid} />}
                 {id === 'image_studio'     && <ImageStudioView brandId={bid} />}
                 {id === 'video_studio'     && <VideoStudioView brandId={bid} />}

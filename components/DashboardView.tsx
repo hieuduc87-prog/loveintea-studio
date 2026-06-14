@@ -40,17 +40,21 @@ export function DashboardView({ brandId, onNavigate }: { brandId: string; onNavi
   const [scores, setScores] = useState<ScoreEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [detail, setDetail] = useState<any>(null);
 
   const load = useCallback(async (live = false) => {
     try {
-      const [hr, sr] = await Promise.all([
+      const [hr, sr, dr] = await Promise.all([
         fetch(`/api/health?brandId=${brandId}${live ? '&live=1' : ''}`),
         fetch(`/api/scoreboard?brandId=${brandId}`),
+        fetch(`/api/dashboard/detailed?brand=${brandId}`),
       ]);
       const h = await hr.json();
       const s = await sr.json();
       setHealth(h);
       setScores((s.entries ?? []) as ScoreEntry[]);
+      setDetail(await dr.json());
     } catch { /* keep last state */ }
     setLoading(false);
   }, [brandId]);
@@ -253,6 +257,94 @@ export function DashboardView({ brandId, onNavigate }: { brandId: string; onNavi
           </div>
         </div>
       </div>
+
+      {/* ── Detailed metrics ── */}
+      {detail && (
+        <>
+          {detail.totals && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                ['Tổng bài', detail.totals.total_posts], ['Đã đăng', detail.totals.published],
+                ['Tổng reach', (detail.totals.total_reach ?? 0).toLocaleString('vi-VN')],
+                ['Tổng engaged', (detail.totals.total_engaged ?? 0).toLocaleString('vi-VN')],
+                ['Tổng comment', (detail.totals.total_comments ?? 0).toLocaleString('vi-VN')],
+              ].map(([l, v]) => (
+                <div key={l as string} className="rounded-xl border border-gray-800 bg-gray-900/60 p-3">
+                  <p className="text-lg font-bold text-white">{v as string}</p>
+                  <p className="text-[10px] text-gray-500">{l as string}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Per-product */}
+            <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4">
+              <h3 className="text-xs font-bold text-gray-300 uppercase mb-3">Hiệu suất theo sản phẩm</h3>
+              {(detail.perProduct ?? []).length === 0 ? <p className="text-[11px] text-gray-600">Chưa có dữ liệu.</p> : (
+                <table className="w-full text-xs">
+                  <thead><tr className="text-gray-500 border-b border-gray-800"><th className="text-left py-1">Sản phẩm</th><th className="text-right">Bài</th><th className="text-right">TB engaged</th><th className="text-right">Reach</th></tr></thead>
+                  <tbody className="divide-y divide-gray-800/50">
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {(detail.perProduct as any[]).slice(0, 8).map(p => (
+                      <tr key={p.id}><td className="py-1.5 text-gray-200 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color || '#888' }} />{p.name}</td><td className="text-right text-gray-400">{p.published}</td><td className="text-right text-white">{Math.round(p.avg_engaged)}</td><td className="text-right text-gray-400">{(p.total_reach ?? 0).toLocaleString('vi-VN')}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Top engaged posts */}
+            <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4">
+              <h3 className="text-xs font-bold text-gray-300 uppercase mb-3">Top bài engaged</h3>
+              {(detail.topPosts ?? []).length === 0 ? <p className="text-[11px] text-gray-600">Chưa có bài đã đăng có metrics.</p> : (
+                <div className="space-y-1.5">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {(detail.topPosts as any[]).map(p => (
+                    <div key={p.id} className="flex items-center gap-2 p-1.5 rounded-lg bg-gray-800/40">
+                      {p.image_url && /* eslint-disable-next-line @next/next/no-img-element */ <img src={p.image_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />}
+                      <p className="text-[11px] text-gray-300 truncate flex-1">{(p.caption || p.sku_id || 'bài').slice(0, 50)}</p>
+                      <span className="text-[10px] text-emerald-300 flex-shrink-0">❤ {p.engaged}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Weekly growth + tag winners */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4">
+              <h3 className="text-xs font-bold text-gray-300 uppercase mb-3">Tăng trưởng theo tuần (engaged TB)</h3>
+              {(detail.weekly ?? []).length === 0 ? <p className="text-[11px] text-gray-600">Chưa đủ dữ liệu.</p> : (
+                <div className="flex items-end gap-1 h-24">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {(() => { const w = detail.weekly as any[]; const max = Math.max(1, ...w.map(x => x.avg_engaged)); return w.map((x, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center justify-end gap-0.5" title={`${x.week}: ${Math.round(x.avg_engaged)} engaged, ${x.posts} bài`}>
+                      <div className="w-full bg-brand-500/70 rounded-t" style={{ height: `${Math.max(4, (x.avg_engaged / max) * 80)}px` }} />
+                      <span className="text-[8px] text-gray-600">{x.posts}</span>
+                    </div>
+                  )); })()}
+                </div>
+              )}
+            </div>
+            <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4">
+              <h3 className="text-xs font-bold text-gray-300 uppercase mb-3">Tag thắng (segment / insight / hành vi)</h3>
+              {Object.keys(detail.tagWinners ?? {}).length === 0 ? <p className="text-[11px] text-gray-600">Chưa có post đã đăng kèm tag + metrics.</p> : (
+                <div className="space-y-2">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {Object.entries(detail.tagWinners as Record<string, any[]>).map(([dim, rows]) => (
+                    <div key={dim}>
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase">{dim}</p>
+                      {rows.map((r, i) => <p key={i} className="text-[11px] text-gray-300">• {r.label || r.value} <span className="text-emerald-400">({Math.round(r.avg_engaged)} engaged · {r.posts} bài)</span></p>)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
