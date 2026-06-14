@@ -62,6 +62,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!files.length) return NextResponse.json({ error: 'No files' }, { status: 400 });
     fs.mkdirSync(IMAGES_DIR, { recursive: true });
 
+    // Video template → save the video as the template media
+    const vid = files.find(f => f.type.startsWith('video/'));
+    if (vid) {
+      const ext = (vid.name.split('.').pop() || 'mp4').toLowerCase();
+      const name = `tpl-${params.id.slice(0, 8)}-${uuid().slice(0, 8)}.${ext}`;
+      fs.writeFileSync(path.join(IMAGES_DIR, name), Buffer.from(await vid.arrayBuffer()));
+      const url = `/api/images/${name}`;
+      db.prepare(`UPDATE content_templates SET image_url=?, thumbnail_url=?, file_type='video', kind='single', slides_json='[]' WHERE id=?`)
+        .run(url, url, params.id);
+      return NextResponse.json({ ok: true, slides: [], cover: url, kind: 'single', file_type: 'video', video_url: url });
+    }
+
     const slides = readSlides(tpl.slides_json);
     let order = slides.length;
     let newThumb = tpl.thumbnail_url || '';

@@ -68,6 +68,9 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
   const [showUpload, setShowUpload] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [perf, setPerf] = useState<Record<string, { posts: number; avg_engaged: number; win: boolean }>>({});
+  const [showCreate, setShowCreate] = useState(false);
+  const [newTplName, setNewTplName] = useState('');
+  const [newTplType, setNewTplType] = useState<'single' | 'collection' | 'video'>('single');
 
   const bid = brandId || 'loveintea';
 
@@ -100,11 +103,15 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
     if (selected?.id === id) setSelected(null);
   }
 
-  // Create an empty template shell → open its detail so the user adds ordered images
-  async function createShell() {
+  // Create an empty template shell with a chosen type → open its detail to add media
+  async function createShell(type: 'single' | 'collection' | 'video', nm: string) {
     const r = await fetch('/api/content-templates', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brandId: bid, name: 'Template mới' }),
+      body: JSON.stringify({
+        brandId: bid, name: nm?.trim() || 'Template mới',
+        file_type: type === 'video' ? 'video' : 'image',
+        kind: type === 'collection' ? 'collection' : 'single',
+      }),
     });
     const d = await r.json() as { id?: string };
     if (!d.id) return;
@@ -112,6 +119,7 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
     setTemplates(list.templates ?? []);
     const created = (list.templates ?? []).find(t => t.id === d.id);
     if (created) setSelected(created);
+    setShowCreate(false); setNewTplName('');
   }
 
   // After slides change in DetailPanel — refresh that template's cover/kind/slides everywhere
@@ -175,9 +183,9 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
           <button onClick={load} className="text-xs text-gray-600 hover:text-white px-3 py-1.5 bg-gray-800 rounded-lg">
             ↻ Refresh
           </button>
-          <button onClick={createShell}
+          <button onClick={() => setShowCreate(v => !v)}
             className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition-colors">
-            + Tạo template
+            {showCreate ? '✕ Đóng' : '+ Tạo template'}
           </button>
           <button onClick={() => setShowUpload(true)}
             className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium rounded-lg transition-colors">
@@ -185,6 +193,23 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
           </button>
         </div>
       </div>
+
+      {/* Create template — chọn loại */}
+      {showCreate && (
+        <div className="flex items-center gap-2 flex-wrap mb-4 bg-gray-900 border border-brand-600/30 rounded-xl p-3 flex-shrink-0">
+          <span className="text-xs text-gray-400">Tạo template mới:</span>
+          <input value={newTplName} onChange={e => setNewTplName(e.target.value)} placeholder="Tên template"
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-48" />
+          <select value={newTplType} onChange={e => setNewTplType(e.target.value as 'single' | 'collection' | 'video')}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white">
+            <option value="single">🖼 1 ảnh</option>
+            <option value="collection">📚 Collection (nhiều ảnh có thứ tự)</option>
+            <option value="video">🎬 Video</option>
+          </select>
+          <button onClick={() => createShell(newTplType, newTplName)}
+            className="px-4 py-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-lg">Tạo & thêm media →</button>
+        </div>
+      )}
 
       {/* Stats Bar */}
       {stats.total > 0 && (
@@ -472,8 +497,10 @@ function DetailPanel({
   const [lib, setLib] = useState<Array<{ id: string; url: string }>>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
-  function applyResp(d: { ok?: boolean; slides?: typeof slides; cover?: string; kind?: string }) {
-    if (d.ok && d.slides) { setSlides(d.slides); onSlidesChanged({ slides_json: JSON.stringify(d.slides), image_url: d.cover, kind: d.kind }); }
+  function applyResp(d: { ok?: boolean; slides?: typeof slides; cover?: string; kind?: string; file_type?: string }) {
+    if (!d.ok) return;
+    if (d.file_type === 'video') { onSlidesChanged({ image_url: d.cover, kind: 'single', file_type: 'video', slides_json: '[]' }); setSlides([]); return; }
+    if (d.slides) { setSlides(d.slides); onSlidesChanged({ slides_json: JSON.stringify(d.slides), image_url: d.cover, kind: d.kind }); }
   }
   async function openPicker() {
     setPickerOpen(true);
@@ -554,10 +581,24 @@ function DetailPanel({
           </div>
         </div>
 
-        {/* Ảnh trong template (theo thứ tự) */}
+        {/* Media trong template */}
         {tpl.file_type === 'video' ? (
-          <div className="rounded-xl overflow-hidden bg-gray-800">
-            <video src={tpl.image_url} controls className="w-full" preload="metadata" />
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Video template</p>
+              <input ref={slideFileRef} type="file" accept="video/*" className="hidden" onChange={e => { uploadSlides(e.target.files); e.target.value = ''; }} />
+              <button onClick={() => slideFileRef.current?.click()} disabled={slideBusy}
+                className="ml-auto px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-[11px] font-semibold">
+                {slideBusy ? '⟳ Đang tải…' : tpl.image_url ? 'Đổi video' : '+ Upload video'}
+              </button>
+            </div>
+            {tpl.image_url ? (
+              <div className="rounded-xl overflow-hidden bg-gray-800"><video src={tpl.image_url} controls className="w-full" preload="metadata" /></div>
+            ) : (
+              <div onClick={() => slideFileRef.current?.click()} className="border-2 border-dashed border-gray-700 hover:border-brand-500 rounded-xl p-8 text-center cursor-pointer">
+                <p className="text-2xl mb-1">🎬</p><p className="text-xs text-gray-400">Tải video cho template này</p>
+              </div>
+            )}
           </div>
         ) : (
           <div>

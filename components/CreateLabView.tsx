@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * CrateLab — sandbox để thử content (thủ công hoặc AI), xem preview hiển thị
+ * CreateLab — sandbox để thử content (thủ công hoặc AI), xem preview hiển thị
  * trên FB/IG (cấp post + cấp wall), rồi thêm vào lịch.
  */
 
@@ -12,7 +12,7 @@ interface Variant { caption: string; hashtags: string; image_prompt: string; tar
 
 const BRAND_NAME = 'Loveintea Offical';
 
-export function CrateLabView({ brandId }: { brandId: string }) {
+export function CreateLabView({ brandId }: { brandId: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [mode, setMode] = useState<'manual' | 'ai'>('ai');
   const [surface, setSurface] = useState<'post' | 'wall'>('post');
@@ -78,7 +78,7 @@ export function CrateLabView({ brandId }: { brandId: string }) {
     try {
       const r = await fetch('/api/posts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, skuId: productId, caption: caption + (hashtags ? `\n\n${hashtags}` : ''), imageUrl, imagePrompt, platforms: 'facebook,instagram', notes: 'CrateLab' }),
+        body: JSON.stringify({ brandId, skuId: productId, caption: caption + (hashtags ? `\n\n${hashtags}` : ''), imageUrl, imagePrompt, platforms: 'facebook,instagram', notes: 'CreateLab' }),
       });
       const d = await r.json() as { id?: string; ok?: boolean };
       if (d.ok && d.id && schedAt) {
@@ -95,7 +95,7 @@ export function CrateLabView({ brandId }: { brandId: string }) {
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <h2 className="text-lg font-semibold text-white">🧪 CrateLab</h2>
+        <h2 className="text-lg font-semibold text-white">🧪 CreateLab</h2>
         <span className="text-xs text-gray-500">Thử content → xem hiển thị FB/IG → thêm vào lịch</span>
         <div className="ml-auto flex items-center gap-1 bg-gray-800 rounded-lg p-0.5">
           {(['ai', 'manual'] as const).map(m => (
