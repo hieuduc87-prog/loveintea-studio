@@ -2,6 +2,8 @@
 
 import Image from 'next/image';
 import { useRef, useState, useEffect } from 'react';
+import { KnowledgeHubView } from './KnowledgeHubView';
+import { RulesEngineView } from './RulesEngineView';
 
 interface BrandDna {
   tagline: string; archetype: string;
@@ -85,7 +87,10 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
     setTimeout(() => setStratMsg(''), 2500);
   }
 
+  const [section, setSection] = useState<'dna' | 'knowledge' | 'rules'>('dna');
   const [extracting, setExtracting] = useState(false);
+  const dnaFileRef = useRef<HTMLInputElement>(null);
+
   async function extractFromDocs() {
     setExtracting(true); setStratMsg('');
     try {
@@ -94,6 +99,20 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
       if (d.ok && d.fields) {
         setStrategy(d.fields); setStratDirty(true);
         setStratMsg(`✓ Đã tổng hợp từ ${d.sources?.length ?? 0} tài liệu — xem lại rồi bấm Lưu`);
+      } else setStratMsg('✗ ' + (d.error ?? 'Lỗi'));
+    } catch (e) { setStratMsg('✗ ' + String(e)); }
+    setExtracting(false);
+  }
+
+  async function extractFromFile(file: File) {
+    setExtracting(true); setStratMsg('');
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const r = await fetch(`/api/brands/${bid}/dna/extract`, { method: 'POST', body: fd });
+      const d = await r.json() as { ok?: boolean; fields?: typeof strategy; error?: string };
+      if (d.ok && d.fields) {
+        setStrategy(d.fields); setStratDirty(true);
+        setStratMsg('✓ Đã trích từ file khách — xem lại rồi Lưu');
       } else setStratMsg('✗ ' + (d.error ?? 'Lỗi'));
     } catch (e) { setStratMsg('✗ ' + String(e)); }
     setExtracting(false);
@@ -126,6 +145,19 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      {/* Sub-tabs — Brand DNA absorbs Knowledge + Rules */}
+      <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-0.5 w-fit mb-4">
+        {([['dna', '🌿 DNA & Chiến lược'], ['knowledge', '🧠 Knowledge'], ['rules', '⚙️ Rules']] as const).map(([s, label]) => (
+          <button key={s} onClick={() => setSection(s)}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === s ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'knowledge' && <KnowledgeHubView brandId={bid} />}
+      {section === 'rules' && <RulesEngineView brandId={bid} />}
+      {section !== 'dna' ? null : (<>
       {/* Header */}
       <div className="flex items-center gap-4 mb-8 p-5 bg-gradient-to-r from-brand-600/20 to-transparent border border-brand-600/30 rounded-xl">
         <div className="w-14 h-14 rounded-xl bg-brand-600/30 flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -175,9 +207,14 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
             <span className="text-[11px] text-gray-300">Đã có tài liệu trong hệ thống? Không cần gõ tay —</span>
             <button onClick={extractFromDocs} disabled={extracting}
               className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-bold">
-              {extracting ? '⟳ AI đang đọc tài liệu…' : '✨ Tổng hợp từ tài liệu đã có'}
+              {extracting ? '⟳ AI đang đọc…' : '✨ Tổng hợp tất cả tài liệu đã có'}
             </button>
-            <span className="text-[10px] text-gray-500">(đọc Playbook + Communication Direction + segment khách hàng đã nhập)</span>
+            <input ref={dnaFileRef} type="file" accept=".xlsx,.xls,.csv,.txt,.md,.docx,.json" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) extractFromFile(f); e.target.value = ''; }} />
+            <button onClick={() => dnaFileRef.current?.click()} disabled={extracting}
+              className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-200 text-xs font-semibold">
+              📄 Nhập từ file khách gửi
+            </button>
           </div>
           <div className="grid md:grid-cols-2 gap-3">
             {([
@@ -309,6 +346,7 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
           </div>
         </Card>
       </Section>
+      </>)}
     </div>
   );
 }

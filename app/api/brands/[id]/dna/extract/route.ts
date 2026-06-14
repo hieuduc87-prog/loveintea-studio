@@ -14,11 +14,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generateJSON } from '@/lib/gemini';
 import { SEGMENTS } from '@/lib/brand-dna';
+import { fileToText } from '@/lib/product-knowledge';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: brandId } = await params;
   try {
     const db = getDb();
+    // Customer file upload → extract DNA strategy fields directly from it
+    if ((req.headers.get('content-type') || '').includes('multipart/form-data')) {
+      const fd = await req.formData();
+      const file = fd.get('file') as File | null;
+      if (!file) return NextResponse.json({ error: 'file required' }, { status: 400 });
+      const text = fileToText(Buffer.from(await file.arrayBuffer()), file.name);
+      if (!text.trim()) return NextResponse.json({ error: 'Không đọc được nội dung file' }, { status: 400 });
+      const dna = db.prepare('SELECT tagline, archetype, voice_traits, compliance_json FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;
+      const filePrompt = `Từ tài liệu brand khách gửi dưới đây, trích 4 trường chiến lược tiếng Việt. CHỈ dùng thông tin trong tài liệu, không bịa.
+BRAND: ${brandId} | TAGLINE: ${dna?.tagline ?? ''} | VOICE: ${dna?.voice_traits ?? '[]'}
+TÀI LIỆU:
+"""${text}"""
+Trả ONLY JSON: {"target_audience":"...","insight":"...","behavior":"...","brand_rules":"..."}`;
+      const o = await generateJSON<Record<string, string>>(filePrompt);
+      return NextResponse.json({ ok: true, fields: {
+        target_audience: String(o.target_audience ?? '').trim(), insight: String(o.insight ?? '').trim(),
+        behavior: String(o.behavior ?? '').trim(), brand_rules: String(o.brand_rules ?? '').trim(),
+      } });
+    }
     const body = await req.json().catch(() => ({})) as { text?: string };
 
     // 1. Pull existing uploaded knowledge (the docs the user already imported)

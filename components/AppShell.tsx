@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { KanbanSquare, GitBranch } from 'lucide-react';
+import { KanbanSquare } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { BrandDnaView }       from './BrandDnaView';
@@ -22,9 +22,7 @@ import { AssetDamView }       from './AssetDamView';
 import { ContentLogView }     from './ContentLogView';
 import { PaymentView }        from './PaymentView';
 import { BrandsView }         from './BrandsView';
-import { KnowledgeHubView }  from './KnowledgeHubView';
 import { ScoreboardView }   from './ScoreboardView';
-import { RulesEngineView }  from './RulesEngineView';
 import { ContentTemplatesView } from './ContentTemplatesView';
 import { DashboardView }      from './DashboardView';
 import { VideoStudioView }    from './VideoStudioView';
@@ -40,7 +38,7 @@ interface BrandSummary {
 
 type TabId =
   | 'dashboard'
-  | 'brands' | 'brand_dna' | 'products' | 'knowledge_hub' | 'rules_engine' | 'scoreboard'
+  | 'brands' | 'brand_dna' | 'products' | 'scoreboard'
   | 'plan_calendar'
   | 'content_workshop' | 'image_studio' | 'video_studio' | 'blog_factory' | 'cratelab' | 'cost'
   | 'content_queue' | 'publisher' | 'job_queue'
@@ -57,10 +55,8 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   // HOME — Dashboard tổng quan + system health
   { id: 'dashboard',        label: 'Dashboard',        icon: '🏠', group: 'Home' },
   // BRAIN — Brand identity + knowledge + rules (Fixed Core)
-  { id: 'knowledge_hub',    label: 'Knowledge Hub',    icon: '🧠', group: 'Brain' },
   { id: 'brand_dna',        label: 'Brand DNA',        icon: '🌿', group: 'Brain' },
   { id: 'products',         label: 'Products',         icon: '📦', group: 'Brain' },
-  { id: 'rules_engine',     label: 'Rules Engine',     icon: '⚙️', group: 'Brain' },
   { id: 'content_templates', label: 'Content Templates', icon: '🎨', group: 'Brain' },
   // PLAN — Calendar, content plans, slot allocation
   { id: 'plan_calendar',    label: 'Plan & Lịch',      icon: '🗓️', group: 'Plan' },
@@ -239,11 +235,6 @@ function SidebarContent({
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
             <KanbanSquare size={14} className="flex-shrink-0" />
             <span>Kanban</span>
-          </Link>
-          <Link href="/flow-builder" onClick={() => onClose?.()}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
-            <GitBranch size={14} className="flex-shrink-0" />
-            <span>Flow Builder</span>
           </Link>
         </div>
 
@@ -454,8 +445,6 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
               <div key={id} className={`absolute inset-0 overflow-auto ${isActive ? '' : 'hidden'}`}>
                 {id === 'dashboard'        && <DashboardView brandId={bid} onNavigate={t => changeTab(t as TabId)} />}
                 {id === 'brands'           && <BrandsView onSelectBrand={bId => { const b = brands.find(x => x.id === bId); if (b) setActiveBrand(b); changeTab('products'); }} />}
-                {id === 'knowledge_hub'    && <KnowledgeHubView brandId={bid} />}
-                {id === 'rules_engine'     && <RulesEngineView brandId={bid} />}
                 {id === 'content_templates' && <ContentTemplatesView brandId={bid} />}
                 {id === 'scoreboard'       && <ScoreboardView brandId={bid} />}
                 {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}

@@ -50,6 +50,15 @@ export function fileToText(buffer: Buffer, filename: string): string {
     const wb = XLSX.read(buffer, { type: 'buffer' });
     return wb.SheetNames.map(name => `### Sheet: ${name}\n${XLSX.utils.sheet_to_csv(wb.Sheets[name])}`).join('\n\n').slice(0, 30000);
   }
+  if (lower.endsWith('.docx')) {
+    // docx = zip; word/document.xml holds the text. Strip tags.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const AdmZip = require('adm-zip');
+      const xml = new AdmZip(buffer).readAsText('word/document.xml');
+      if (xml) return xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30000);
+    } catch { /* fall through */ }
+  }
   // txt, csv, md, json, or anything decodable as utf-8
   return buffer.toString('utf-8').slice(0, 30000);
 }
