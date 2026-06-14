@@ -9,11 +9,14 @@ import { useCallback, useEffect, useState } from 'react';
 
 interface Product { id: string; name: string; color?: string; image_url?: string }
 interface Variant { caption: string; hashtags: string; image_prompt: string; targeting?: Record<string, string> }
+interface Tpl { id: string; name: string; image_url: string; thumbnail_url?: string; kind?: string; file_type?: string; slides_json?: string }
 
 const BRAND_NAME = 'Loveintea Offical';
 
 export function CreateLabView({ brandId }: { brandId: string }) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [templates, setTemplates] = useState<Tpl[]>([]);
+  const [templateId, setTemplateId] = useState('');
   const [mode, setMode] = useState<'manual' | 'ai'>('ai');
   const [surface, setSurface] = useState<'post' | 'wall'>('post');
   const [platform, setPlatform] = useState<'fb' | 'ig'>('fb');
@@ -33,8 +36,12 @@ export function CreateLabView({ brandId }: { brandId: string }) {
   const [schedAt, setSchedAt] = useState('');
 
   const load = useCallback(async () => {
-    const r = await fetch(`/api/products?brand=${brandId}`).catch(() => null);
-    if (r?.ok) setProducts(((await r.json()).products ?? []) as Product[]);
+    const [pr, tr] = await Promise.all([
+      fetch(`/api/products?brand=${brandId}`).catch(() => null),
+      fetch(`/api/content-templates?brand=${brandId}&active=1&limit=100`).catch(() => null),
+    ]);
+    if (pr?.ok) setProducts(((await pr.json()).products ?? []) as Product[]);
+    if (tr?.ok) setTemplates(((await tr.json()).templates ?? []) as Tpl[]);
   }, [brandId]);
   useEffect(() => { load(); }, [load]);
 
@@ -44,7 +51,7 @@ export function CreateLabView({ brandId }: { brandId: string }) {
     try {
       const r = await fetch('/api/content/quick', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, productId: productId || undefined, message, tone: tone || undefined, n: 3 }),
+        body: JSON.stringify({ brandId, productId: productId || undefined, message, tone: tone || undefined, n: 3, templateId: templateId || undefined }),
       });
       const d = await r.json() as { ok?: boolean; variants?: Variant[]; error?: string };
       if (d.ok && d.variants?.length) {
@@ -114,6 +121,30 @@ export function CreateLabView({ brandId }: { brandId: string }) {
             <option value="">— Sản phẩm (tùy chọn) —</option>
             {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
+
+          {/* Template picker — chọn để AI dựng bài theo cấu trúc/khung sườn template */}
+          {templates.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-500 mb-1">Template (tùy chọn — bài sẽ bám cấu trúc template)</p>
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                <button onClick={() => setTemplateId('')}
+                  className={`flex-shrink-0 w-12 h-16 rounded-lg border flex items-center justify-center text-[9px] ${!templateId ? 'border-brand-400 bg-brand-600/20 text-brand-300' : 'border-gray-700 text-gray-500'}`}>Không</button>
+                {templates.map(t => {
+                  let n = 0; try { n = (JSON.parse(t.slides_json || '[]') as unknown[]).length; } catch { /* */ }
+                  return (
+                    <button key={t.id} onClick={() => setTemplateId(t.id)} title={t.name}
+                      className={`relative flex-shrink-0 w-12 h-16 rounded-lg overflow-hidden border ${templateId === t.id ? 'border-brand-400 ring-1 ring-brand-400' : 'border-gray-700'}`}>
+                      {t.file_type === 'video'
+                        ? <video src={t.image_url} muted preload="metadata" className="w-full h-full object-cover" />
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        : <img src={t.thumbnail_url || t.image_url} alt="" className="w-full h-full object-cover" />}
+                      <span className="absolute bottom-0 inset-x-0 text-[7px] bg-black/70 text-white text-center">{t.file_type === 'video' ? '🎬' : n > 1 ? `📚${n}` : '🖼'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {mode === 'ai' ? (
             <>
