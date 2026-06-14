@@ -1,6 +1,23 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
+
+// POST — create an EMPTY template shell (metadata only); images added later via /[id]/slides
+export async function POST(req: NextRequest) {
+  try {
+    const b = await req.json() as { brandId?: string; name?: string; category?: string; format?: string; aspect_ratio?: string; purpose?: string };
+    const id = uuid();
+    getDb().prepare(`INSERT INTO content_templates
+      (id, brand_id, name, category, purpose, format, aspect_ratio, image_url, thumbnail_url, kind, slides_json, file_type)
+      VALUES (?,?,?,?,?,?,?, '', '', 'single', '[]', 'image')`)
+      .run(id, b.brandId || 'loveintea', b.name?.trim() || 'Template mới', b.category || 'general',
+        b.purpose || '', b.format || 'post', b.aspect_ratio || '2:3');
+    return NextResponse.json({ ok: true, id });
+  } catch (e) {
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
+  }
+}
 
 export async function GET(req: NextRequest) {
   const db = getDb();

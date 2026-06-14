@@ -100,6 +100,26 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
     if (selected?.id === id) setSelected(null);
   }
 
+  // Create an empty template shell → open its detail so the user adds ordered images
+  async function createShell() {
+    const r = await fetch('/api/content-templates', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: bid, name: 'Template mới' }),
+    });
+    const d = await r.json() as { id?: string };
+    if (!d.id) return;
+    const list = await fetch(`/api/content-templates?brand=${bid}&active=1&limit=200`).then(x => x.json()) as { templates: Template[] };
+    setTemplates(list.templates ?? []);
+    const created = (list.templates ?? []).find(t => t.id === d.id);
+    if (created) setSelected(created);
+  }
+
+  // After slides change in DetailPanel — refresh that template's cover/kind/slides everywhere
+  function applySlides(id: string, patch: Partial<Template>) {
+    setTemplates(ts => ts.map(t => t.id === id ? { ...t, ...patch } : t));
+    if (selected?.id === id) setSelected(prev => prev ? { ...prev, ...patch } : null);
+  }
+
   async function updateTemplate(id: string, data: Partial<Template>) {
     await fetch(`/api/content-templates/${id}`, {
       method: 'PATCH',
@@ -155,11 +175,13 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
           <button onClick={load} className="text-xs text-gray-600 hover:text-white px-3 py-1.5 bg-gray-800 rounded-lg">
             ↻ Refresh
           </button>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition-colors"
-          >
-            + Upload Template
+          <button onClick={createShell}
+            className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition-colors">
+            + Tạo template
+          </button>
+          <button onClick={() => setShowUpload(true)}
+            className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium rounded-lg transition-colors">
+            ⬆ Upload nhanh
           </button>
         </div>
       </div>
@@ -262,6 +284,7 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
               parseAnalysis={parseAnalysis}
               editingId={editingId}
               onStartEdit={() => setEditingId(selected.id)}
+              onSlidesChanged={(patch) => applySlides(selected.id, patch)}
               onSave={(data) => updateTemplate(selected.id, data)}
               onCancelEdit={() => setEditingId(null)}
               onClose={() => setSelected(null)}
@@ -298,6 +321,8 @@ function TemplateCard({
   onDelete: () => void;
 }) {
   const tags = parseTags(tpl);
+  const [expanded, setExpanded] = useState(false);
+  const innerSlides: Array<{ url: string }> = (() => { try { return JSON.parse(tpl.slides_json || '[]'); } catch { return []; } })();
   return (
     <div
       onClick={onSelect}
@@ -328,11 +353,26 @@ function TemplateCard({
             loading="lazy"
           />
         )}
-        {tpl.kind === 'collection' && (() => {
-          let n = 0; try { n = (JSON.parse(tpl.slides_json || '[]') as unknown[]).length; } catch { /* */ }
-          return <span className="absolute bottom-1.5 left-1.5 text-[9px] bg-purple-600/90 text-white px-1.5 py-0.5 rounded-full font-medium">📚 {n || 'collection'}</span>;
-        })()}
+        {tpl.kind === 'collection' && innerSlides.length > 1 && (
+          <button onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
+            className="absolute bottom-1.5 left-1.5 text-[9px] bg-purple-600/90 hover:bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-medium">
+            📚 {innerSlides.length} {expanded ? '▲' : '▾'}
+          </button>
+        )}
       </div>
+
+      {/* Collapse/expand inner ordered images (collection) */}
+      {expanded && innerSlides.length > 1 && (
+        <div className="flex gap-1 p-1.5 bg-gray-950/80 overflow-x-auto" onClick={e => e.stopPropagation()}>
+          {innerSlides.map((s, i) => (
+            <div key={i} className="relative flex-shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={s.url} alt="" className="w-10 h-14 object-cover rounded" />
+              <span className="absolute top-0 left-0 w-3.5 h-3.5 bg-brand-600 text-white text-[7px] rounded-br flex items-center justify-center">{i + 1}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Category badge */}
       <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
@@ -386,7 +426,7 @@ function TemplateCard({
 
 // ─── Detail Panel ───────────────────────────────────────────
 function DetailPanel({
-  tpl, catColor, catLabel, parseTags, parseAnalysis, editingId, onStartEdit, onSave, onCancelEdit, onClose, onDelete, onReAnalyze,
+  tpl, catColor, catLabel, parseTags, parseAnalysis, editingId, onStartEdit, onSave, onCancelEdit, onClose, onDelete, onReAnalyze, onSlidesChanged,
 }: {
   tpl: Template;
   catColor: (c: string) => string;
@@ -400,7 +440,41 @@ function DetailPanel({
   onClose: () => void;
   onDelete: () => void;
   onReAnalyze: () => void;
+  onSlidesChanged: (patch: Partial<Template>) => void;
 }) {
+  const slideFileRef = useRef<HTMLInputElement>(null);
+  const [slides, setSlides] = useState<Array<{ url: string; order: number }>>([]);
+  const [slideBusy, setSlideBusy] = useState(false);
+  const [slideDrag, setSlideDrag] = useState<number | null>(null);
+
+  useEffect(() => {
+    try { const a = JSON.parse(tpl.slides_json || '[]'); setSlides(Array.isArray(a) ? a : []); } catch { setSlides([]); }
+  }, [tpl.id, tpl.slides_json]);
+
+  async function uploadSlides(files: FileList | null) {
+    if (!files?.length) return;
+    setSlideBusy(true);
+    const fd = new FormData();
+    Array.from(files).forEach(f => fd.append('files', f));
+    const r = await fetch(`/api/content-templates/${tpl.id}/slides`, { method: 'POST', body: fd });
+    const d = await r.json() as { ok?: boolean; slides?: typeof slides; cover?: string; kind?: string };
+    if (d.ok && d.slides) { setSlides(d.slides); onSlidesChanged({ slides_json: JSON.stringify(d.slides), image_url: d.cover, kind: d.kind }); }
+    setSlideBusy(false);
+  }
+  async function saveSlideOrder(next: typeof slides) {
+    setSlides(next);
+    const r = await fetch(`/api/content-templates/${tpl.id}/slides`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slides: next }),
+    });
+    const d = await r.json() as { ok?: boolean; slides?: typeof slides; cover?: string; kind?: string };
+    if (d.ok && d.slides) { setSlides(d.slides); onSlidesChanged({ slides_json: JSON.stringify(d.slides), image_url: d.cover, kind: d.kind }); }
+  }
+  function moveSlide(from: number, to: number) {
+    if (from === to) return;
+    const a = [...slides]; const [m] = a.splice(from, 1); a.splice(to, 0, m);
+    saveSlideOrder(a.map((s, i) => ({ url: s.url, order: i })));
+  }
+  function removeSlide(i: number) { saveSlideOrder(slides.filter((_, x) => x !== i).map((s, j) => ({ url: s.url, order: j }))); }
   const isEditing = editingId === tpl.id;
   const [editName, setEditName] = useState(tpl.name);
   const [editCategory, setEditCategory] = useState(tpl.category);
@@ -441,15 +515,43 @@ function DetailPanel({
           </div>
         </div>
 
-        {/* Image / Video */}
-        <div className="rounded-xl overflow-hidden bg-gray-800">
-          {tpl.file_type === 'video' ? (
+        {/* Ảnh trong template (theo thứ tự) */}
+        {tpl.file_type === 'video' ? (
+          <div className="rounded-xl overflow-hidden bg-gray-800">
             <video src={tpl.image_url} controls className="w-full" preload="metadata" />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={tpl.image_url} alt={tpl.name} className="w-full" />
-          )}
-        </div>
+          </div>
+        ) : (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Ảnh trong template ({slides.length})</p>
+              <span className="text-[10px] text-gray-600">{slides.length > 1 ? 'collection — kéo để sắp thứ tự' : slides.length === 1 ? 'single' : 'trống — thêm ảnh'}</span>
+              <input ref={slideFileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { uploadSlides(e.target.files); e.target.value = ''; }} />
+              <button onClick={() => slideFileRef.current?.click()} disabled={slideBusy}
+                className="ml-auto px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-[11px] font-semibold">
+                {slideBusy ? '⟳ Đang tải…' : '+ Thêm ảnh'}
+              </button>
+            </div>
+            {slides.length === 0 ? (
+              <div onClick={() => slideFileRef.current?.click()} className="border-2 border-dashed border-gray-700 hover:border-brand-500 rounded-xl p-8 text-center cursor-pointer">
+                <p className="text-2xl mb-1">🖼</p><p className="text-xs text-gray-400">Tải 1 hoặc nhiều ảnh vào template này (có thứ tự)</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {slides.map((s, i) => (
+                  <div key={s.url} className={`relative group rounded-lg overflow-hidden border border-gray-700 ${slideDrag === i ? 'opacity-40' : ''}`}
+                    draggable onDragStart={() => setSlideDrag(i)} onDragEnd={() => setSlideDrag(null)}
+                    onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (slideDrag !== null) moveSlide(slideDrag, i); setSlideDrag(null); }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={s.url} alt="" className="w-full aspect-[3/4] object-cover cursor-grab active:cursor-grabbing" />
+                    <span className="absolute top-1 left-1 w-4 h-4 bg-brand-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{i + 1}</span>
+                    {i === 0 && <span className="absolute bottom-1 left-1 text-[8px] bg-black/70 text-yellow-300 px-1 rounded">cover</span>}
+                    <button onClick={() => removeSlide(i)} className="absolute top-1 right-1 w-4 h-4 bg-black/70 hover:bg-red-700 text-white text-[9px] rounded-full opacity-0 group-hover:opacity-100">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Edit / View Mode */}
         {isEditing ? (
