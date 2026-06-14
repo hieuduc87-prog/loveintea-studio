@@ -56,22 +56,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (existing) { skipped.push(item.id); continue; }
 
       try {
-        const gen = await generateFromPlanItem(item);
-
-        // Template operating flow: pick a template (rotation + win-bias) for this surface
+        // Template operating flow: pick a template (rotation + win-bias) for this surface,
+        // read its analysed structure/skeleton so the post mirrors the template for THIS product.
         let templateId: string | null = null;
-        let imagePrompt = gen.image_prompt;
+        let templateGuide: { structure?: string; skeleton?: string } | undefined;
+        let styleHint = '';
         if (useTemplate) {
           const tpl = pickTemplate(plan.brand_id, { format: surfaceToFormat(item.surface) });
           if (tpl) {
             templateId = tpl.id;
-            // Bias the generated image toward the picked template's layout/style
-            let styleHint = '';
-            try { const a = JSON.parse(tpl.analysis || '{}') as { style_keywords?: string[]; layout?: { description?: string } };
-              styleHint = [a.style_keywords?.join(', '), a.layout?.description].filter(Boolean).join('. '); } catch { /* */ }
-            if (styleHint) imagePrompt = `${gen.image_prompt}\n\nFollow this template style/layout: ${styleHint}`;
+            try {
+              const a = JSON.parse(tpl.analysis || '{}') as { style_keywords?: string[]; layout?: { description?: string }; structure?: string; skeleton?: string };
+              styleHint = [a.style_keywords?.join(', '), a.layout?.description].filter(Boolean).join('. ');
+              if (a.skeleton || a.structure) templateGuide = { structure: a.structure, skeleton: a.skeleton };
+            } catch { /* */ }
           }
         }
+
+        const gen = await generateFromPlanItem(item, templateGuide);
+        let imagePrompt = gen.image_prompt;
+        if (styleHint) imagePrompt = `${gen.image_prompt}\n\nFollow this template style/layout: ${styleHint}`;
 
         let imageUrl = '';
         if (withImage) {

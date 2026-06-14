@@ -1136,23 +1136,61 @@ function AnalysisSection({ analysis, onReAnalyze }: { analysis: TemplateAnalysis
   return (
     <div className="border-t border-gray-800 pt-4">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">AI Layout Analysis</p>
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">🤖 AI phân tích cấu trúc template</p>
         <button onClick={handleReAnalyze} disabled={reanalyzing}
-          className="text-[10px] text-gray-500 hover:text-white px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 transition-colors disabled:opacity-50">
-          {reanalyzing ? 'Analyzing...' : 'Re-analyze'}
+          className="text-[10px] text-white px-2.5 py-1 rounded bg-brand-600 hover:bg-brand-500 transition-colors disabled:opacity-50 font-semibold">
+          {reanalyzing ? '⟳ Đang phân tích…' : '🤖 AI Analyze'}
         </button>
       </div>
 
       {!analysis ? (
         <div className="bg-gray-800/50 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500 mb-2">No analysis yet</p>
+          <p className="text-xs text-gray-500 mb-2">Chưa phân tích — bấm AI Analyze để Gemini đọc số ảnh, step, nội dung từng ảnh + rút khung sườn tái dùng.</p>
           <button onClick={handleReAnalyze} disabled={reanalyzing}
-            className="text-xs text-brand-400 hover:text-brand-300 disabled:opacity-50">
-            {reanalyzing ? 'Analyzing...' : 'Run AI Analysis'}
+            className="text-xs text-brand-400 hover:text-brand-300 disabled:opacity-50 font-semibold">
+            {reanalyzing ? 'Đang phân tích…' : '🤖 Chạy AI Analyze'}
           </button>
         </div>
       ) : (
         <div className="space-y-3">
+          {/* Collection: structure + skeleton + per-slide steps */}
+          {(() => {
+            const a = analysis as unknown as { slide_count?: number; structure?: string; skeleton?: string; slides?: Array<{ index: number; role: string; content: string; text_on_image?: string }> };
+            if (!a.skeleton && !a.slides) return null;
+            return (
+              <div className="space-y-2">
+                {a.structure && (
+                  <div className="bg-brand-900/20 border border-brand-700/30 rounded-lg p-3">
+                    <p className="text-[10px] text-brand-400 uppercase tracking-widest mb-1">Cấu trúc ({a.slide_count ?? a.slides?.length} ảnh)</p>
+                    <p className="text-xs text-gray-200">{a.structure}</p>
+                  </div>
+                )}
+                {a.slides && a.slides.length > 0 && (
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Từng ảnh / step</p>
+                    <div className="space-y-1.5">
+                      {a.slides.map((s, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="w-4 h-4 bg-brand-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">{s.index ?? i + 1}</span>
+                          <div className="min-w-0">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-300 font-medium">{s.role}</span>
+                            <p className="text-[11px] text-gray-300 mt-0.5">{s.content}{s.text_on_image ? ` · chữ: "${s.text_on_image}"` : ''}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {a.skeleton && (
+                  <div className="bg-emerald-900/15 border border-emerald-700/30 rounded-lg p-3">
+                    <p className="text-[10px] text-emerald-400 uppercase tracking-widest mb-1">🦴 Khung sườn tái dùng</p>
+                    <p className="text-[11px] text-gray-200 whitespace-pre-wrap">{a.skeleton}</p>
+                    <p className="text-[9px] text-gray-500 mt-1.5">Khi tạo post & chọn template này, hệ thống dùng khung sườn + brand + sản phẩm mới để dựng post cấu trúc tương đương.</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {/* Layout */}
           {analysis.layout && (
             <div className="bg-gray-800/50 rounded-lg p-3">

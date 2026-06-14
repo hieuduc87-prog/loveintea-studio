@@ -179,3 +179,56 @@ Return JSON matching this exact schema:
     throw new Error('Gemini returned unparseable template analysis');
   }
 }
+
+// ─── Collection Template Analysis (multi-image: số lượng, step, nội dung từng ảnh) ───
+export interface CollectionAnalysis {
+  slide_count: number;
+  slides: Array<{
+    index: number;          // 1-based order
+    role: string;           // hook | product | benefit | ingredient | how_to | proof | cta | other
+    content: string;        // mô tả nội dung ảnh này
+    text_on_image: string;  // chữ overlay (nếu có)
+    visual: string;         // bố cục/visual của ảnh
+  }>;
+  structure: string;        // luồng tổng thể (vd: hook → sản phẩm → lợi ích → CTA)
+  skeleton: string;         // KHUNG SƯỜN tái sử dụng: tả từng slide làm gì để dựng lại cho sản phẩm khác
+  style_keywords: string[];
+  best_for: string[];
+}
+
+/** Analyze ALL images of a collection template → structure + reusable skeleton. */
+export async function analyzeTemplateCollection(images: Array<{ data: Buffer; mimeType: string }>): Promise<CollectionAnalysis> {
+  const prompt = `Bạn là giám đốc sáng tạo. Đây là MỘT template content gồm ${images.length} ảnh THEO THỨ TỰ (ảnh 1 → ${images.length}).
+Phân tích CHI TIẾT để hiểu cấu trúc template và rút ra KHUNG SƯỜN tái sử dụng được cho sản phẩm khác.
+
+Trả ONLY JSON đúng schema:
+{
+ "slide_count": ${images.length},
+ "slides": [{"index":1,"role":"hook|product|benefit|ingredient|how_to|proof|cta|other","content":"ảnh này thể hiện gì","text_on_image":"chữ overlay nếu có","visual":"bố cục/màu/khung hình"}],
+ "structure": "luồng tổng thể của template (vd: hook gây tò mò → giới thiệu sản phẩm → 3 lợi ích → CTA)",
+ "skeleton": "KHUNG SƯỜN: mô tả từng slide cần làm gì (vai trò + loại nội dung + bố cục) để có thể DỰNG LẠI template tương đương cho 1 sản phẩm KHÁC — viết như công thức từng bước",
+ "style_keywords": ["..."],
+ "best_for": ["promo","educate","launch",...]
+}`;
+
+  const parts: Array<{ inlineData: { data: string; mimeType: string } } | string> = images.map(img => ({
+    inlineData: { data: img.data.toString('base64'), mimeType: img.mimeType },
+  }));
+  parts.push(prompt);
+
+  let lastError: unknown;
+  for (const modelName of MODELS) {
+    try {
+      const client = getClient();
+      const model = client.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: 'application/json' } });
+      const result = await model.generateContent(parts as Parameters<typeof model.generateContent>[0]);
+      const raw = result.response.text().trim();
+      const m = raw.match(/\{[\s\S]*\}/);
+      return JSON.parse(m ? m[0] : raw) as CollectionAnalysis;
+    } catch (e) {
+      lastError = e;
+      if (!isRetryable(e)) throw e;
+    }
+  }
+  throw lastError;
+}

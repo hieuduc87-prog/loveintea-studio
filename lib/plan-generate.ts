@@ -49,7 +49,7 @@ export function resolveProductImagePath(imageUrl: string | null | undefined): st
   return p && fs.existsSync(p) ? p : null;
 }
 
-export async function generateFromPlanItem(item: PlanItemRow): Promise<GeneratedContent> {
+export async function generateFromPlanItem(item: PlanItemRow, templateGuide?: { structure?: string; skeleton?: string }): Promise<GeneratedContent> {
   const db = getDb();
   const brandId = item.brand_id || 'loveintea';
   const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;
@@ -68,6 +68,7 @@ PLAN ITEM:
 - Copy direction: ${item.copy_direction || ''}
 - Visual direction: ${item.visual_direction || ''}
 - Context: ${item.context || ''}
+${templateGuide?.skeleton ? `\nTEMPLATE STRUCTURE TO FOLLOW (dựng post theo khung sườn này nhưng cho ĐÚNG sản phẩm trên):\n- Cấu trúc: ${templateGuide.structure ?? ''}\n- Khung sườn: ${templateGuide.skeleton}` : ''}
 
 BRAND DNA:
 - Tagline: ${dna?.tagline ?? ''} | Archetype: ${dna?.archetype ?? ''}
