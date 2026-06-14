@@ -43,6 +43,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const tpl = db.prepare('SELECT slides_json, thumbnail_url FROM content_templates WHERE id=?').get(params.id) as { slides_json: string; thumbnail_url: string } | undefined;
     if (!tpl) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    // Add EXISTING images by URL (drag from library) — no upload
+    if ((req.headers.get('content-type') || '').includes('application/json')) {
+      const { addUrls } = await req.json() as { addUrls?: string[] };
+      if (!addUrls?.length) return NextResponse.json({ error: 'addUrls required' }, { status: 400 });
+      const slides = readSlides(tpl.slides_json);
+      let order = slides.length;
+      const existing = new Set(slides.map(s => s.url));
+      for (const url of addUrls) {
+        if (typeof url === 'string' && url.trim() && !existing.has(url)) { slides.push({ url, order: order++ }); existing.add(url); }
+      }
+      const r = persist(db, params.id, slides);
+      return NextResponse.json({ ok: true, ...r });
+    }
+
     const fd = await req.formData();
     const files = (fd.getAll('files') as File[]).filter(Boolean);
     if (!files.length) return NextResponse.json({ error: 'No files' }, { status: 400 });

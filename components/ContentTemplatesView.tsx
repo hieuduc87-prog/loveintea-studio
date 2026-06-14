@@ -451,14 +451,37 @@ function DetailPanel({
     try { const a = JSON.parse(tpl.slides_json || '[]'); setSlides(Array.isArray(a) ? a : []); } catch { setSlides([]); }
   }, [tpl.id, tpl.slides_json]);
 
+  // Library picker (drag/select existing images into this template)
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [lib, setLib] = useState<Array<{ id: string; url: string }>>([]);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+
+  function applyResp(d: { ok?: boolean; slides?: typeof slides; cover?: string; kind?: string }) {
+    if (d.ok && d.slides) { setSlides(d.slides); onSlidesChanged({ slides_json: JSON.stringify(d.slides), image_url: d.cover, kind: d.kind }); }
+  }
+  async function openPicker() {
+    setPickerOpen(true);
+    if (lib.length) return;
+    const r = await fetch(`/api/hub/assets?brand=${tpl.brand_id}&limit=200`).catch(() => null);
+    if (r?.ok) { const d = await r.json() as { assets?: Array<{ id: string; url: string }> }; setLib(d.assets ?? []); }
+  }
+  async function addUrls(urls: string[]) {
+    if (!urls.length) return;
+    setSlideBusy(true);
+    const r = await fetch(`/api/content-templates/${tpl.id}/slides`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ addUrls: urls }),
+    });
+    applyResp(await r.json());
+    setPicked(new Set()); setSlideBusy(false);
+  }
+
   async function uploadSlides(files: FileList | null) {
     if (!files?.length) return;
     setSlideBusy(true);
     const fd = new FormData();
     Array.from(files).forEach(f => fd.append('files', f));
     const r = await fetch(`/api/content-templates/${tpl.id}/slides`, { method: 'POST', body: fd });
-    const d = await r.json() as { ok?: boolean; slides?: typeof slides; cover?: string; kind?: string };
-    if (d.ok && d.slides) { setSlides(d.slides); onSlidesChanged({ slides_json: JSON.stringify(d.slides), image_url: d.cover, kind: d.kind }); }
+    applyResp(await r.json());
     setSlideBusy(false);
   }
   async function saveSlideOrder(next: typeof slides) {
@@ -526,17 +549,50 @@ function DetailPanel({
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Ảnh trong template ({slides.length})</p>
               <span className="text-[10px] text-gray-600">{slides.length > 1 ? 'collection — kéo để sắp thứ tự' : slides.length === 1 ? 'single' : 'trống — thêm ảnh'}</span>
               <input ref={slideFileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { uploadSlides(e.target.files); e.target.value = ''; }} />
+              <button onClick={openPicker} disabled={slideBusy}
+                className="ml-auto px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-200 text-[11px] font-semibold">
+                🖼 Ảnh có sẵn
+              </button>
               <button onClick={() => slideFileRef.current?.click()} disabled={slideBusy}
-                className="ml-auto px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-[11px] font-semibold">
-                {slideBusy ? '⟳ Đang tải…' : '+ Thêm ảnh'}
+                className="px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-[11px] font-semibold">
+                {slideBusy ? '⟳ Đang tải…' : '+ Upload ảnh'}
               </button>
             </div>
+
+            {/* Library picker — kéo/chọn ảnh cũ vào template */}
+            {pickerOpen && (
+              <div className="mb-2 bg-gray-950/70 border border-gray-800 rounded-lg p-2">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-[10px] text-gray-400">Kéo ảnh vào khung ảnh template, hoặc chọn rồi bấm Thêm</span>
+                  {picked.size > 0 && <button onClick={() => addUrls([...picked])} className="ml-auto px-2 py-0.5 rounded bg-brand-600 hover:bg-brand-500 text-white text-[10px] font-semibold">+ Thêm {picked.size} ảnh</button>}
+                  <button onClick={() => setPickerOpen(false)} className="text-gray-500 hover:text-white text-xs">✕</button>
+                </div>
+                {lib.length === 0 ? <p className="text-[10px] text-gray-600 py-2">Đang tải thư viện…</p> : (
+                  <div className="grid grid-cols-6 gap-1 max-h-40 overflow-y-auto">
+                    {lib.map(a => (
+                      <div key={a.id} draggable onDragStart={e => e.dataTransfer.setData('text/uri-list', a.url)}
+                        onClick={() => setPicked(p => { const n = new Set(p); n.has(a.url) ? n.delete(a.url) : n.add(a.url); return n; })}
+                        className={`relative rounded overflow-hidden border cursor-pointer ${picked.has(a.url) ? 'border-brand-400 ring-1 ring-brand-400' : 'border-gray-800'}`}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={a.url} alt="" className="w-full aspect-square object-cover" loading="lazy" />
+                        {picked.has(a.url) && <span className="absolute top-0.5 right-0.5 text-[8px] bg-brand-500 text-white rounded-full w-3 h-3 flex items-center justify-center">✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {slides.length === 0 ? (
-              <div onClick={() => slideFileRef.current?.click()} className="border-2 border-dashed border-gray-700 hover:border-brand-500 rounded-xl p-8 text-center cursor-pointer">
-                <p className="text-2xl mb-1">🖼</p><p className="text-xs text-gray-400">Tải 1 hoặc nhiều ảnh vào template này (có thứ tự)</p>
+              <div onClick={() => slideFileRef.current?.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const u = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain'); if (u && u.startsWith('/')) addUrls([u]); }}
+                className="border-2 border-dashed border-gray-700 hover:border-brand-500 rounded-xl p-8 text-center cursor-pointer">
+                <p className="text-2xl mb-1">🖼</p><p className="text-xs text-gray-400">Upload, hoặc <b>kéo ảnh có sẵn</b> từ thư viện vào đây (có thứ tự)</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2"
+                onDragOver={e => { if (slideDrag === null) e.preventDefault(); }}
+                onDrop={e => { const u = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain'); if (u && u.startsWith('/') && slideDrag === null) { e.preventDefault(); addUrls([u]); } }}>
                 {slides.map((s, i) => (
                   <div key={s.url} className={`relative group rounded-lg overflow-hidden border border-gray-700 ${slideDrag === i ? 'opacity-40' : ''}`}
                     draggable onDragStart={() => setSlideDrag(i)} onDragEnd={() => setSlideDrag(null)}
