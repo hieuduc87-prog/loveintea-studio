@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useRef, useState, useEffect } from 'react';
 import { KnowledgeHubView } from './KnowledgeHubView';
 import { RulesEngineView } from './RulesEngineView';
+import { KnowledgeMindmapView } from './KnowledgeMindmapView';
 
 interface BrandDna {
   tagline: string; archetype: string;
@@ -87,7 +88,7 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
     setTimeout(() => setStratMsg(''), 2500);
   }
 
-  const [section, setSection] = useState<'dna' | 'knowledge' | 'rules'>('dna');
+  const [section, setSection] = useState<'dna' | 'knowledge' | 'rules' | 'mindmap'>('dna');
   const [extracting, setExtracting] = useState(false);
   const dnaFileRef = useRef<HTMLInputElement>(null);
 
@@ -147,7 +148,7 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Sub-tabs — Brand DNA absorbs Knowledge + Rules */}
       <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-0.5 w-fit mb-4">
-        {([['dna', '🌿 DNA & Chiến lược'], ['knowledge', '🧠 Knowledge'], ['rules', '⚙️ Rules']] as const).map(([s, label]) => (
+        {([['dna', '🌿 DNA & Chiến lược'], ['knowledge', '🧠 Knowledge'], ['rules', '⚙️ Rules'], ['mindmap', '🗺️ Mindmap']] as const).map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${section === s ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'}`}>
             {label}
@@ -157,6 +158,7 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
 
       {section === 'knowledge' && <KnowledgeHubView brandId={bid} />}
       {section === 'rules' && <RulesEngineView brandId={bid} />}
+      {section === 'mindmap' && <KnowledgeMindmapView brandId={bid} />}
       {section !== 'dna' ? null : (<>
       {/* Header */}
       <div className="flex items-center gap-4 mb-8 p-5 bg-gradient-to-r from-brand-600/20 to-transparent border border-brand-600/30 rounded-xl">
