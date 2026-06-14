@@ -344,6 +344,19 @@ function TemplateCard({
               VIDEO
             </span>
           </>
+        ) : innerSlides.length > 1 ? (
+          // Collection → collapsed collage of ALL inner images
+          <div className={`w-full h-full grid gap-px bg-gray-900 ${innerSlides.length === 2 ? 'grid-cols-2' : innerSlides.length === 3 ? 'grid-cols-2 grid-rows-2' : 'grid-cols-2 grid-rows-2'}`}>
+            {innerSlides.slice(0, 4).map((s, i) => (
+              <div key={i} className={`relative overflow-hidden ${innerSlides.length === 3 && i === 0 ? 'row-span-2' : ''}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                {i === 3 && innerSlides.length > 4 && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-sm font-bold">+{innerSlides.length - 4}</div>
+                )}
+              </div>
+            ))}
+          </div>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
