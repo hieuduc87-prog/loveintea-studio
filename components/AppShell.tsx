@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { KanbanSquare } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { BrandDnaView }       from './BrandDnaView';
 import { ProductsView }       from './ProductsView';
 import { ContentWorkshopView } from './ContentWorkshopView';
@@ -313,7 +312,6 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
   });
 
   const { data: session } = useSession();
-  const router = useRouter();
 
   // Load brands list
   const loadBrands = useCallback(async () => {
@@ -333,11 +331,27 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
 
   useEffect(() => { loadBrands(); }, [loadBrands]);
 
+  // Clean URLs: tab id (snake_case) ↔ path (kebab-case). /video-studio not /?tab=video_studio
   const changeTab = useCallback((t: TabId) => {
     setTab(t);
     setVisitedTabs(prev => new Set([...prev, t]));
-    router.push(`/?tab=${t}`, { scroll: false });
-  }, [router]);
+    // pushState keeps the SPA mounted (preserves keep-alive) while giving a real URL
+    if (typeof window !== 'undefined') {
+      const path = '/' + t.replace(/_/g, '-');
+      if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    }
+  }, []);
+
+  // Sync tab on browser back/forward
+  useEffect(() => {
+    const onPop = () => {
+      const seg = window.location.pathname.replace(/^\//, '').split('/')[0].replace(/-/g, '_');
+      const found = TABS.find(t => t.id === seg);
+      if (found) { setTab(found.id); setVisitedTabs(prev => new Set([...prev, found.id])); }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   const userRole = (session?.user as Record<string, unknown>)?.role as string | undefined;
 
