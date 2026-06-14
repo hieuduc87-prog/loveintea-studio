@@ -114,12 +114,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         created.push({ itemId: item.id, postId });
       } catch (e) {
-        errors.push({ itemId: item.id, error: String(e).slice(0, 200) });
+        errors.push({ itemId: item.id, error: (console.error('[api]', e), 'Có lỗi hệ thống').slice(0, 200) });
       }
     }
 
     return NextResponse.json({ ok: true, created, skipped, errors });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

@@ -27,6 +27,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       url: `/api/flow-builder/${params.id}/image/${filename}`,
     });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

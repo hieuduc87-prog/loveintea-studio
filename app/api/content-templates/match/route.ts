@@ -125,7 +125,7 @@ Return JSON array of exactly ${limit} items, ranked best-first:
 
     return NextResponse.json({ templates: result });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }
 

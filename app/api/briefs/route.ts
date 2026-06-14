@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     ).all(brandId);
     return NextResponse.json({ briefs: rows });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }
 
@@ -34,6 +34,6 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, brief }, { status: 201 });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

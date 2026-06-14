@@ -46,6 +46,6 @@ Trả ONLY JSON: {"variants":[{"caption":"...","hashtags":"#a #b","image_prompt"
     const out = await generateJSON<{ variants: Array<{ caption: string; hashtags: string; image_prompt: string; targeting?: Record<string, string> }> }>(prompt);
     return NextResponse.json({ ok: true, variants: (out.variants ?? []).slice(0, n) });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

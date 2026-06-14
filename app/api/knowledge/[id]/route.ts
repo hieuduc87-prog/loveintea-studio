@@ -16,6 +16,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
     return NextResponse.json({ doc });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

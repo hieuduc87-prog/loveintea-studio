@@ -102,6 +102,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, id, imageUrl: fileUrl, thumbnailUrl, analysis: analysis ? JSON.parse(analysis) : null, fileType, kind, slides });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

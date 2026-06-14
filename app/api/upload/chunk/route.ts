@@ -78,9 +78,9 @@ export async function POST(req: NextRequest) {
       throw new Error(`Unknown purpose: ${purpose}`);
     } catch (e) {
       try { fs.unlinkSync(assembled); } catch { /* */ }
-      return NextResponse.json({ error: String(e) }, { status: 500 });
+      return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
     }
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

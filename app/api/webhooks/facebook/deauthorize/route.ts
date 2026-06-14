@@ -46,6 +46,6 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     // FB expects a 200 even on errors, to avoid retries for our own validation failures
     console.error('[fb-deauthorize]', e);
-    return NextResponse.json({ ok: false, error: String(e) });
+    return NextResponse.json({ ok: false, error: (console.error('[api]', e), 'Có lỗi hệ thống') });
   }
 }

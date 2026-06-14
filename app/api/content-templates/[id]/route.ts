@@ -36,7 +36,7 @@ export async function PATCH(
     db.prepare(`UPDATE content_templates SET ${fields.join(', ')} WHERE id = ?`).run(...values);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }
 
@@ -63,6 +63,6 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

@@ -39,6 +39,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     return NextResponse.json({ error: 'file, text, or action required' }, { status: 400 });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

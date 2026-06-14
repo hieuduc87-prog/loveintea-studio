@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   try {
     prompt = buildImageEditPrompt({ skuId, uspId, contextId, extraNotes: customPrompt });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 400 });
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 400 });
   }
   const start  = Date.now();
 

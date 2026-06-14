@@ -10,19 +10,27 @@ export async function GET(
 ) {
   const { filename } = params;
 
-  // Sanitize — only allow alphanumeric, hyphens, underscores, dots
-  if (!/^[\w\-.]+$/.test(filename)) {
+  // Sanitize — basename only (defence in depth), block traversal + dotfiles
+  const safe = path.basename(filename);
+  if (safe !== filename || !/^[\w][\w\-.]*$/.test(safe) || safe.includes('..')) {
     return new NextResponse('Not found', { status: 404 });
   }
 
-  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-  const filePath = path.join(dataDir, 'images', filename);
-  if (!fs.existsSync(filePath)) {
+  const imagesDir = path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'images');
+  const filePath = path.join(imagesDir, safe);
+  // Resolved path must stay inside imagesDir, and must be a file (not a dir)
+  if (!filePath.startsWith(imagesDir + path.sep)) {
     return new NextResponse('Not found', { status: 404 });
   }
-
-  const buffer = fs.readFileSync(filePath);
-  const ext = path.extname(filename).toLowerCase();
+  let buffer: Buffer;
+  try {
+    const st = fs.statSync(filePath);
+    if (!st.isFile()) return new NextResponse('Not found', { status: 404 });
+    buffer = fs.readFileSync(filePath);
+  } catch {
+    return new NextResponse('Not found', { status: 404 });
+  }
+  const ext = path.extname(safe).toLowerCase();
   const contentType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
     : ext === '.webp' ? 'image/webp'
     : ext === '.mp4' ? 'video/mp4'
@@ -33,7 +41,7 @@ export async function GET(
 
   const isVideo = contentType.startsWith('video/');
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': contentType,
       'Cache-Control': isVideo ? 'public, max-age=3600' : 'public, max-age=31536000, immutable',
