@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 type CardType = 'bug' | 'task' | 'feature';
 type Priority = 'critical' | 'high' | 'medium' | 'low';
+type Severity = 'blocker' | 'annoying' | 'cosmetic';
 type Status = 'todo' | 'auto_fix' | 'fixing' | 'fixed' | 'fix_failed' | 'done' | 'approved';
 
 interface FixResult {
@@ -25,11 +26,29 @@ interface KanbanCard {
   status: Status;
   fileHint: string;
   errorLog: string;
+  // ── Cấu trúc báo lỗi 5 lớp ──
+  feature?: string;        // 1. ĐỊNH VỊ — tên tính năng (tab)
+  role?: string;           // 1. ĐỊNH VỊ — vai trò người dùng
+  reproSteps?: string;     // 2. HÀNH ĐỘNG — bước tái hiện
+  inputData?: string;      // 2. HÀNH ĐỘNG — dữ liệu nhập
+  wrongResult?: string;    // 3. KẾT QUẢ SAI — quan sát
+  expected?: string;       // 4. KỲ VỌNG ĐÚNG
+  businessReason?: string; // 4. KỲ VỌNG ĐÚNG — lý do nghiệp vụ (bắt buộc)
+  severity?: Severity;     // 5. MỨC ĐỘ
+  impact?: string;         // 5. ẢNH HƯỞNG
   fixResult: FixResult | null;
   images: string[];
   createdAt: string;
   updatedAt: string;
 }
+
+interface FeatureTab { name: string; path: string }
+
+const SEVERITY_META: Record<Severity, { label: string; priority: Priority }> = {
+  blocker:  { label: '🚫 Chặn đứng', priority: 'critical' },
+  annoying: { label: '😣 Khó chịu',  priority: 'medium'   },
+  cosmetic: { label: '🎨 Cosmetic',  priority: 'low'      },
+};
 
 const COLUMNS: { id: Status; label: string; color: string }[] = [
   { id: 'todo',       label: 'Cần làm',       color: '#f59e0b' },
@@ -62,6 +81,7 @@ export default function KanbanPage() {
   const [imgDragOver, setImgDragOver] = useState(false);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [dropTargetCol, setDropTargetCol] = useState<Status | null>(null);
+  const [features, setFeatures] = useState<FeatureTab[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -72,6 +92,7 @@ export default function KanbanPage() {
   }, []);
 
   useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
+  useEffect(() => { fetch('/api/kanban/features').then(r => r.ok ? r.json() : []).then(setFeatures).catch(() => {}); }, []);
 
   const openModal = (card: KanbanCard) => { setModalCard(card); setModalDraft({ ...card }); setDirty(false); };
   const closeModal = () => {
@@ -289,56 +310,119 @@ export default function KanbanPage() {
             </div>
 
             <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              {/* Tóm tắt 1 câu */}
+              {(() => {
+                const f = modalDraft.feature || modalDraft.title || '___';
+                const act = (modalDraft.reproSteps || modalDraft.inputData || '___').split('\n')[0].replace(/^\s*\d+[.)]\s*/, '').slice(0, 50) || '___';
+                const z = (modalDraft.wrongResult || '___').slice(0, 50) || '___';
+                const w = (modalDraft.expected || '___').slice(0, 50) || '___';
+                const why = (modalDraft.businessReason || '').trim();
+                return (
+                  <div className="rounded-md p-2.5 border text-[11px] leading-relaxed" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)' }}>
+                    <span style={{ color: 'var(--text-3)' }}>Tóm tắt: </span>
+                    <span style={{ color: 'var(--text-1)' }}>Tính năng <b style={{ color: '#8b5cf6' }}>{f}</b>, khi <b>{act}</b>, ra <b style={{ color: '#ef4444' }}>{z}</b> (sai) — đúng phải là <b style={{ color: '#10b981' }}>{w}</b> {why ? <>vì <b>{why.slice(0,50)}</b></> : <span style={{ color: '#f59e0b' }}>vì ___</span>}.</span>
+                  </div>
+                );
+              })()}
+
               <div>
-                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Tiêu đề</label>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Tiêu đề (1 dòng hiện trên board)</label>
                 <input value={modalDraft.title || ''} onChange={e => { setModalDraft(p => ({ ...p, title: e.target.value })); setDirty(true); }}
                   className="w-full text-sm rounded-md px-3 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Loại</label>
-                  <select value={modalDraft.type || 'task'} onChange={e => { setModalDraft(p => ({ ...p, type: e.target.value as CardType })); setDirty(true); }}
-                    className="w-full text-xs rounded-md px-2 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}>
-                    <option value="bug">Bug</option><option value="task">Task</option><option value="feature">Feature</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Ưu tiên</label>
-                  <select value={modalDraft.priority || 'medium'} onChange={e => { setModalDraft(p => ({ ...p, priority: e.target.value as Priority })); setDirty(true); }}
-                    className="w-full text-xs rounded-md px-2 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}>
-                    <option value="critical">🔴 Critical</option><option value="high">🟠 High</option><option value="medium">🟡 Medium</option><option value="low">🟢 Low</option>
-                  </select>
-                </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Loại</label>
+                <select value={modalDraft.type || 'bug'} onChange={e => { setModalDraft(p => ({ ...p, type: e.target.value as CardType })); setDirty(true); }}
+                  className="w-full text-xs rounded-md px-2 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}>
+                  <option value="bug">Bug</option><option value="task">Task</option><option value="feature">Feature</option>
+                </select>
               </div>
 
-              <div>
-                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>File / Function <span className="font-normal" style={{ color: 'var(--text-3)' }}>(gợi ý cho Claude)</span></label>
-                <input value={modalDraft.fileHint || ''} onChange={e => { setModalDraft(p => ({ ...p, fileHint: e.target.value })); setDirty(true); }}
-                  className="w-full text-xs font-mono rounded-md px-3 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
-                  placeholder="src/app/page.tsx hoặc function handleSubmit" />
+              {/* ══ 1. ĐỊNH VỊ ══ */}
+              <div className="pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+                <p className="text-[11px] font-bold mb-2" style={{ color: '#8b5cf6' }}>1. ĐỊNH VỊ — Lỗi ở đâu</p>
+                <label className="text-[10px] mb-1 block" style={{ color: 'var(--text-3)' }}>Tính năng (chọn đúng TAB đang bị lỗi)</label>
+                {(() => {
+                  const feat = modalDraft.feature || '';
+                  const known = feat === '' || features.some(f => f.name === feat);
+                  const sel = known ? feat : '__custom__';
+                  return (
+                    <>
+                      <select value={sel} onChange={e => {
+                          const v = e.target.value;
+                          if (v === '__custom__') { setModalDraft(p => ({ ...p, feature: ' ' })); }
+                          else { const tab = features.find(f => f.name === v); setModalDraft(p => ({ ...p, feature: v, fileHint: tab ? tab.path : p.fileHint })); }
+                          setDirty(true);
+                        }}
+                        className="w-full text-sm rounded-md px-3 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}>
+                        <option value="">— Chọn tính năng / tab —</option>
+                        {features.map(f => <option key={f.path} value={f.name}>{f.name}</option>)}
+                        <option value="__custom__">✏️ Khác / tự nhập…</option>
+                      </select>
+                      {sel === '__custom__' && (
+                        <input autoFocus value={feat.trim()} onChange={e => { setModalDraft(p => ({ ...p, feature: e.target.value })); setDirty(true); }}
+                          placeholder="Tên tính năng" className="w-full text-sm rounded-md px-3 py-2 border outline-none mt-2" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} />
+                      )}
+                    </>
+                  );
+                })()}
+                <input value={modalDraft.role || ''} onChange={e => { setModalDraft(p => ({ ...p, role: e.target.value })); setDirty(true); }}
+                  placeholder="Vai trò người dùng (admin / khách / nhân viên...)"
+                  className="w-full text-sm rounded-md px-3 py-2 border outline-none mt-2" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} />
               </div>
 
-              <div>
-                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Log lỗi / Chi tiết <span className="font-normal" style={{ color: 'var(--text-3)' }}>(paste log, stacktrace...)</span></label>
+              {/* ══ 2. HÀNH ĐỘNG ══ */}
+              <div className="pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+                <p className="text-[11px] font-bold mb-2" style={{ color: '#8b5cf6' }}>2. HÀNH ĐỘNG — Tôi làm gì để gặp lỗi</p>
+                <textarea value={modalDraft.reproSteps || ''} onChange={e => { setModalDraft(p => ({ ...p, reproSteps: e.target.value })); setDirty(true); }}
+                  rows={4} className="w-full text-sm rounded-md px-3 py-2 border outline-none resize-none mb-2"
+                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} placeholder={"Bước tái hiện (đánh số):\n1. Mở...\n2. Nhấn..."} />
+                <input value={modalDraft.inputData || ''} onChange={e => { setModalDraft(p => ({ ...p, inputData: e.target.value })); setDirty(true); }}
+                  placeholder="Dữ liệu nhập (nhập gì, chọn gì, file nào)"
+                  className="w-full text-sm rounded-md px-3 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} />
+              </div>
+
+              {/* ══ 3. KẾT QUẢ SAI ══ */}
+              <div className="pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+                <p className="text-[11px] font-bold mb-2" style={{ color: '#ef4444' }}>3. KẾT QUẢ SAI — Hệ thống đang làm gì (chỉ QUAN SÁT)</p>
+                <textarea value={modalDraft.wrongResult || ''} onChange={e => { setModalDraft(p => ({ ...p, wrongResult: e.target.value })); setDirty(true); }}
+                  rows={3} className="w-full text-sm rounded-md px-3 py-2 border outline-none resize-none mb-2"
+                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} placeholder="Thông báo lỗi / màn hình trắng / số liệu sai..." />
+                <label className="text-[10px] mb-1 block" style={{ color: 'var(--text-3)' }}>Log / stacktrace (tùy chọn)</label>
                 <textarea value={modalDraft.errorLog || ''} onChange={e => { setModalDraft(p => ({ ...p, errorLog: e.target.value })); setDirty(true); }}
-                  rows={5} className="w-full text-xs font-mono rounded-md px-3 py-2 border outline-none resize-none"
-                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
-                  placeholder="Paste log, stacktrace, hoặc mô tả chi tiết..." />
+                  rows={4} className="w-full text-xs font-mono rounded-md px-3 py-2 border outline-none resize-none"
+                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} placeholder="Paste log / stack trace..." />
               </div>
 
-              <div>
-                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Mô tả thêm</label>
-                <textarea value={modalDraft.description || ''} onChange={e => { setModalDraft(p => ({ ...p, description: e.target.value })); setDirty(true); }}
-                  rows={3} className="w-full text-xs rounded-md px-3 py-2 border outline-none resize-none"
-                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} placeholder="Mô tả vấn đề / yêu cầu..." />
+              {/* ══ 4. KỲ VỌNG ĐÚNG ══ */}
+              <div className="pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+                <p className="text-[11px] font-bold mb-2" style={{ color: '#10b981' }}>4. KỲ VỌNG ĐÚNG — Lẽ ra phải thế nào</p>
+                <textarea value={modalDraft.expected || ''} onChange={e => { setModalDraft(p => ({ ...p, expected: e.target.value })); setDirty(true); }}
+                  rows={2} className="w-full text-sm rounded-md px-3 py-2 border outline-none resize-none mb-2"
+                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} placeholder="Kết quả đúng theo nghiệp vụ..." />
+                <textarea value={modalDraft.businessReason || ''} onChange={e => { setModalDraft(p => ({ ...p, businessReason: e.target.value })); setDirty(true); }}
+                  rows={2} className="w-full text-sm rounded-md px-3 py-2 border outline-none resize-none"
+                  style={{ backgroundColor: 'var(--bg-2)', borderColor: (modalDraft.businessReason || '').trim() ? 'var(--border)' : '#f59e0b', color: 'var(--text-1)' }}
+                  placeholder="LÝ DO NGHIỆP VỤ — tại sao phải đúng vậy? (BẮT BUỘC)" />
+                {!(modalDraft.businessReason || '').trim() && (
+                  <p className="text-[10px] mt-1" style={{ color: '#f59e0b' }}>⚠ Chưa có lý do nghiệp vụ → có thể là YÊU CẦU MỚI, không phải bug.</p>
+                )}
               </div>
 
-              <div>
-                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Output mong đợi</label>
-                <textarea value={modalDraft.goal || ''} onChange={e => { setModalDraft(p => ({ ...p, goal: e.target.value })); setDirty(true); }}
-                  rows={2} className="w-full text-xs rounded-md px-3 py-2 border outline-none resize-none"
-                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} placeholder="Kết quả mong muốn..." />
+              {/* ══ 5. MỨC ĐỘ ══ */}
+              <div className="pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+                <p className="text-[11px] font-bold mb-2" style={{ color: 'var(--text-2)' }}>5. MỨC ĐỘ & ẢNH HƯỞNG</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <select value={modalDraft.severity || ''} onChange={e => { const sv = e.target.value as Severity; setModalDraft(p => ({ ...p, severity: sv, priority: sv ? SEVERITY_META[sv].priority : p.priority })); setDirty(true); }}
+                    className="w-full text-xs rounded-md px-2 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}>
+                    <option value="">— Mức độ —</option>
+                    <option value="blocker">🚫 Chặn đứng</option><option value="annoying">😣 Khó chịu</option><option value="cosmetic">🎨 Cosmetic</option>
+                  </select>
+                  <input value={modalDraft.impact || ''} onChange={e => { setModalDraft(p => ({ ...p, impact: e.target.value })); setDirty(true); }}
+                    placeholder="Ảnh hưởng: ai, bao nhiêu, mất tiền/data?"
+                    className="w-full text-sm rounded-md px-3 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} />
+                </div>
               </div>
 
               <div>
