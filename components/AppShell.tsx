@@ -15,6 +15,7 @@ import { InboxView }          from './InboxView';
 import { AnalyticsView }      from './AnalyticsView';
 import { PlanCalendarView }   from './PlanCalendarView';
 import { UserGuideView }      from './UserGuideView';
+import { HelpDrawer }         from './HelpDrawer';
 import { UserManagementView } from './UserManagementView';
 import { AssetDamView }       from './AssetDamView';
 import { ContentLogView }     from './ContentLogView';
@@ -422,6 +423,8 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
           </div>
 
           <div className="flex-1" />
+
+          <HelpDrawer tabId={tab} onOpenFullGuide={() => changeTab('guide')} />
 
           {session?.user && (
             <div className="flex items-center gap-2">
