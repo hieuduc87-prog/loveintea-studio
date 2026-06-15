@@ -57,10 +57,8 @@ export async function GET(req: NextRequest) {
     // The worker treats JSON `null` the same as 204 (no pending card).
     if (candidates.length === 0) return NextResponse.json(null)
     candidates.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
-    const card = candidates[0]
-    return NextResponse.json({
-      id: card.id, title: card.title, description: card.description,
-      errorLog: card.errorLog, projectKey: card.projectKey,
-    })
+    // Trả NGUYÊN card để worker nhận đủ field 5 lớp (feature, reproSteps,
+    // wrongResult, expected, businessReason, severity, impact...).
+    return NextResponse.json(candidates[0])
   } catch { return NextResponse.json(null) }
 }
