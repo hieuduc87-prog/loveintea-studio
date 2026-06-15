@@ -21,14 +21,13 @@ export async function GET() {
     cards.sort((a, b) => order.indexOf(a.priority) - order.indexOf(b.priority));
     const emoji: Record<string,string> = { critical:'🔴', high:'🟠', medium:'🟡', low:'🟢' };
 
-    let out = `# Kanban Brief (${new Date().toLocaleDateString('vi-VN')})\n${cards.length} tasks chưa duyệt\n\n`;
+    let out = `# Kanban Brief (${new Date().toLocaleDateString('vi-VN')})\n${cards.length} tasks\n\n`;
     for (const c of cards) {
-      out += `## ${emoji[c.priority]||'⚪'} [${c.type.toUpperCase()}] ${c.title}${c.status==='inprogress'?' · IN PROGRESS':''}\n`;
-      out += `Priority: ${c.priority}\n`;
+      out += `## ${emoji[c.priority]||'⚪'} [${c.type.toUpperCase()}] ${c.title} (${c.status})\n`;
       if (c.fileHint) out += `File: \`${c.fileHint}\`\n`;
+      if (c.errorLog) out += `\nLog:\n${c.errorLog}\n`;
       if (c.description) out += `\nMô tả:\n${c.description}\n`;
       if (c.goal) out += `\nMục tiêu:\n${c.goal}\n`;
-      if (c.images?.length) out += `\nScreenshots (${c.images.length}): /api/kanban/${c.id}/image/{filename}\n`;
       out += '\n';
     }
     return new NextResponse(out, { headers: { 'Content-Type': 'text/plain' } });

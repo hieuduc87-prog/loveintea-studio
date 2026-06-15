@@ -4,11 +4,12 @@ import path from 'path';
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'kanban');
 
-export async function GET(req: Request, { params }: { params: { id: string; filename: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string; filename: string }> }) {
+  const { id, filename } = await params;
   try {
-    const fp = path.join(DATA_DIR, params.id, 'images', params.filename);
+    const fp = path.join(DATA_DIR, id, 'images', filename);
     const buf = await fs.readFile(fp);
-    const ext = path.extname(params.filename).slice(1) || 'png';
+    const ext = path.extname(filename).slice(1) || 'png';
     return new NextResponse(buf, { headers: { 'Content-Type': `image/${ext}` } });
   } catch { return NextResponse.json({ error: 'Not found' }, { status: 404 }); }
 }

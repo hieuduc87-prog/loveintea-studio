@@ -4,8 +4,9 @@ import path from 'path';
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'kanban');
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const fp = path.join(DATA_DIR, params.id, 'card.json');
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const fp = path.join(DATA_DIR, id, 'card.json');
   try {
     const card = JSON.parse(await fs.readFile(fp, 'utf8'));
     const body = await req.json();
@@ -15,9 +16,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   } catch { return NextResponse.json({ error: 'Not found' }, { status: 404 }); }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
-    await fs.rm(path.join(DATA_DIR, params.id), { recursive: true, force: true });
+    await fs.rm(path.join(DATA_DIR, id), { recursive: true, force: true });
     return NextResponse.json({ ok: true });
   } catch { return NextResponse.json({ error: 'Not found' }, { status: 404 }); }
 }

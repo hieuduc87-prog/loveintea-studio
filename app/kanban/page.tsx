@@ -1,365 +1,68 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import Link from 'next/link';
-import { Plus, X, Image, Loader2, Trash2, Upload } from 'lucide-react';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+type CardType = 'bug' | 'task' | 'feature';
+type Priority = 'critical' | 'high' | 'medium' | 'low';
+type Status = 'todo' | 'auto_fix' | 'fixing' | 'fixed' | 'fix_failed' | 'done' | 'approved';
+
+interface FixResult {
+  summary: string;
+  branch: string | null;
+  changedFiles: string[];
+  costUsd: number | null;
+  durationMs: number | null;
+  fixedAt: string | null;
+}
+
 interface KanbanCard {
   id: string;
   title: string;
   description: string;
   goal: string;
-  type: string;
-  priority: string;
-  status: string;
+  type: CardType;
+  priority: Priority;
+  status: Status;
   fileHint: string;
+  errorLog: string;
+  fixResult: FixResult | null;
   images: string[];
   createdAt: string;
   updatedAt: string;
 }
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-const COLUMNS = [
-  { key: 'todo',       label: 'Cần làm',            color: '#be185d', bg: '#fff1f2', dotColor: '#f43f5e' },
-  { key: 'starting',  label: '⚡ Bắt đầu xử lý',   color: '#b45309', bg: '#fef9c3', dotColor: '#eab308' },
-  { key: 'inprogress', label: 'Claude đang fix...',  color: '#0369a1', bg: '#dbeafe', dotColor: '#3b82f6' },
-  { key: 'done',       label: 'Đã xử lý xong',       color: '#15803d', bg: '#dcfce7', dotColor: '#22c55e' },
-  { key: 'approved',   label: 'Duyệt ✓',             color: '#7c3aed', bg: '#f3e8ff', dotColor: '#a855f7' },
-] as const;
-
-const TYPE_OPTIONS = [
-  { value: 'bug',     label: '🐛 Bug — lỗi cần sửa' },
-  { value: 'task',    label: '✅ Task — việc cần làm' },
-  { value: 'feature', label: '✨ Feature — tính năng mới' },
+const COLUMNS: { id: Status; label: string; color: string }[] = [
+  { id: 'todo',       label: 'Cần làm',       color: '#f59e0b' },
+  { id: 'auto_fix',   label: '🤖 Auto Fix',   color: '#8b5cf6' },
+  { id: 'fixing',     label: '⚙️ Đang fix',   color: '#ef4444' },
+  { id: 'fixed',      label: '✅ Đã fix',     color: '#10b981' },
+  { id: 'fix_failed', label: '❌ Fix lỗi',    color: '#ef4444' },
+  { id: 'done',       label: 'Đã xong',       color: '#3b82f6' },
+  { id: 'approved',   label: 'Duyệt ✓',       color: '#6b7280' },
 ];
 
-const PRIORITY_OPTIONS = [
-  { value: 'critical', label: '🔴 Critical — chặn production' },
-  { value: 'high',     label: '🟠 High — ảnh hưởng chính' },
-  { value: 'medium',   label: '🟡 Medium — bình thường' },
-  { value: 'low',      label: '🟢 Low — khi rảnh' },
-];
-
-const PRIORITY_BADGE: Record<string, { color: string; bg: string; icon: string }> = {
-  critical: { color: '#b91c1c', bg: '#fee2e2', icon: '🔴' },
-  high:     { color: '#c2410c', bg: '#ffedd5', icon: '🟠' },
-  medium:   { color: '#b45309', bg: '#fef3c7', icon: '🟡' },
-  low:      { color: '#15803d', bg: '#dcfce7', icon: '🟢' },
+const PRIORITY_EMOJI: Record<Priority, string> = {
+  critical: '🔴', high: '🟠', medium: '🟡', low: '🟢',
 };
 
-const TYPE_BADGE: Record<string, { color: string; bg: string }> = {
-  bug:     { color: '#dc2626', bg: '#fee2e2' },
-  task:    { color: '#0369a1', bg: '#dbeafe' },
-  feature: { color: '#7c3aed', bg: '#f3e8ff' },
+const TYPE_COLORS: Record<CardType, string> = {
+  bug: '#ef4444', task: '#f59e0b', feature: '#10b981',
 };
 
-const FILE_HINTS = [
-  { label: 'Brand DNA',        value: 'components/BrandDnaView.tsx' },
-  { label: 'Products',         value: 'components/ProductsView.tsx' },
-  { label: 'Content Workshop', value: 'components/ContentWorkshopView.tsx' },
-  { label: 'Image Studio',     value: 'components/ImageStudioView.tsx' },
-  { label: 'Image Library',    value: 'components/ImageLibraryView.tsx' },
-  { label: 'Content Queue',    value: 'components/ContentQueueView.tsx' },
-  { label: 'Publisher',        value: 'components/PublisherView.tsx' },
-  { label: 'Blog Factory',     value: 'components/BlogFactoryView.tsx' },
-  { label: 'Analytics',        value: 'components/AnalyticsView.tsx' },
-  { label: 'Schedule',         value: 'components/ScheduleView.tsx' },
-];
-
-// ─── Quick Add ────────────────────────────────────────────────────────────────
-function QuickAdd({ colKey, onAdded }: { colKey: string; onAdded: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
-
-  async function submit() {
-    if (!title.trim()) return;
-    setSaving(true);
-    setErr('');
-    try {
-      const res = await fetch('/api/kanban', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, status: colKey, type: 'task', priority: 'medium' }),
-      });
-      if (!res.ok) { setErr(`Lỗi ${res.status} — thử reload trang`); return; }
-      setTitle(''); setOpen(false); onAdded();
-    } catch (e) {
-      setErr('Mất kết nối — thử lại');
-    } finally { setSaving(false); }
-  }
-
-  if (!open) return (
-    <button onClick={() => setOpen(true)}
-      className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm text-slate-400 hover:text-slate-600 hover:bg-white/60 transition mt-1">
-      <Plus size={14} /> Thêm card
-    </button>
-  );
-
-  return (
-    <div className="mt-2 space-y-2">
-      <textarea value={title} onChange={e => setTitle(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } if (e.key === 'Escape') setOpen(false); }}
-        placeholder="Tiêu đề card... (Enter để lưu)" rows={2} autoFocus
-        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400 resize-none bg-white shadow-sm"
-      />
-      {err && <p className="text-xs text-red-600 font-medium">{err}</p>}
-      <div className="flex gap-2">
-        <button onClick={submit} disabled={!title.trim() || saving}
-          className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white disabled:opacity-40 transition"
-          style={{ background: '#f43f5e' }}>
-          {saving ? '...' : 'Thêm card'}
-        </button>
-        <button onClick={() => setOpen(false)} className="p-1.5 hover:bg-white/60 rounded-lg">
-          <X size={14} className="text-slate-400" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Card Modal ───────────────────────────────────────────────────────────────
-function CardModal({ card, onClose, onSaved }: { card: KanbanCard; onClose: () => void; onSaved: (c: KanbanCard) => void }) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [title, setTitle] = useState(card.title);
-  const [description, setDescription] = useState(card.description ?? '');
-  const [goal, setGoal] = useState(card.goal ?? '');
-  const [type, setType] = useState(card.type);
-  const [priority, setPriority] = useState(card.priority);
-  const [fileHint, setFileHint] = useState(card.fileHint ?? '');
-  const [fileHintCustom, setFileHintCustom] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [localImages, setLocalImages] = useState(card.images ?? []);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const mark = () => setDirty(true);
-
-  async function save() {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/kanban/${card.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, goal, type, priority, fileHint: fileHint || undefined }),
-      });
-      if (res.ok) { const updated = await res.json(); onSaved(updated); setDirty(false); }
-    } finally { setSaving(false); }
-  }
-
-  async function uploadImages(files: FileList | null) {
-    if (!files) return;
-    setUploading(true);
-    try {
-      for (const file of Array.from(files)) {
-        const fd = new FormData();
-        fd.append('file', file);
-        const res = await fetch(`/api/kanban/${card.id}/image`, { method: 'POST', body: fd });
-        if (res.ok) { const updated = await res.json(); setLocalImages(updated.images ?? []); }
-      }
-    } finally { setUploading(false); }
-  }
-
-  const pb = PRIORITY_BADGE[priority] || PRIORITY_BADGE.medium;
-  const tb = TYPE_BADGE[type] || TYPE_BADGE.task;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-start justify-between px-6 py-5 border-b">
-          <input value={title} onChange={e => { setTitle(e.target.value); mark(); }}
-            className="text-xl font-bold text-slate-800 flex-1 focus:outline-none border-b-2 border-transparent focus:border-rose-400 pb-0.5 mr-4"
-          />
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg flex-shrink-0">
-            <X size={16} className="text-slate-500" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Type + Priority */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">Loại</label>
-              <select value={type} onChange={e => { setType(e.target.value); mark(); }}
-                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-rose-400 bg-white">
-                {TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">Ưu tiên</label>
-              <select value={priority} onChange={e => { setPriority(e.target.value); mark(); }}
-                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-rose-400 bg-white">
-                {PRIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* File hint */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">File / Function liên quan</label>
-              <button onClick={() => setFileHintCustom(m => !m)} className="text-xs text-rose-500 hover:underline">
-                {fileHintCustom ? 'Chọn từ list' : 'Nhập tay'}
-              </button>
-            </div>
-            {!fileHintCustom ? (
-              <select value={fileHint} onChange={e => { setFileHint(e.target.value); mark(); }}
-                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-rose-400 bg-white">
-                <option value="">— Không chọn —</option>
-                {FILE_HINTS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
-              </select>
-            ) : (
-              <input value={fileHint} onChange={e => { setFileHint(e.target.value); mark(); }}
-                placeholder="e.g. components/PublisherView.tsx"
-                className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-rose-400 font-mono"
-              />
-            )}
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">Mô tả lỗi / yêu cầu</label>
-            <textarea value={description} onChange={e => { setDescription(e.target.value); mark(); }}
-              rows={4} placeholder="Lỗi xảy ra ở đâu? Các bước tái hiện?"
-              className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-rose-400 resize-none"
-            />
-          </div>
-
-          {/* Goal */}
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">
-              Mục tiêu <span className="text-slate-400 normal-case font-normal">— output ra sao mới đúng</span>
-            </label>
-            <textarea value={goal} onChange={e => { setGoal(e.target.value); mark(); }}
-              rows={3} placeholder="Kết quả mong đợi: nút X redirect sang Y, không mở modal Z..."
-              className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400 resize-none"
-            />
-          </div>
-
-          {/* Screenshots */}
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">
-              Screenshots ({localImages.length})
-            </label>
-            {localImages.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {localImages.map((img, i) => (
-                  <a key={i} href={`/api/kanban/${card.id}/image/${img}`} target="_blank" rel="noreferrer"
-                    className="block w-24 h-24 rounded-xl border-2 border-slate-200 overflow-hidden hover:border-rose-400 transition">
-                    <img src={`/api/kanban/${card.id}/image/${img}`} alt="" className="w-full h-full object-cover" />
-                  </a>
-                ))}
-              </div>
-            )}
-            <div onClick={() => fileRef.current?.click()}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); uploadImages(e.dataTransfer.files); }}
-              className="border-2 border-dashed border-slate-200 rounded-xl p-5 text-center cursor-pointer hover:border-rose-400 transition">
-              {uploading ? (
-                <div className="flex items-center justify-center gap-2 text-rose-500">
-                  <Loader2 size={16} className="animate-spin" /> Đang upload...
-                </div>
-              ) : (
-                <>
-                  <Upload size={18} className="mx-auto mb-2 text-slate-400" />
-                  <p className="text-sm text-slate-400">Kéo nhiều ảnh vào đây hoặc click</p>
-                  <p className="text-xs text-slate-300 mt-1">PNG, JPG, WebP</p>
-                </>
-              )}
-            </div>
-            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
-              onChange={e => { uploadImages(e.target.files); e.target.value = ''; }} />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="border-t px-6 py-4 flex items-center justify-between bg-slate-50">
-          <p className="text-xs text-slate-400">Tạo: {new Date(card.createdAt).toLocaleDateString('vi-VN')}</p>
-          <button onClick={save} disabled={!dirty || saving}
-            className="px-5 py-2 rounded-xl font-bold text-white text-sm disabled:opacity-40 transition"
-            style={{ background: '#f43f5e' }}>
-            {saving ? 'Đang lưu...' : dirty ? 'Lưu thay đổi' : 'Đã lưu ✓'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Card ─────────────────────────────────────────────────────────────────────
-function Card({ card, onEdit, onDelete, onMove }: {
-  card: KanbanCard; onEdit: () => void; onDelete: () => void; onMove: (s: string) => void;
-}) {
-  const pb = PRIORITY_BADGE[card.priority] || PRIORITY_BADGE.medium;
-  const tb = TYPE_BADGE[card.type] || TYPE_BADGE.task;
-  const typeLabel = TYPE_OPTIONS.find(t => t.value === card.type)?.label.split(' ')[1] ?? card.type;
-  const colIdx = COLUMNS.findIndex(c => c.key === card.status);
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-3.5 hover:shadow-md transition-shadow cursor-pointer group"
-      onClick={onEdit}>
-      <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
-        <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: tb.bg, color: tb.color }}>{typeLabel}</span>
-        <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ background: pb.bg, color: pb.color }}>
-          {pb.icon} {PRIORITY_OPTIONS.find(p => p.value === card.priority)?.label.split('—')[0].split(' ').slice(1).join(' ')}
-        </span>
-      </div>
-
-      <p className="text-sm font-semibold text-slate-800 leading-snug mb-2">{card.title}</p>
-
-      {card.goal && (
-        <p className="text-xs text-purple-600 bg-purple-50 rounded-lg px-2 py-1.5 mb-2 line-clamp-2 italic">🎯 {card.goal}</p>
-      )}
-      {card.description && !card.goal && (
-        <p className="text-xs text-slate-400 line-clamp-2 mb-2">{card.description}</p>
-      )}
-
-      {card.fileHint && (
-        <p className="text-xs text-rose-500 font-mono truncate mb-2">📄 {card.fileHint.split('/').slice(-2).join('/')}</p>
-      )}
-
-      {(card.status === 'inprogress' || card.status === 'starting') && (card as any).fixLog && (
-        <div className="text-xs bg-slate-800 text-green-300 font-mono rounded-lg px-2 py-1.5 mb-2 line-clamp-3 whitespace-pre-wrap">
-          {(card as any).fixLog.slice(-300)}
-        </div>
-      )}
-      {card.status === 'starting' && !(card as any).fixLog && (
-        <p className="text-xs text-yellow-600 animate-pulse mb-2">⏳ Đang gọi Claude CLI...</p>
-      )}
-
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-1">
-          {card.images.length > 0 && (
-            <span className="text-xs text-slate-400 flex items-center gap-1"><Image size={11} /> {card.images.length}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          {colIdx > 0 && (
-            <button onClick={() => onMove(COLUMNS[colIdx - 1].key)}
-              className="text-xs px-1.5 py-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition">←</button>
-          )}
-          {colIdx < COLUMNS.length - 1 && (
-            <button onClick={() => onMove(COLUMNS[colIdx + 1].key)}
-              className="text-xs px-1.5 py-0.5 rounded hover:bg-rose-50 text-rose-400 hover:text-rose-600 font-bold transition">→</button>
-          )}
-          <button onClick={onDelete}
-            className="ml-1 p-1 rounded hover:bg-red-50 text-slate-200 hover:text-red-400 transition opacity-0 group-hover:opacity-100">
-            <Trash2 size={11} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function KanbanPage() {
   const [cards, setCards] = useState<KanbanCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editCard, setEditCard] = useState<KanbanCard | null>(null);
+  const [modalCard, setModalCard] = useState<KanbanCard | null>(null);
+  const [modalDraft, setModalDraft] = useState<Partial<KanbanCard>>({});
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [addingCol, setAddingCol] = useState<Status | null>(null);
+  const [addText, setAddText] = useState('');
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [imgDragOver, setImgDragOver] = useState(false);
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+  const [dropTargetCol, setDropTargetCol] = useState<Status | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -368,88 +71,332 @@ export default function KanbanPage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    const t = setInterval(load, 20000);
-    return () => clearInterval(t);
-  }, [load]);
+  useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
 
-  async function deleteCard(id: string) {
-    if (!confirm(`Xóa card này?`)) return;
+  const openModal = (card: KanbanCard) => { setModalCard(card); setModalDraft({ ...card }); setDirty(false); };
+  const closeModal = () => {
+    if (dirty && !confirm('Có thay đổi chưa lưu. Thoát?')) return;
+    setModalCard(null); setModalDraft({}); setDirty(false);
+  };
+
+  const saveModal = async () => {
+    if (!modalCard) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/kanban/${modalCard.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(modalDraft),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setCards(prev => prev.map(c => c.id === updated.id ? updated : c));
+        setDirty(false); setModalCard(null); setModalDraft({});
+      }
+    } finally { setSaving(false); }
+  };
+
+  const deleteCard = async (id: string) => {
+    if (!confirm('Xóa card này?')) return;
     await fetch(`/api/kanban/${id}`, { method: 'DELETE' });
     setCards(prev => prev.filter(c => c.id !== id));
-    setEditCard(null);
-  }
+    closeModal();
+  };
 
-  async function moveCard(id: string, status: string) {
+  const moveCardTo = async (id: string, newStatus: Status) => {
+    const card = cards.find(c => c.id === id);
+    if (!card || card.status === newStatus) return;
+    setCards(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
     const res = await fetch(`/api/kanban/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
     });
-    if (res.ok) { const updated = await res.json(); setCards(prev => prev.map(c => c.id === updated.id ? updated : c)); }
-  }
+    if (res.ok) {
+      const updated = await res.json();
+      setCards(prev => prev.map(c => c.id === updated.id ? updated : c));
+    } else {
+      setCards(prev => prev.map(c => c.id === id ? { ...c, status: card.status } : c));
+    }
+  };
 
-  const byCol = (key: string) => cards.filter(c => c.status === key);
-  const pending = cards.filter(c => c.status !== 'approved').length;
+  const handleDragStart = (e: React.DragEvent, cardId: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', cardId);
+    setDraggingCardId(cardId);
+  };
+  const handleDragEnd = () => { setDraggingCardId(null); setDropTargetCol(null); };
+  const handleColumnDragOver = (e: React.DragEvent, colId: Status) => {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropTargetCol(colId);
+  };
+  const handleColumnDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDropTargetCol(null);
+  };
+  const handleColumnDrop = (e: React.DragEvent, colId: Status) => {
+    e.preventDefault();
+    const cardId = e.dataTransfer.getData('text/plain');
+    if (cardId) moveCardTo(cardId, colId);
+    setDraggingCardId(null); setDropTargetCol(null);
+  };
+
+  const quickAdd = async (status: Status) => {
+    const title = addText.trim();
+    if (!title) { setAddingCol(null); return; }
+    const res = await fetch('/api/kanban', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, status }),
+    });
+    if (res.ok) { const card = await res.json(); setCards(prev => [card, ...prev]); }
+    setAddText(''); setAddingCol(null);
+  };
+
+  const uploadImage = async (cardId: string, files: FileList | File[]) => {
+    setUploadingFor(cardId);
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData(); fd.append('file', file);
+        const res = await fetch(`/api/kanban/${cardId}/image`, { method: 'POST', body: fd });
+        if (res.ok) {
+          const updated = await res.json();
+          setCards(prev => prev.map(c => c.id === updated.id ? updated : c));
+          if (modalCard?.id === cardId) setModalDraft(prev => ({ ...prev, images: updated.images }));
+        }
+      }
+    } finally { setUploadingFor(null); }
+  };
+
+  const colCards = (status: Status) => cards.filter(c => c.status === status);
+  const fmtDur = (ms: number) => ms < 60000 ? `${Math.round(ms/1000)}s` : `${Math.round(ms/60000)}m`;
 
   return (
-    <div className="min-h-screen" style={{ background: '#fdf2f4' }}>
-      {editCard && (
-        <CardModal
-          card={editCard}
-          onClose={() => { setEditCard(null); load(); }}
-          onSaved={updated => { setCards(prev => prev.map(c => c.id === updated.id ? updated : c)); }}
-        />
-      )}
-
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg-2)', minHeight: '100vh' }}>
       {/* Header */}
-      <div className="px-6 py-4 flex items-center justify-between" style={{ background: '#f43f5e' }}>
-        <div className="flex items-center gap-3">
-          <Link href="/" className="text-xs text-rose-200 hover:text-white transition-colors">← Studio</Link>
-          <div className="w-px h-4 bg-rose-300/50" />
-          <h1 className="text-lg font-bold text-white">Kanban — Task Tracker</h1>
-          <span className="text-sm text-rose-100">{pending} chưa duyệt</span>
+      <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-1)' }}>
+        <div>
+          <h1 className="text-lg font-bold" style={{ color: 'var(--text-1)' }}>Kanban Board</h1>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Kéo card vào 🤖 Auto Fix để Claude tự sửa</p>
         </div>
         <a href="/api/kanban/claude-brief" target="_blank" rel="noreferrer"
-          className="text-xs text-rose-100 hover:text-white border border-rose-300/50 px-3 py-1.5 rounded-lg hover:bg-rose-600/30 transition">
+          className="text-xs px-3 py-1.5 rounded-md border"
+          style={{ borderColor: 'var(--border)', color: 'var(--text-2)', backgroundColor: 'var(--bg-2)' }}>
           Claude Brief ↗
         </a>
       </div>
 
       {/* Board */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20 text-slate-400">
-          <Loader2 size={20} className="animate-spin mr-2" /> Đang tải...
-        </div>
-      ) : (
-        <div className="p-4 flex gap-3 items-start overflow-x-auto min-h-[calc(100vh-60px)]">
-          {COLUMNS.map(col => {
-            const colCards = byCol(col.key);
-            return (
-              <div key={col.key} className="flex-shrink-0 w-72 rounded-xl overflow-hidden" style={{ background: col.bg }}>
-                <div className="flex items-center justify-between px-3 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: col.dotColor }} />
-                    <span className="text-sm font-bold" style={{ color: col.color }}>{col.label}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/60 font-bold" style={{ color: col.color }}>
-                      {colCards.length}
-                    </span>
+      <div className="flex-1 overflow-x-auto p-4">
+        {loading ? (
+          <div className="flex items-center justify-center h-64" style={{ color: 'var(--text-3)' }}>Loading...</div>
+        ) : (
+          <div className="flex gap-3 min-w-max pb-4">
+            {COLUMNS.map(col => {
+              const items = colCards(col.id);
+              const isDrop = dropTargetCol === col.id && draggingCardId;
+              return (
+                <div key={col.id}
+                  className="flex flex-col rounded-xl border transition-all duration-150"
+                  style={{
+                    width: 260,
+                    backgroundColor: isDrop ? 'var(--bg-2)' : 'var(--bg-1)',
+                    borderColor: isDrop ? col.color : 'var(--border)',
+                    boxShadow: isDrop ? `0 0 0 1px ${col.color}40` : 'none',
+                  }}
+                  onDragOver={e => handleColumnDragOver(e, col.id)}
+                  onDragLeave={handleColumnDragLeave}
+                  onDrop={e => handleColumnDrop(e, col.id)}
+                >
+                  <div className="flex items-center gap-2 px-3 py-2.5 border-b" style={{ borderColor: 'var(--border)' }}>
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: col.color }} />
+                    <span className="text-xs font-semibold flex-1" style={{ color: 'var(--text-1)' }}>{col.label}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono" style={{ backgroundColor: 'var(--bg-2)', color: 'var(--text-3)' }}>{items.length}</span>
                   </div>
+
+                  <div className="flex-1 overflow-y-auto p-2 space-y-2" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+                    {items.map(card => (
+                      <div key={card.id} draggable
+                        onDragStart={e => handleDragStart(e, card.id)} onDragEnd={handleDragEnd}
+                        className="rounded-lg border cursor-grab hover:shadow-md active:cursor-grabbing"
+                        style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', opacity: draggingCardId === card.id ? 0.4 : 1 }}
+                        onClick={() => openModal(card)}
+                      >
+                        <div className="p-2.5">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase" style={{ backgroundColor: TYPE_COLORS[card.type]+'22', color: TYPE_COLORS[card.type] }}>{card.type}</span>
+                            <span className="text-[10px]">{PRIORITY_EMOJI[card.priority]}</span>
+                          </div>
+                          <p className="text-xs font-medium leading-snug mb-1" style={{ color: 'var(--text-1)' }}>{card.title}</p>
+                          {card.fileHint && <p className="text-[10px] font-mono truncate mb-1" style={{ color: 'var(--text-3)' }}>{card.fileHint}</p>}
+                          {card.images?.length > 0 && <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>📎 {card.images.length} ảnh</p>}
+                          {card.fixResult && (
+                            <div className="mt-1.5 pt-1.5 border-t flex items-center gap-1.5 flex-wrap" style={{ borderColor: 'var(--border)' }}>
+                              {card.fixResult.branch && <span className="text-[9px] px-1 py-0.5 rounded font-mono" style={{ backgroundColor: '#10b98122', color: '#10b981' }}>{card.fixResult.branch}</span>}
+                              {card.fixResult.changedFiles?.length > 0 && <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>{card.fixResult.changedFiles.length} file</span>}
+                              {card.fixResult.costUsd != null && <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>${card.fixResult.costUsd.toFixed(3)}</span>}
+                              {card.fixResult.durationMs != null && <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>{fmtDur(card.fixResult.durationMs)}</span>}
+                            </div>
+                          )}
+                          {card.status === 'fixing' && (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <div className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#ef4444', borderTopColor: 'transparent' }} />
+                              <span className="text-[10px]" style={{ color: '#ef4444' }}>Claude đang fix...</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {(col.id === 'todo' || col.id === 'auto_fix') && (
+                    <div className="p-2 border-t" style={{ borderColor: 'var(--border)' }}>
+                      {addingCol === col.id ? (
+                        <div className="flex flex-col gap-2">
+                          <textarea autoFocus value={addText} onChange={e => setAddText(e.target.value)}
+                            onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); quickAdd(col.id); } if (e.key==='Escape') { setAddingCol(null); setAddText(''); } }}
+                            placeholder="Tiêu đề... (Enter để lưu)" rows={2}
+                            className="w-full text-xs rounded-md p-2 resize-none outline-none border"
+                            style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} />
+                          <div className="flex gap-1.5">
+                            <button onClick={() => quickAdd(col.id)} className="flex-1 text-xs py-1 rounded-md font-medium" style={{ backgroundColor: col.color, color: '#fff' }}>Thêm</button>
+                            <button onClick={() => { setAddingCol(null); setAddText(''); }} className="px-2 text-xs py-1 rounded-md" style={{ backgroundColor: 'var(--bg-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>Hủy</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setAddingCol(col.id)} className="w-full text-xs py-1.5 rounded-md text-left px-2" style={{ color: 'var(--text-3)' }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-2)')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                          + Thêm card
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="px-2 pb-2 space-y-2">
-                  {colCards.map(card => (
-                    <Card key={card.id} card={card}
-                      onEdit={() => setEditCard(card)}
-                      onDelete={() => deleteCard(card.id)}
-                      onMove={status => moveCard(card.id, status)}
-                    />
-                  ))}
-                  <QuickAdd colKey={col.key} onAdded={load} />
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      {modalCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+          onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
+          <div className="w-full max-w-lg rounded-xl border overflow-hidden flex flex-col" style={{ backgroundColor: 'var(--bg-1)', borderColor: 'var(--border)', maxHeight: '90vh' }}>
+            <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Edit Card</h2>
+                {modalDraft.status === 'fixing' && <span className="text-[10px] px-2 py-0.5 rounded-full animate-pulse" style={{ backgroundColor: '#ef444422', color: '#ef4444' }}>⚙️ Đang fix</span>}
+              </div>
+              <button onClick={closeModal} className="text-lg hover:opacity-70" style={{ color: 'var(--text-3)' }}>✕</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Tiêu đề</label>
+                <input value={modalDraft.title || ''} onChange={e => { setModalDraft(p => ({ ...p, title: e.target.value })); setDirty(true); }}
+                  className="w-full text-sm rounded-md px-3 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Loại</label>
+                  <select value={modalDraft.type || 'task'} onChange={e => { setModalDraft(p => ({ ...p, type: e.target.value as CardType })); setDirty(true); }}
+                    className="w-full text-xs rounded-md px-2 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}>
+                    <option value="bug">Bug</option><option value="task">Task</option><option value="feature">Feature</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Ưu tiên</label>
+                  <select value={modalDraft.priority || 'medium'} onChange={e => { setModalDraft(p => ({ ...p, priority: e.target.value as Priority })); setDirty(true); }}
+                    className="w-full text-xs rounded-md px-2 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}>
+                    <option value="critical">🔴 Critical</option><option value="high">🟠 High</option><option value="medium">🟡 Medium</option><option value="low">🟢 Low</option>
+                  </select>
                 </div>
               </div>
-            );
-          })}
+
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>File / Function <span className="font-normal" style={{ color: 'var(--text-3)' }}>(gợi ý cho Claude)</span></label>
+                <input value={modalDraft.fileHint || ''} onChange={e => { setModalDraft(p => ({ ...p, fileHint: e.target.value })); setDirty(true); }}
+                  className="w-full text-xs font-mono rounded-md px-3 py-2 border outline-none" style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                  placeholder="src/app/page.tsx hoặc function handleSubmit" />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Log lỗi / Chi tiết <span className="font-normal" style={{ color: 'var(--text-3)' }}>(paste log, stacktrace...)</span></label>
+                <textarea value={modalDraft.errorLog || ''} onChange={e => { setModalDraft(p => ({ ...p, errorLog: e.target.value })); setDirty(true); }}
+                  rows={5} className="w-full text-xs font-mono rounded-md px-3 py-2 border outline-none resize-none"
+                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                  placeholder="Paste log, stacktrace, hoặc mô tả chi tiết..." />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Mô tả thêm</label>
+                <textarea value={modalDraft.description || ''} onChange={e => { setModalDraft(p => ({ ...p, description: e.target.value })); setDirty(true); }}
+                  rows={3} className="w-full text-xs rounded-md px-3 py-2 border outline-none resize-none"
+                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} placeholder="Mô tả vấn đề / yêu cầu..." />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Output mong đợi</label>
+                <textarea value={modalDraft.goal || ''} onChange={e => { setModalDraft(p => ({ ...p, goal: e.target.value })); setDirty(true); }}
+                  rows={2} className="w-full text-xs rounded-md px-3 py-2 border outline-none resize-none"
+                  style={{ backgroundColor: 'var(--bg-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }} placeholder="Kết quả mong muốn..." />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-2)' }}>Screenshots</label>
+                <div className="border-2 border-dashed rounded-lg p-3 text-center cursor-pointer"
+                  style={{ borderColor: imgDragOver ? '#f59e0b' : 'var(--border)', backgroundColor: imgDragOver ? 'rgba(245,158,11,0.05)' : 'var(--bg-2)' }}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); setImgDragOver(true); }}
+                  onDragLeave={() => setImgDragOver(false)}
+                  onDrop={e => { e.preventDefault(); e.stopPropagation(); setImgDragOver(false); if (e.dataTransfer.files.length) uploadImage(modalCard.id, e.dataTransfer.files); }}
+                  onClick={() => fileRef.current?.click()}>
+                  <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => e.target.files && uploadImage(modalCard.id, e.target.files)} />
+                  <p className="text-xs" style={{ color: 'var(--text-3)' }}>{uploadingFor === modalCard.id ? 'Uploading...' : 'Drag & drop hoặc click'}</p>
+                </div>
+                {(modalDraft.images || []).length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {(modalDraft.images || []).map(img => (
+                      <img key={img} src={`/api/kanban/${modalCard.id}/image/${img}`} alt="" className="rounded-md object-cover w-full h-20" style={{ border: '1px solid var(--border)' }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {modalDraft.fixResult && (
+                <div className="rounded-lg border p-3" style={{ borderColor: '#10b98144', backgroundColor: '#10b98108' }}>
+                  <label className="text-xs font-semibold mb-2 block" style={{ color: '#10b981' }}>🤖 Kết quả Auto Fix</label>
+                  {modalDraft.fixResult.branch && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded" style={{ backgroundColor: '#10b98122', color: '#10b981' }}>{modalDraft.fixResult.branch}</span>
+                      {modalDraft.fixResult.costUsd != null && <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>Cost: ${modalDraft.fixResult.costUsd.toFixed(3)}</span>}
+                      {modalDraft.fixResult.durationMs != null && <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDur(modalDraft.fixResult.durationMs)}</span>}
+                    </div>
+                  )}
+                  {modalDraft.fixResult.changedFiles?.length > 0 && (
+                    <div className="mb-2">
+                      <span className="text-[10px] font-medium" style={{ color: 'var(--text-2)' }}>Files:</span>
+                      {modalDraft.fixResult.changedFiles.map((f: string) => <p key={f} className="text-[10px] font-mono" style={{ color: 'var(--text-3)' }}>• {f}</p>)}
+                    </div>
+                  )}
+                  {modalDraft.fixResult.summary && (
+                    <div className="text-xs whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--text-2)' }}>
+                      {modalDraft.fixResult.summary.slice(0, 1000)}{modalDraft.fixResult.summary.length > 1000 ? '...' : ''}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
+              <button onClick={() => deleteCard(modalCard.id)} className="text-xs px-3 py-1.5 rounded-md" style={{ color: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)' }}>Xóa</button>
+              <div className="flex gap-2">
+                <button onClick={closeModal} className="text-xs px-3 py-1.5 rounded-md border" style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}>Hủy</button>
+                <button onClick={saveModal} disabled={saving} className="text-xs px-4 py-1.5 rounded-md font-medium disabled:opacity-60"
+                  style={{ backgroundColor: dirty ? '#f59e0b' : '#374151', color: '#fff' }}>
+                  {saving ? 'Saving...' : dirty ? 'Lưu thay đổi' : 'Đã lưu ✓'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

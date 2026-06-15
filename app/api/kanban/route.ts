@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
-import { v4 as uuid } from 'uuid';
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'kanban');
-
 async function ensureDir() { await fs.mkdir(DATA_DIR, { recursive: true }); }
 
 export async function GET() {
@@ -24,7 +22,7 @@ export async function GET() {
 export async function POST(req: Request) {
   await ensureDir();
   const body = await req.json();
-  const id = uuid();
+  const id = crypto.randomUUID();
   const card = {
     id, title: body.title || 'Untitled',
     description: body.description || '',
@@ -33,6 +31,8 @@ export async function POST(req: Request) {
     priority: body.priority || 'medium',
     status: body.status || 'todo',
     fileHint: body.fileHint || '',
+    errorLog: body.errorLog || '',
+    fixResult: null,
     images: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
