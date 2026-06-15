@@ -331,6 +331,18 @@ export function PublisherView({ fbSuccess, fbError, brandId }: { fbSuccess?: boo
               </div>
             )}
           </div>
+
+          {/* ── Threads (sắp kết nối) ── */}
+          <div className="border-t border-gray-800 pt-4">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/50 border border-gray-700 border-dashed">
+              <span className="text-xl">🧵</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-medium">Threads</p>
+                <p className="text-[11px] text-gray-500">Threads (Meta) — đăng qua Threads API. Kết nối bằng token Meta giống FB/IG.</p>
+              </div>
+              <span className="text-[10px] px-2 py-1 rounded-full bg-amber-900/30 text-amber-400 border border-amber-800/40 flex-shrink-0">Sắp kết nối</span>
+            </div>
+          </div>
         </div>
       )}
 
