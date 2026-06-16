@@ -18,7 +18,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://loveintea.wealthps
 function toAbsoluteUrl(url: string): string {
   const abs = url.startsWith('http') ? url : `${SITE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   if (abs.includes('/api/images/') && !/[?&]w=/.test(abs)) {
-    return `${abs}${abs.includes('?') ? '&' : '?'}w=4096&q=92`;
+    return `${abs}${abs.includes('?') ? '&' : '?'}w=4096&q=95`;
   }
   return abs;
 }

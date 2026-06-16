@@ -51,10 +51,13 @@ export async function GET(
   const q = qParam ? Math.min(100, Math.max(40, parseInt(qParam, 10) || 0)) : 85;
   if (!isVideo && w) {
     try {
-      const out = await sharp(buffer)
-        .resize({ width: w, withoutEnlargement: true })
-        .jpeg({ quality: q })
-        .toBuffer();
+      const resized = sharp(buffer).resize({ width: w, withoutEnlargement: true });
+      let out = await resized.jpeg({ quality: q }).toBuffer();
+      // Guard: ảnh phức tạp ở quality cao có thể vượt giới hạn FB (~4MB) → hạ dần quality.
+      const MAX = 3_900_000;
+      for (let qq = q - 6; out.length > MAX && qq >= 60; qq -= 8) {
+        out = await sharp(buffer).resize({ width: w, withoutEnlargement: true }).jpeg({ quality: qq }).toBuffer();
+      }
       return new NextResponse(new Uint8Array(out), {
         headers: {
           'Content-Type': 'image/jpeg',
