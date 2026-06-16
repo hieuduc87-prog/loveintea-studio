@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LoveinTea Studio — Bộ Test Tính Năng</title>
+<style>
+  :root{
+    --bg:#0b0f0d; --panel:#11181400; --card:#121a16; --card2:#0f1512;
+    --line:#1e2a23; --brand:#1A5632; --brand2:#2e7d49; --brand3:#5BBC7E;
+    --gold:#F4A020; --red:#E04854; --txt:#e8efe9; --mut:#8aa195; --mut2:#5d6f66;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0b0f0d,#0e1411);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.55}
+  a{color:var(--brand3)}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px 18px 80px}
+  header.top{position:sticky;top:0;z-index:20;background:rgba(11,15,13,.92);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);margin:-24px -18px 18px;padding:14px 18px}
+  .title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .title h1{font-size:18px;margin:0;font-weight:700}
+  .title .pill{font-size:11px;color:var(--brand3);border:1px solid var(--brand);border-radius:999px;padding:2px 9px}
+  .bar{height:8px;background:#0a0f0c;border:1px solid var(--line);border-radius:999px;overflow:hidden;margin-top:10px}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),var(--brand3));width:0;transition:width .3s}
+  .meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--mut)}
+  .meta b{color:var(--txt)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .controls button{background:var(--card);border:1px solid var(--line);color:var(--mut);font-size:12px;
+    padding:6px 11px;border-radius:8px;cursor:pointer;transition:.15s}
+  .controls button:hover{color:var(--txt);border-color:var(--brand2)}
+  .controls button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .intro{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:20px}
+  .intro p{margin:6px 0;font-size:13.5px;color:var(--mut)}
+  .intro b{color:var(--txt)}
+  .grp{margin:26px 0 10px;display:flex;align-items:center;gap:10px}
+  .grp h2{font-size:14px;margin:0;letter-spacing:.5px;text-transform:uppercase;color:var(--brand3)}
+  .grp .gline{flex:1;height:1px;background:var(--line)}
+  .grp .gcount{font-size:11px;color:var(--mut2)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0;margin-bottom:12px;overflow:hidden;transition:.15s}
+  .card.done{border-color:var(--brand);background:linear-gradient(180deg,#0f1713,#0e1512)}
+  .card.fail{border-color:#5b2a2e}
+  .chead{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;cursor:pointer}
+  .num{flex-shrink:0;width:30px;height:30px;border-radius:9px;background:#0c120f;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--brand3)}
+  .card.done .num{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .chead .ic{font-size:20px;flex-shrink:0;margin-top:-1px}
+  .ctitle{flex:1;min-width:0}
+  .ctitle h3{margin:0;font-size:15px;font-weight:650}
+  .ctitle .what{margin:3px 0 0;font-size:13px;color:var(--mut)}
+  .badge{font-size:10px;padding:2px 7px;border-radius:999px;border:1px solid;white-space:nowrap}
+  .badge.new{color:var(--gold);border-color:#5a4a1e;background:#1a150a}
+  .badge.fix{color:var(--brand3);border-color:#234a32;background:#0d1611}
+  .chev{flex-shrink:0;color:var(--mut2);transition:.2s;font-size:12px;margin-top:4px}
+  .card.open .chev{transform:rotate(90deg)}
+  .body{display:none;padding:0 16px 16px 58px}
+  .card.open .body{display:block}
+  .sec{margin-top:12px}
+  .sec .lab{font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--mut2);margin-bottom:5px}
+  ol.steps{margin:0;padding-left:18px}
+  ol.steps li{font-size:13px;margin:4px 0;color:var(--txt)}
+  .expect{font-size:13px;color:var(--brand3);background:#0c1611;border:1px solid #1b3326;border-radius:9px;padding:8px 11px}
+  .row{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .chk{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:13px;font-weight:600}
+  .chk input{width:18px;height:18px;accent-color:var(--brand2)}
+  .failbtn{font-size:12px;border:1px solid var(--line);background:var(--card2);color:var(--mut);
+    border-radius:8px;padding:5px 10px;cursor:pointer}
+  .failbtn.on{border-color:var(--red);color:var(--red);background:#1a0f10}
+  .note{flex:1;min-width:180px;background:#0a0f0c;border:1px solid var(--line);border-radius:8px;
+    color:var(--txt);font-size:12.5px;padding:7px 10px;font-family:inherit}
+  .footnote{margin-top:30px;font-size:12px;color:var(--mut2);text-align:center}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;
+    padding:9px 16px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:.3s;z-index:50}
+  .toast.show{opacity:1}
+  code{background:#0a0f0c;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px;color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="title">
+      <h1>🍵 LoveinTea Studio — Bộ Test Tính Năng</h1>
+      <span class="pill">Closed-Loop Content Engine</span>
+    </div>
+    <div class="bar"><i id="progbar"></i></div>
+    <div class="meta">
+      <span><b id="doneN">0</b>/<b id="totalN">0</b> đã test</span>
+      <span>✅ Pass: <b id="passN" style="color:var(--brand3)">0</b></span>
+      <span>❌ Fail: <b id="failN" style="color:var(--red)">0</b></span>
+      <span id="pct">0%</span>
+    </div>
+    <div class="controls">
+      <button id="f-all" class="on" onclick="setFilter('all')">Tất cả</button>
+      <button id="f-todo" onclick="setFilter('todo')">Chưa test</button>
+      <button id="f-fail" onclick="setFilter('fail')">Đang lỗi</button>
+      <button onclick="expandAll(true)">Mở hết</button>
+      <button onclick="expandAll(false)">Thu hết</button>
+      <button onclick="copySummary()">📋 Copy báo cáo</button>
+      <button onclick="resetAll()" style="color:var(--red)">↺ Reset</button>
+    </div>
+  </header>
+
+  <div class="intro">
+    <p><b>Mục đích:</b> đi tuần tự từng tính năng theo đúng <b>quy trình vận hành</b> (Chiến lược → Chuẩn bị → Lên kế hoạch → Sản xuất → Đăng → Đo lường → Học). Mỗi mục có: <b>tính năng làm gì</b>, <b>các bước thao tác</b>, và <b>kết quả mong đợi</b>.</p>
+    <p><b>Cách dùng:</b> bấm vào thẻ để mở chi tiết → làm theo bước trên tool thật (<a href="https://loveintea.wealthpsy.com" target="_blank">loveintea.wealthpsy.com</a>) → tick <b>Pass</b> nếu đúng, bấm <b>Lỗi</b> + ghi chú nếu sai. Tiến độ tự lưu trên trình duyệt này.</p>
+    <p style="color:var(--gold)"><b>Lưu ý môi trường hiện tại:</b> hệ thống tạm chỉ admin dùng; <b>Instagram chưa kết nối</b> nên bài target IG sẽ "bỏ qua IG" (không tính lỗi) — chỉ test đăng <b>Facebook</b>. Video Studio chưa bắt buộc test.</p>
+  </div>
+
+  <div id="list"></div>
+  <div class="footnote">LoveinTea Studio · bộ test cập nhật theo phiên bản tool · mở lại link này để tiếp tục (tiến độ đã lưu)</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const FEATURES = [
+  // ───── BẮT ĐẦU ─────
+  { g:"Bắt đầu", ic:"🔐", t:"Đăng nhập & phân quyền",
+    what:"Đăng nhập bằng Google; phân vai trò root_admin/admin/viewer; user thường chỉ thấy brand được gán.",
+    steps:["Mở loveintea.wealthpsy.com → bấm Đăng nhập với Google.","Đăng nhập đúng email đã được cấp quyền (vd hieuduc87@gmail.com).","Kiểm tra vào được Dashboard; thử mở 1 tab bất kỳ."],
+    expect:"Đăng nhập thành công, vào thẳng Dashboard. Email lạ chưa duyệt sẽ bị chặn/chờ duyệt." },
+  { g:"Bắt đầu", ic:"🏢", t:"Chuyển/Tạo Brand",
+    what:"Đa thương hiệu — mỗi brand có dữ liệu riêng (DNA, sản phẩm, kế hoạch, kênh, số liệu).",
+    steps:["Bấm vùng brand ở góc trên sidebar.","Chọn brand khác (nếu có) → xem dữ liệu đổi theo.","Vào tab Brands để tạo brand mới (tên + mã)."],
+    expect:"Đổi brand thì toàn bộ tab đổi dữ liệu theo đúng brand đang chọn." },
+
+  // ───── BRAIN ─────
+  { g:"Brain", ic:"🌿", t:"Brand DNA & Chiến lược",
+    what:"Bộ não thương hiệu: tagline, archetype, voice, đối tượng/insight/hành vi, brand rules, compliance. Mọi nội dung AI đều bám DNA này.",
+    steps:["Vào Brand DNA → tab '🌿 DNA & Chiến lược'.","Card 'Đối tượng & Chiến lược': bấm '✨ Tổng hợp từ tài liệu đã có' → AI điền 4 ô từ Playbook/segments.","Hoặc bấm '📄 Nhập từ file khách gửi' → tải xlsx/docx/txt → AI điền.","Xem lại → Lưu."],
+    expect:"4 ô (khách hàng/insight/hành vi/brand rules) được điền hợp lý, đúng nội dung Playbook; Lưu thành công." },
+  { g:"Brain", ic:"🧠", t:"Knowledge Hub — thêm nhanh tri thức",
+    what:"Nạp nhanh tri thức chuyên gia (expert tip / real case / rule / insight). Áp dụng NGAY vào mọi prompt tạo nội dung (loop học nhanh).",
+    steps:["Brand DNA → tab '🧠 Knowledge' → panel '⚡ Thêm nhanh tri thức'.","Chọn loại (expert_tip…) → gõ 1 mẹo thật → Lưu.","Sang Tạo Content gen thử 1 bài xem có phản ánh tri thức vừa thêm."],
+    expect:"Tri thức lưu vào danh sách; bài AI tạo sau đó có dấu vết của tri thức vừa nạp." },
+  { g:"Brain", ic:"⚙️", t:"Rules Engine",
+    what:"Luật nội dung riêng của brand (active rules) — ràng buộc mọi bài viết.",
+    steps:["Brand DNA → tab '⚙️ Rules'.","Thêm 1 rule (vd: luôn nhắc 'zero-calorie').","Gen 1 bài và kiểm tra rule được tuân thủ."],
+    expect:"Rule lưu active và được đưa vào prompt khi tạo nội dung." },
+  { g:"Brain", ic:"📦", t:"Products — kho ảnh & video per-sản phẩm",
+    what:"Mỗi sản phẩm là 1 media hub: gallery ảnh + video riêng. Upload tới 200MB (chia nhỏ tự động qua Cloudflare).",
+    steps:["Vào Products → mở 1 sản phẩm → toggle '📦 Ảnh & Video'.","Upload 1 ảnh và 1 video (thử file lớn ~100-200MB).","Mở lightbox 1 ảnh → đổi 'type' (packshot/macro/lifestyle…) → xóa thử 1 ảnh."],
+    expect:"Ảnh + video lên đúng sản phẩm; file lớn không lỗi; gắn type/xóa hoạt động." },
+  { g:"Brain", ic:"📋", t:"Product Brief & Knowledge",
+    what:"Brief shot-list (các góc ảnh cần có + số lượng tối thiểu, coverage tự đếm) và Knowledge template (12 trường) điền từ file khách hoặc tổng hợp.",
+    steps:["Products → mở sản phẩm → toggle '📋 Brief & Knowledge'.","Xem coverage shot-list; bấm 'Gửi creative' xuất brief các góc còn thiếu.","Phần Knowledge: tải file khách (xlsx/csv/txt) → AI fill các trường rỗng; hoặc '✨ Tổng hợp'."],
+    expect:"Coverage tính đúng theo type ảnh; brief xuất ra .txt; knowledge điền đúng, không đè ô đã sửa tay." },
+  { g:"Brain", ic:"🎨", t:"Content Templates — tạo & phân tích",
+    what:"Kho template tham chiếu. Hỗ trợ 1 ảnh / collection nhiều ảnh (kéo sắp thứ tự) / video. AI Analyze đọc cấu trúc + rút khung sườn tái dùng.",
+    steps:["Vào Content Templates → '+ Tạo template' → chọn loại (1 ảnh / collection / video).","Upload ảnh (hoặc dùng 'Ảnh có sẵn' kéo từ Library); với collection kéo để sắp thứ tự.","Mở template → bấm '🤖 AI Analyze' → xem 'Cấu trúc' + 'Từng ảnh/step' (role hook/benefit/product…)."],
+    expect:"Template lưu đúng số ảnh; thumbnail collection hiện nhiều ảnh; AI Analyze ra cấu trúc + mô tả từng slide." },
+  { g:"Brain", ic:"✨", t:"Tạo post từ Template (1..N ảnh)", badge:"new",
+    what:"BẢN CHẤT: template mấy ảnh thì sinh bấy nhiêu. 1 ảnh → 1 prompt → 1 ảnh → 1 post. 5 ảnh → 5 prompt → 5 ảnh theo thứ tự → 1 post carousel. Tự match sản phẩm + giữ bố cục/style template.",
+    steps:["Mở 1 template → kéo xuống mục '🎬 Tạo post từ template (N ảnh)'.","Chọn 1 sản phẩm → bấm '✨ Tạo N ảnh → 1 post'.","Chờ sinh ảnh (mỗi ảnh ~10-20s) → xem dải ảnh preview.","Sang Review & Queue kiểm tra post mới (draft) gồm đủ N ảnh + caption."],
+    expect:"Số ảnh sinh ra = số ảnh template, đúng thứ tự, có sản phẩm đã chọn; tạo 1 post carousel draft + caption tiếng Anh bám cấu trúc template." },
+
+  // ───── PLAN ─────
+  { g:"Plan", ic:"🗓️", t:"Plan & Lịch — kế hoạch + lịch đăng",
+    what:"Gộp Kế hoạch + Lịch. Import plan .xlsx, xem dạng Lịch/Bảng, cảnh báo lệch (drift), Run-all/Run-step để AI sinh bài, duyệt, chèn bài, khóa bài đã đăng.",
+    steps:["Vào Plan & Lịch → Import 1 file .xlsx (cột đầu có 'Date' hoặc 'Ngày').","Bật template rotate (tùy) → 'Run all' hoặc Run từng dòng → AI sinh caption+ảnh.","Tick 'Duyệt' từng bài hoặc 'Duyệt tất cả'.","Bấm 1 ngày trống trên Lịch để chèn draft; kéo-thả 1 draft sang ngày khác.","Thử kéo 1 bài đã 'published' (phải bị khóa 🔒)."],
+    expect:"Import xlsx không lỗi header; Run sinh bài đúng; duyệt/chèn/kéo hoạt động; bài đã đăng không cho đổi lịch." },
+
+  // ───── CREATE ─────
+  { g:"Create", ic:"🧪", t:"Tạo Content (CreateLab)", badge:"fix",
+    what:"Tạo bài nhanh: AI tự suy giọng/đối tượng/USP từ DNA. Mặc định Tiếng Anh (brand bán US) + chọn ngắn/dài + hook mạnh. Tạo ảnh bám sản phẩm + template + ảnh ref.",
+    steps:["Vào Tạo Content → (tùy) chọn sản phẩm + template.","Gõ ý chính/hook → để ngôn ngữ '🇬🇧 English' + độ dài → '✨ Tạo nhanh'.","Xem 3 biến thể; ô ảnh: dán link ảnh ref HOẶC để trống → '🖼 Tạo ảnh'.","Đặt giờ → '📅 Thêm vào lịch'."],
+    expect:"Caption ra TIẾNG ANH (không cần gõ 'write in english'), mở đầu có hook; ảnh tạo ra LIÊN QUAN tới sản phẩm/template/ref; thêm vào lịch OK." },
+  { g:"Create", ic:"🎬", t:"Video Studio (chưa bắt buộc)",
+    what:"Dựng video ngắn 9:16: storyboard AI, clip per-product, nhạc nền (mp3/bóc từ video), lồng tiếng TTS, chọn ngôn ngữ vi/en, render overlay.",
+    steps:["Vào Video Studio → chọn mục đích + sản phẩm + thời lượng.","Chọn ngôn ngữ (🇻🇳/🇬🇧), bật lồng tiếng → nhập ghi chú.","Tạo storyboard → Render → xem preview."],
+    expect:"Text/voiceover ra ĐÚNG ngôn ngữ đã chọn; render ra video 9:16 có overlay + tiếng." },
+  { g:"Create", ic:"✍️", t:"Blog Factory",
+    what:"Sinh bài blog dài chuẩn SEO từ chủ đề + brand DNA.",
+    steps:["Vào Blog Factory → nhập chủ đề/keyword → tạo.","Xem outline + nội dung."],
+    expect:"Ra bài blog có cấu trúc, bám brand." },
+
+  // ───── PUBLISH ─────
+  { g:"Publish", ic:"✅", t:"Review & Queue — duyệt & đăng", badge:"fix",
+    what:"Hàng đợi mọi bài (Draft/Scheduled/Published/Failed). Đăng ngay (Post Now) hoặc hẹn giờ, chọn FB/IG, hỗ trợ carousel nhiều ảnh.",
+    steps:["Vào Review & Queue → mở 1 bài có đủ caption + ảnh.","Bỏ chọn Instagram (vì IG chưa nối) → để Facebook.","Để trống giờ → 'Post Now' (đăng ngay) HOẶC đặt giờ để hẹn.","Kiểm tra bài lên trang Facebook 'Loveintea Offical', ảnh NÉT."],
+    expect:"Đăng FB thành công, ảnh nét (~3MB, không vỡ/không lỗi 'Invalid parameter'); IG được 'bỏ qua' chứ KHÔNG làm cả bài failed; bài rỗng báo lỗi rõ." },
+  { g:"Publish", ic:"📡", t:"Channels — kết nối kênh",
+    what:"Kết nối Facebook (OAuth) hoặc dán System User token; quản lý nhiều Page; Threads (sắp kết nối).",
+    steps:["Vào Channels → tab Setup.","Kiểm tra Facebook đã 'Connected' (Page Loveintea Offical).","Thử mục '🔧 Nhập token thủ công' (dán user token → liệt kê pages).","Xem mục Threads hiển thị nhãn 'Sắp kết nối'."],
+    expect:"FB hiện đã kết nối; nhập token thủ công liệt kê được pages; Threads hiện placeholder." },
+
+  // ───── ENGAGE ─────
+  { g:"Engage", ic:"💬", t:"Inbox & Comments",
+    what:"Hộp thư/bình luận FB-IG tập trung để trả lời.",
+    steps:["Vào Inbox & Comments → xem hội thoại/bình luận (nếu có).","Thử trả lời 1 mục."],
+    expect:"Load được tương tác; trả lời gửi đi (khi đã có dữ liệu)." },
+
+  // ───── LEARN ─────
+  { g:"Learn", ic:"📊", t:"Analytics",
+    what:"Số liệu hiệu suất bài đăng (reach/engaged…) đồng bộ từ FB/IG mỗi 6h.",
+    steps:["Vào Analytics → xem biểu đồ/bảng.","Đối chiếu với 1 bài đã đăng thật."],
+    expect:"Hiện số liệu khi đã có bài published + scheduler sync (có thể = 0 nếu chưa đủ thời gian)." },
+  { g:"Learn", ic:"🏆", t:"Scoreboard (SCALE/HOLD/RETIRE)",
+    what:"Chấm điểm bài/combo → đề xuất nhân bản (SCALE) hay loại (RETIRE) dựa trên engaged.",
+    steps:["Vào Scoreboard → xem xếp hạng + nhãn SCALE/HOLD/RETIRE.","Xem tag-performance theo segment/insight."],
+    expect:"Có bảng điểm + khuyến nghị khi đã có dữ liệu metrics." },
+  { g:"Learn", ic:"💰", t:"Cost & P&L",
+    what:"Tính chi phí tạo nội dung (ảnh/video/template) + lãi lỗ.",
+    steps:["Vào Cost & P&L → xem bảng chi phí.","Kiểm tra con số khớp số bài/ảnh đã tạo."],
+    expect:"Hiện chi phí ước tính theo hoạt động." },
+
+  // ───── LIBRARY ─────
+  { g:"Library", ic:"🗂️", t:"Library (Asset DAM)", badge:"fix",
+    what:"Kho ảnh/video tổng. Thumbnail nhẹ load nhanh, video hiện frame đầu, gom folder, gắn tag/type, lightbox.",
+    steps:["Vào Library → quan sát lưới load NHANH (thumbnail nhỏ, không kéo ảnh 10MB).","Kiểm tra clip .mp4 hiện preview (không còn ô vỡ).","Bấm 1 ảnh mở lightbox; thử lọc theo tag/status/source; gom vài ảnh vào folder."],
+    expect:"Mở Library nhanh, không treo; video có thumbnail; lightbox + lọc + gom folder hoạt động." },
+  { g:"Library", ic:"📜", t:"Content Log",
+    what:"Nhật ký mọi nội dung đã tạo/đăng để tra cứu.",
+    steps:["Vào Content Log → xem lịch sử.","Tìm 1 bài vừa tạo."],
+    expect:"Liệt kê đúng lịch sử nội dung." },
+  { g:"Library", ic:"⏳", t:"Job Queue",
+    what:"Hàng đợi tác vụ nền (sinh ảnh, render video, sync…) + trạng thái.",
+    steps:["Vào Job Queue → xem job đang chạy/đã xong/lỗi.","Đối chiếu với 1 job vừa kích hoạt (vd tạo ảnh template)."],
+    expect:"Job hiện đúng trạng thái; job lỗi có thông báo." },
+
+  // ───── SYSTEM ─────
+  { g:"System", ic:"💳", t:"Billing / Payment",
+    what:"Thanh toán (Casso + MoMo) — gói/đơn của khách.",
+    steps:["Vào Billing → xem gói/giao dịch.","(Nếu test) tạo 1 đơn thử."],
+    expect:"Hiện trạng thái thanh toán; webhook IPN fulfill đúng." },
+  { g:"System", ic:"👥", t:"Team & Access",
+    what:"Quản lý người dùng: thêm user, đổi vai trò, gán brand. Viewer chỉ đọc.",
+    steps:["Vào Team & Access → xem danh sách user (6 user).","Kiểm tra vai trò admin/viewer.","(Tùy) gán brand cho 1 user thường rồi đăng nhập kiểm tra chỉ thấy brand đó."],
+    expect:"Danh sách đúng; đổi role/gán brand có hiệu lực; viewer bị chặn mọi thao tác ghi (403)." },
+  { g:"System", ic:"❓", t:"Guide + nút ❓ trong từng tab", badge:"new",
+    what:"Tài liệu hướng dẫn: 1 tab Guide tổng + nút ❓ ở header mở hướng dẫn riêng của tab đang xem.",
+    steps:["Ở bất kỳ tab nào, bấm nút ❓ góc phải header.","Xem drawer hiện hướng dẫn ĐÚNG tab đang mở (giới thiệu + các bước + mẹo).","Bấm 'Mở toàn bộ tài liệu' → sang tab Guide."],
+    expect:"❓ luôn hiện hướng dẫn khớp tab hiện tại; tab Guide có đầy đủ mục." },
+];
+
+const KEY='loveintea-test-v1';
+let state=JSON.parse(localStorage.getItem(KEY)||'{}'); // {idx:{pass:bool,fail:bool,note:str,open:bool}}
+let filter='all';
+
+function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+function st(i){return state[i]||(state[i]={pass:false,fail:false,note:'',open:false});}
+
+function render(){
+  const list=document.getElementById('list');
+  list.innerHTML='';
+  const groups=[...new Set(FEATURES.map(f=>f.g))];
+  let shown=0;
+  groups.forEach(g=>{
+    const items=FEATURES.map((f,i)=>({f,i})).filter(x=>x.f.g===g);
+    const vis=items.filter(x=>passFilter(x.i));
+    if(!vis.length) return;
+    const gdone=items.filter(x=>st(x.i).pass).length;
+    const h=document.createElement('div');h.className='grp';
+    h.innerHTML=`<h2>${g}</h2><span class="gline"></span><span class="gcount">${gdone}/${items.length}</span>`;
+    list.appendChild(h);
+    vis.forEach(({f,i})=>{ list.appendChild(cardEl(f,i)); shown++; });
+  });
+  if(!shown){const e=document.createElement('p');e.style.cssText='color:var(--mut2);text-align:center;padding:30px';e.textContent='Không có mục nào khớp bộ lọc.';list.appendChild(e);}
+  updateStats();
+}
+
+function passFilter(i){
+  const s=st(i);
+  if(filter==='todo') return !s.pass && !s.fail;
+  if(filter==='fail') return s.fail;
+  return true;
+}
+
+function cardEl(f,i){
+  const s=st(i);
+  const c=document.createElement('div');
+  c.className='card'+(s.pass?' done':'')+(s.fail?' fail':'')+(s.open?' open':'');
+  const badge=f.badge==='new'?'<span class="badge new">MỚI</span>':f.badge==='fix'?'<span class="badge fix">VỪA FIX</span>':'';
+  c.innerHTML=`
+    <div class="chead" onclick="toggle(${i})">
+      <div class="num">${s.pass?'✓':(i+1)}</div>
+      <div class="ic">${f.ic}</div>
+      <div class="ctitle"><h3>${f.t} ${badge}</h3><p class="what">${f.what}</p></div>
+      <div class="chev">▶</div>
+    </div>
+    <div class="body">
+      <div class="sec"><div class="lab">Các bước thao tác</div>
+        <ol class="steps">${f.steps.map(x=>`<li>${x}</li>`).join('')}</ol></div>
+      <div class="sec"><div class="lab">Kết quả mong đợi</div>
+        <div class="expect">✔ ${f.expect}</div></div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" ${s.pass?'checked':''} onchange="mark(${i},'pass',this.checked)"> Pass</label>
+        <button class="failbtn ${s.fail?'on':''}" onclick="mark(${i},'fail',!st(${i}).fail)">❌ Lỗi</button>
+        <input class="note" placeholder="Ghi chú / mô tả lỗi…" value="${(s.note||'').replace(/"/g,'&quot;')}" oninput="note(${i},this.value)">
+      </div>
+    </div>`;
+  return c;
+}
+
+function toggle(i){st(i).open=!st(i).open;save();render();}
+function mark(i,k,v){const s=st(i);s[k]=v;if(k==='pass'&&v)s.fail=false;if(k==='fail'&&v)s.pass=false;save();render();}
+function note(i,v){st(i).note=v;save();updateStats();}
+function setFilter(f){filter=f;['all','todo','fail'].forEach(x=>document.getElementById('f-'+x).classList.toggle('on',x===f));render();}
+function expandAll(o){FEATURES.forEach((_,i)=>st(i).open=o);save();render();}
+function resetAll(){if(confirm('Xóa toàn bộ tiến độ test?')){state={};save();render();toast('Đã reset');}}
+
+function updateStats(){
+  const total=FEATURES.length;
+  const pass=FEATURES.filter((_,i)=>st(i).pass).length;
+  const fail=FEATURES.filter((_,i)=>st(i).fail).length;
+  const done=pass+fail;
+  document.getElementById('totalN').textContent=total;
+  document.getElementById('doneN').textContent=done;
+  document.getElementById('passN').textContent=pass;
+  document.getElementById('failN').textContent=fail;
+  const pct=Math.round(done/total*100);
+  document.getElementById('pct').textContent=pct+'%';
+  document.getElementById('progbar').style.width=pct+'%';
+}
+
+function copySummary(){
+  let out=`LoveinTea Studio — Báo cáo test\n${new Date().toLocaleString('vi-VN')}\n`;
+  const pass=FEATURES.filter((_,i)=>st(i).pass).length, fail=FEATURES.filter((_,i)=>st(i).fail).length;
+  out+=`Pass ${pass} | Fail ${fail} | Tổng ${FEATURES.length}\n\n`;
+  const fails=FEATURES.map((f,i)=>({f,s:st(i)})).filter(x=>x.s.fail);
+  if(fails.length){out+='❌ ĐANG LỖI:\n';fails.forEach(x=>{out+=`- ${x.f.t}${x.s.note?': '+x.s.note:''}\n`});out+='\n';}
+  const todo=FEATURES.map((f,i)=>({f,s:st(i)})).filter(x=>!x.s.pass&&!x.s.fail);
+  if(todo.length){out+='⏳ CHƯA TEST:\n';todo.forEach(x=>out+=`- ${x.f.t}\n`);}
+  navigator.clipboard.writeText(out).then(()=>toast('Đã copy báo cáo'),()=>toast('Không copy được'));
+}
+
+let tt;
+function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),1800);}
+
+render();
+</script>
+</body>
+</html>
