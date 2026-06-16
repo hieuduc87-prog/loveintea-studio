@@ -24,7 +24,9 @@ export function CreateLabView({ brandId }: { brandId: string }) {
   // composer (2-4 fields)
   const [productId, setProductId] = useState('');
   const [message, setMessage] = useState('');
-  const [tone, setTone] = useState('');
+  const [tone, setTone] = useState('');           // dropdown: '' = auto từ DNA
+  const [segment, setSegment] = useState('');     // dropdown đối tượng: '' = auto từ DNA
+  const [segments, setSegments] = useState<Array<{ name: string; tension: string }>>([]);
   const [lang, setLang] = useState('en');        // brand bán US → mặc định English
   const [length, setLength] = useState('short');  // short | long
   const [caption, setCaption] = useState('');
@@ -44,6 +46,7 @@ export function CreateLabView({ brandId }: { brandId: string }) {
     ]);
     if (pr?.ok) setProducts(((await pr.json()).products ?? []) as Product[]);
     if (tr?.ok) setTemplates(((await tr.json()).templates ?? []) as Tpl[]);
+    fetch(`/api/brands/${brandId}/segments`).then(r => r.json()).then(d => setSegments(d.segments ?? [])).catch(() => {});
   }, [brandId]);
   useEffect(() => { load(); }, [load]);
 
@@ -53,7 +56,7 @@ export function CreateLabView({ brandId }: { brandId: string }) {
     try {
       const r = await fetch('/api/content/quick', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, productId: productId || undefined, message, tone: tone || undefined, n: 3, templateId: templateId || undefined, language: lang, length }),
+        body: JSON.stringify({ brandId, productId: productId || undefined, message, tone: tone || undefined, segment: segment || undefined, n: 3, templateId: templateId || undefined, language: lang, length }),
       });
       const d = await r.json() as { ok?: boolean; variants?: Variant[]; error?: string };
       if (d.ok && d.variants?.length) {
@@ -70,12 +73,10 @@ export function CreateLabView({ brandId }: { brandId: string }) {
     const p = imagePrompt || caption.slice(0, 200);
     if (!p) { setMsg('Cần image prompt hoặc caption'); return; }
     setBusy('img'); setMsg('');
-    // imageUrl ô nhập = ảnh tham chiếu (nếu có) → dùng làm base để AI bám theo.
-    const refImageUrl = imageUrl && !imageUrl.startsWith('data:') ? imageUrl : undefined;
     try {
       const r = await fetch('/api/image/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: p, productId: productId || undefined, brandId, refImageUrl, templateId: templateId || undefined }),
+        body: JSON.stringify({ prompt: p, productId: productId || undefined, brandId, templateId: templateId || undefined }),
       });
       const d = await r.json() as { ok?: boolean; url?: string; error?: string };
       if (d.ok && d.url) setImageUrl(d.url); else setMsg('✗ ' + (d.error ?? 'Lỗi tạo ảnh'));
@@ -154,8 +155,23 @@ export function CreateLabView({ brandId }: { brandId: string }) {
             <>
               <input value={message} onChange={e => setMessage(e.target.value)} placeholder="Ý chính / hook (vd: trà thư giãn cho tối Chủ nhật không ngủ được)"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white" />
-              <input value={tone} onChange={e => setTone(e.target.value)} placeholder="Tông (tùy chọn: ấm áp / hài / sang…)"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white" />
+              <div className="flex gap-2">
+                <select value={segment} onChange={e => setSegment(e.target.value)}
+                  className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white" title="Đối tượng">
+                  <option value="">🎯 Đối tượng: tự suy từ DNA</option>
+                  {segments.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                </select>
+                <select value={tone} onChange={e => setTone(e.target.value)}
+                  className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white" title="Tông giọng">
+                  <option value="">🎙 Tông: tự suy từ DNA</option>
+                  <option value="ấm áp">Ấm áp</option>
+                  <option value="truyền cảm hứng">Truyền cảm hứng</option>
+                  <option value="sang trọng">Sang trọng</option>
+                  <option value="hài hước">Hài hước</option>
+                  <option value="thân mật">Thân mật</option>
+                  <option value="chuyên gia">Chuyên gia / đáng tin</option>
+                </select>
+              </div>
               <div className="flex gap-2">
                 <select value={lang} onChange={e => setLang(e.target.value)} className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white">
                   <option value="en">🇬🇧 English (mặc định — bán US)</option>
@@ -183,10 +199,16 @@ export function CreateLabView({ brandId }: { brandId: string }) {
           <textarea value={caption} onChange={e => setCaption(e.target.value)} placeholder="Caption" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white resize-none h-28" />
           <input value={hashtags} onChange={e => setHashtags(e.target.value)} placeholder="#hashtags" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white" />
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Ảnh bài đăng — dán link ảnh có sẵn, hoặc bấm <b>Tạo ảnh</b> để AI tạo (bám sản phẩm + template + ảnh đang dán làm tham chiếu)</p>
-            <div className="flex gap-2">
-              <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="Dán link ảnh (vd https://…) hoặc để trống rồi bấm Tạo ảnh" className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white" />
-              <button onClick={genImage} disabled={busy === 'img'} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs disabled:opacity-50 whitespace-nowrap">{busy === 'img' ? '⟳' : '🖼 Tạo ảnh'}</button>
+            <p className="text-[10px] text-gray-500 mb-1">Ảnh bài đăng — bấm <b>Tạo ảnh</b> để AI sinh ảnh bám sản phẩm + template đã chọn</p>
+            <div className="flex gap-2 items-start">
+              <button onClick={genImage} disabled={busy === 'img'} className="px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold disabled:opacity-50 whitespace-nowrap">{busy === 'img' ? '⟳ Đang tạo…' : '🖼 Tạo ảnh'}</button>
+              {imageUrl && (
+                <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imageUrl.includes('/api/images/') ? `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}w=300` : imageUrl} alt="" className="w-16 h-20 object-cover rounded-lg border border-gray-700" />
+                  <button onClick={() => setImageUrl('')} title="Xóa ảnh" className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-gray-900 border border-gray-600 text-gray-300 text-[10px] leading-none">✕</button>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 pt-1 border-t border-gray-800">

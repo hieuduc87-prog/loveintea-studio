@@ -67,6 +67,19 @@
   .failbtn.on{border-color:var(--red);color:var(--red);background:#1a0f10}
   .note{flex:1;min-width:180px;background:#0a0f0c;border:1px solid var(--line);border-radius:8px;
     color:var(--txt);font-size:12.5px;padding:7px 10px;font-family:inherit}
+  .imgrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+  .uploadbtn{font-size:12px;border:1px dashed var(--brand2);background:#0c1611;color:var(--brand3);
+    border-radius:8px;padding:6px 11px;cursor:pointer;white-space:nowrap}
+  .uploadbtn:hover{background:#10261a}
+  .imghint{font-size:11px;color:var(--mut2)}
+  .thumbs{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+  .thumb{position:relative;width:66px;height:66px}
+  .thumb img{width:100%;height:100%;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer}
+  .thumb button{position:absolute;-top:6px;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;
+    background:var(--red);border:none;color:#fff;font-size:11px;cursor:pointer;line-height:1}
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;
+    z-index:60;padding:20px;cursor:zoom-out}
+  .lightbox img{max-width:96vw;max-height:92vh;border-radius:10px}
   .footnote{margin-top:30px;font-size:12px;color:var(--mut2);text-align:center}
   .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;
     padding:9px 16px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:.3s;z-index:50}
@@ -94,7 +107,8 @@
       <button id="f-fail" onclick="setFilter('fail')">Đang lỗi</button>
       <button onclick="expandAll(true)">Mở hết</button>
       <button onclick="expandAll(false)">Thu hết</button>
-      <button onclick="copySummary()">📋 Copy báo cáo</button>
+      <button onclick="copySummary()">📋 Copy text</button>
+      <button onclick="downloadHtml()">⬇ Tải báo cáo (kèm ảnh)</button>
       <button onclick="resetAll()" style="color:var(--red)">↺ Reset</button>
     </div>
   </header>
@@ -235,8 +249,11 @@ const KEY='loveintea-test-v1';
 let state=JSON.parse(localStorage.getItem(KEY)||'{}'); // {idx:{pass:bool,fail:bool,note:str,open:bool}}
 let filter='all';
 
-function save(){localStorage.setItem(KEY,JSON.stringify(state));}
-function st(i){return state[i]||(state[i]={pass:false,fail:false,note:'',open:false});}
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(state)); }
+  catch(e){ toast('⚠ Hết bộ nhớ trình duyệt — bớt ảnh hoặc tải báo cáo rồi xóa.'); }
+}
+function st(i){return state[i]||(state[i]={pass:false,fail:false,note:'',open:false,imgs:[]});}
 
 function render(){
   const list=document.getElementById('list');
@@ -286,6 +303,15 @@ function cardEl(f,i){
         <button class="failbtn ${s.fail?'on':''}" onclick="mark(${i},'fail',!st(${i}).fail)">❌ Lỗi</button>
         <input class="note" placeholder="Ghi chú / mô tả lỗi…" value="${(s.note||'').replace(/"/g,'&quot;')}" oninput="note(${i},this.value)">
       </div>
+      <div class="imgrow">
+        <label class="uploadbtn">📷 Đính ảnh lỗi
+          <input type="file" accept="image/*" multiple style="display:none" onchange="addImgs(${i},this.files);this.value=''">
+        </label>
+        <span class="imghint">(chụp màn hình lỗi — nhiều ảnh được; cũng có thể Ctrl+V dán ảnh khi đang ở thẻ này)</span>
+        <div class="thumbs">
+          ${(s.imgs||[]).map((u,k)=>`<div class="thumb"><img src="${u}" onclick="viewImg('${i}_${k}')"><button onclick="rmImg(${i},${k})">✕</button></div>`).join('')}
+        </div>
+      </div>
     </div>`;
   return c;
 }
@@ -323,7 +349,54 @@ function copySummary(){
 }
 
 let tt;
-function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),1800);}
+function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),2400);}
+
+// ── Ảnh lỗi: nén (resize ≤1000px, JPEG 0.7) rồi lưu base64 vào localStorage ──
+function compress(file){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=1000;let{width:w,height:h}=img;
+      if(w>max||h>max){const r=Math.min(max/w,max/h);w=Math.round(w*r);h=Math.round(h*r);}
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      res(cv.toDataURL('image/jpeg',0.7));
+    };
+    img.onerror=()=>res(null);
+    const fr=new FileReader();fr.onload=()=>img.src=fr.result;fr.readAsDataURL(file);
+  });
+}
+async function addImgs(i,files){
+  if(!files||!files.length)return;
+  const s=st(i);s.imgs=s.imgs||[];
+  for(const f of files){ if(!f.type.startsWith('image/'))continue; const d=await compress(f); if(d)s.imgs.push(d); }
+  if(!s.fail&&!s.pass)s.fail=true; // đính ảnh lỗi → tự đánh dấu Lỗi
+  s.open=true;save();render();toast('Đã thêm ảnh');
+}
+function rmImg(i,k){const s=st(i);s.imgs.splice(k,1);save();render();}
+function viewImg(key){const[i,k]=key.split('_').map(Number);const u=(st(i).imgs||[])[k];if(!u)return;const d=document.createElement('div');d.className='lightbox';d.onclick=()=>d.remove();d.innerHTML=`<img src="${u}">`;document.body.appendChild(d);}
+
+// Dán ảnh (Ctrl+V) vào thẻ đang mở
+document.addEventListener('paste',e=>{
+  const open=FEATURES.map((_,i)=>i).filter(i=>st(i).open);
+  if(open.length!==1)return; // chỉ khi đúng 1 thẻ đang mở để biết gán vào đâu
+  const items=[...(e.clipboardData?.items||[])].filter(x=>x.type.startsWith('image/'));
+  if(!items.length)return;
+  addImgs(open[0],items.map(x=>x.getAsFile()).filter(Boolean));
+});
+
+function downloadHtml(){
+  const pass=FEATURES.filter((_,i)=>st(i).pass).length, fail=FEATURES.filter((_,i)=>st(i).fail).length;
+  let rows='';
+  FEATURES.forEach((f,i)=>{const s=st(i);if(!s.pass&&!s.fail&&!(s.imgs||[]).length&&!s.note)return;
+    const status=s.pass?'<b style="color:#2e7d49">✅ PASS</b>':s.fail?'<b style="color:#E04854">❌ LỖI</b>':'⏳';
+    const imgs=(s.imgs||[]).map(u=>`<img src="${u}" style="max-width:320px;border:1px solid #ccc;border-radius:8px;margin:4px">`).join('');
+    rows+=`<div style="border-bottom:1px solid #eee;padding:12px 0"><h3 style="margin:0 0 4px">${i+1}. ${f.ic} ${f.t} — ${status}</h3>${s.note?`<p style="margin:4px 0;color:#444">📝 ${s.note}</p>`:''}<div>${imgs}</div></div>`;
+  });
+  const html=`<!doctype html><meta charset=utf-8><title>Báo cáo test LoveinTea</title><body style="font-family:system-ui;max-width:760px;margin:24px auto;padding:0 16px"><h1>🍵 Báo cáo test — LoveinTea Studio</h1><p>${new Date().toLocaleString('vi-VN')} · Pass ${pass} · Fail ${fail} · Tổng ${FEATURES.length}</p>${rows||'<p>Chưa có dữ liệu.</p>'}</body>`;
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+  a.download='bao-cao-test-loveintea.html';a.click();toast('Đã tải báo cáo (kèm ảnh)');
+}
 
 render();
 </script>

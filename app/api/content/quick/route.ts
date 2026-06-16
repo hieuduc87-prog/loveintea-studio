@@ -13,7 +13,7 @@ import { getExpertKnowledgeBlock } from '@/lib/brand-knowledge';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { brandId?: string; productId?: string; message?: string; tone?: string; platform?: string; n?: number; templateId?: string; language?: string; length?: string };
+    const body = await req.json() as { brandId?: string; productId?: string; message?: string; tone?: string; segment?: string; platform?: string; n?: number; templateId?: string; language?: string; length?: string };
     const brandId = body.brandId || 'loveintea';
     const message = (body.message || '').trim();
     if (!message) return NextResponse.json({ error: 'message required' }, { status: 400 });
@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
 
 Ý CHÍNH NGƯỜI DÙNG: "${message}"
 ${body.tone ? `Tông yêu cầu: ${body.tone}` : ''}
+${body.segment ? `Đối tượng MỤC TIÊU (viết hướng tới nhóm này): ${body.segment}` : ''}
 Nền tảng: ${body.platform || 'facebook,instagram'}
 ${product ? `Sản phẩm: ${product.name} — ${product.pitch ?? ''} (${product.theme ?? ''}, thành phần: ${product.ingredients ?? ''})` : 'Brand-level (không gắn sản phẩm)'}
 
