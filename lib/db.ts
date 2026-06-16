@@ -783,6 +783,8 @@ function initSchema(db: Database.Database) {
   try { db.exec(`CREATE INDEX IF NOT EXISTS idx_assets_folder ON assets(brand_id, folder)`); } catch { /* already exists */ }
   // Template operating flow: link posts to the template used + rotation timestamp
   try { db.exec(`ALTER TABLE posts ADD COLUMN template_id TEXT`); } catch { /* already exists */ }
+  // Carousel posts: ordered list of image URLs (FB/IG multi-photo). image_url = ảnh đầu (cover).
+  try { db.exec(`ALTER TABLE posts ADD COLUMN images_json TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN last_used_at TEXT`); } catch { /* already exists */ }
   try { db.exec(`CREATE INDEX IF NOT EXISTS idx_posts_template ON posts(template_id) WHERE template_id IS NOT NULL`); } catch { /* already exists */ }
   // Multi-tag every post across dimensions (segment/insight/behavior/usp/...) for win-rate aggregation

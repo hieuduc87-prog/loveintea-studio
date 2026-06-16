@@ -791,6 +791,9 @@ function DetailPanel({
             {/* AI Analysis */}
             <AnalysisSection analysis={parseAnalysis(tpl)} onReAnalyze={onReAnalyze} />
 
+            {/* Generate carousel post from this template */}
+            <GenerateFromTemplate tpl={tpl} slideCount={slides.length || 1} />
+
             {/* Actions */}
             <div className="border-t border-gray-800 pt-4 flex gap-2">
               <a
@@ -1163,6 +1166,62 @@ function UploadModal({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Generate carousel post from template ───────────────────
+function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: number }) {
+  const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
+  const [productId, setProductId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [result, setResult] = useState<{ images: string[]; postId: string } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/products?brand=${tpl.brand_id}`).then(r => r.json()).then(d => setProducts(d.products ?? [])).catch(() => {});
+  }, [tpl.brand_id]);
+
+  async function generate() {
+    setBusy(true); setMsg(''); setResult(null);
+    try {
+      const r = await fetch(`/api/content-templates/${tpl.id}/generate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId: tpl.brand_id, productId: productId || undefined }),
+      });
+      const d = await r.json() as { ok?: boolean; postId?: string; images?: string[]; count?: number; error?: string };
+      if (d.ok && d.images?.length) {
+        setResult({ images: d.images, postId: d.postId! });
+        setMsg(`✓ Đã tạo post carousel ${d.count} ảnh — vào Review & Queue để duyệt/đăng.`);
+      } else setMsg('✗ ' + (d.error ?? 'Lỗi tạo post'));
+    } catch (e) { setMsg('✗ ' + String(e)); }
+    setBusy(false);
+  }
+
+  return (
+    <div className="border-t border-gray-800 pt-4">
+      <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">🎬 Tạo post từ template ({slideCount} ảnh)</p>
+      <p className="text-[11px] text-gray-500 mb-2">Chọn sản phẩm → AI sinh {slideCount} ảnh theo đúng thứ tự + bố cục template, gộp thành 1 post carousel (caption tự viết bám cấu trúc).</p>
+      <div className="flex gap-2">
+        <select value={productId} onChange={e => setProductId(e.target.value)}
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white">
+          <option value="">— Chọn sản phẩm —</option>
+          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <button onClick={generate} disabled={busy}
+          className="px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-semibold whitespace-nowrap">
+          {busy ? `⟳ Đang sinh ${slideCount} ảnh…` : `✨ Tạo ${slideCount} ảnh → 1 post`}
+        </button>
+      </div>
+      {msg && <p className={`text-xs mt-2 ${msg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>{msg}</p>}
+      {result && (
+        <div className="flex gap-1.5 mt-2 overflow-x-auto">
+          {result.images.map((u, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={i} src={`${u}${u.includes('?') ? '&' : '?'}w=300`} alt="" className="w-16 h-24 object-cover rounded-lg border border-gray-700 flex-shrink-0" />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

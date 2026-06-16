@@ -83,6 +83,13 @@ export function getChannelCreds(brandId?: string): ChannelCreds {
   return { pageId: pageId(), pageToken: token(), igId: igAccountId(), pageName: getSetting('FB_PAGE_NAME'), source: 'legacy' };
 }
 
+/** True nếu brand đã cấu hình Instagram (có page token + IG account id).
+ *  Dùng để SKIP IG thay vì hard-fail khi IG chưa kết nối. */
+export function hasIgCreds(brandId?: string): boolean {
+  const c = getChannelCreds(brandId);
+  return Boolean(c.pageToken && c.igId);
+}
+
 export interface PostResult {
   ok: boolean;
   postId?: string;
