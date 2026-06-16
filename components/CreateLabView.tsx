@@ -68,10 +68,12 @@ export function CreateLabView({ brandId }: { brandId: string }) {
     const p = imagePrompt || caption.slice(0, 200);
     if (!p) { setMsg('Cần image prompt hoặc caption'); return; }
     setBusy('img'); setMsg('');
+    // imageUrl ô nhập = ảnh tham chiếu (nếu có) → dùng làm base để AI bám theo.
+    const refImageUrl = imageUrl && !imageUrl.startsWith('data:') ? imageUrl : undefined;
     try {
       const r = await fetch('/api/image/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: p, productId: productId || undefined, brandId }),
+        body: JSON.stringify({ prompt: p, productId: productId || undefined, brandId, refImageUrl, templateId: templateId || undefined }),
       });
       const d = await r.json() as { ok?: boolean; url?: string; error?: string };
       if (d.ok && d.url) setImageUrl(d.url); else setMsg('✗ ' + (d.error ?? 'Lỗi tạo ảnh'));

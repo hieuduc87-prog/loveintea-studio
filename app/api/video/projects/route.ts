@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as {
       brandId?: string; title?: string; purpose?: string; productId?: string;
       targetDurationS?: number; bgmUrl?: string; notes?: string;
-      useVoiceover?: boolean; voVoice?: string;
+      useVoiceover?: boolean; voVoice?: string; language?: string;
     };
     const brandId = body.brandId || 'loveintea';
     const purpose = body.purpose || 'promo';
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     const board = await buildStoryboard({
       brandId, purpose, productId: body.productId,
-      targetDurationS, bpm, notes: body.notes,
+      targetDurationS, bpm, notes: body.notes, language: body.language,
     });
 
     const id = uuid();

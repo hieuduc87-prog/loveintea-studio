@@ -27,10 +27,12 @@ export interface Storyboard {
 
 export async function buildStoryboard(opts: {
   brandId: string; purpose: string; productId?: string;
-  targetDurationS: number; bpm?: number | null; notes?: string;
+  targetDurationS: number; bpm?: number | null; notes?: string; language?: string;
 }): Promise<Storyboard> {
   const db = getDb();
   const { brandId, purpose, productId, targetDurationS, bpm, notes } = opts;
+  // Ngôn ngữ cho toàn bộ text/hook/CTA/voiceover. Mặc định Tiếng Việt.
+  const langName = (opts.language ?? 'vi').toLowerCase().startsWith('en') ? 'English' : 'Vietnamese';
 
   const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;
   const product = productId
@@ -93,10 +95,11 @@ RULES (proven editing knowledge):
 1. 5-9 segments. First segment = strongest visual (scroll-stopper).
 2. Mix ratio target: ~30% real clips, ~70% photos/AI images (Ken Burns motion is applied to stills automatically).
 3. source priority: clip from catalog → image (product photo) → ai_image (only for atmosphere scenes that don't exist; write a 60-100 word prompt: Subject, Action, Environment, Camera, Style — no brand text in image).
-4. text: short Vietnamese caption (max 8 words), benefit-led, follows compliance. Not every segment needs text.
-5. hook: max 7 words, creates curiosity, Vietnamese.
-6. cta_text: short CTA aligned with the purpose, Vietnamese.
-7. voiceover: a smooth Vietnamese narration read over the whole video. Length ≈ ${Math.round(targetDurationS * 2.3)} words (≈2.3 words/sec for ${targetDurationS}s). Warm, on-brand, follows compliance, complements (does NOT just repeat) the on-screen text. One flowing paragraph, no timestamps.
+LANGUAGE: write ALL on-screen text, hook, cta_text and voiceover in ${langName}. Do NOT mix languages.
+4. text: short ${langName} caption (max 8 words), benefit-led, follows compliance. Not every segment needs text.
+5. hook: max 7 words, creates curiosity, ${langName}.
+6. cta_text: short CTA aligned with the purpose, ${langName}.
+7. voiceover: a smooth ${langName} narration read over the whole video. Length ≈ ${Math.round(targetDurationS * 2.3)} words (≈2.3 words/sec for ${targetDurationS}s). Warm, on-brand, follows compliance, complements (does NOT just repeat) the on-screen text. One flowing paragraph, no timestamps.
 
 Return ONLY JSON:
 {"title":"...","hook":"...","segments":[{"dur_s":2.0,"source":"clip|image|ai_image","clip_id":"...","image_url":"...","image_prompt":"...","text":"...","text_anim":"fade|pop|slide"}],"cta_text":"...","voiceover":"..."}`;

@@ -62,13 +62,23 @@ export async function POST(req: NextRequest) {
     const ws1 = wb.Sheets[wb.SheetNames[0]];
     const rows1: unknown[][] = XLSX.utils.sheet_to_json(ws1, { header: 1, defval: '' });
 
+    // Header detection — linh hoạt: quét vài cột đầu của mỗi dòng, chấp nhận
+    // "date" (EN) hoặc "ngày" (VI), không phân biệt hoa thường / khoảng trắng.
+    const isDateHeader = (v: unknown) => {
+      const s = String(v ?? '').trim().toLowerCase();
+      return s === 'date' || s === 'ngày' || s === 'ngay' || s.startsWith('date') || s.startsWith('ngày');
+    };
     let headerIdx = -1;
     for (let i = 0; i < rows1.length; i++) {
-      if (String((rows1[i] as unknown[])[0]).trim().toLowerCase() === 'date') {
-        headerIdx = i; break;
-      }
+      const row = rows1[i] as unknown[];
+      if (row.slice(0, 4).some(isDateHeader)) { headerIdx = i; break; }
     }
-    if (headerIdx < 0) return NextResponse.json({ error: 'Cannot find header row in Sheet 1' }, { status: 400 });
+    if (headerIdx < 0) {
+      const preview = rows1.slice(0, 5).map(r => String((r as unknown[])[0] ?? '').trim()).filter(Boolean).join(', ');
+      return NextResponse.json({
+        error: `Không tìm thấy dòng tiêu đề ở Sheet 1. Cần một cột tên "Date" (hoặc "Ngày") trong 4 cột đầu. Các giá trị cột đầu đọc được: ${preview || '(trống)'}`,
+      }, { status: 400 });
+    }
 
     const dataRows = rows1.slice(headerIdx + 1).filter(r => cell(r as unknown[], 0));
 

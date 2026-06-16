@@ -40,6 +40,7 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
   const [productId, setProductId] = useState('');
   const [duration, setDuration] = useState(20);
   const [notes, setNotes] = useState('');
+  const [language, setLanguage] = useState('vi');
   const [bgmUrl, setBgmUrl] = useState('');
   const [bgmName, setBgmName] = useState('');
   const [useVoiceover, setUseVoiceover] = useState(true);
@@ -121,7 +122,7 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
     try {
       const r = await fetch('/api/video/projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, purpose, productId: productId || undefined, targetDurationS: duration, bgmUrl: bgmUrl || undefined, notes: notes || undefined, useVoiceover, voVoice }),
+        body: JSON.stringify({ brandId, purpose, productId: productId || undefined, targetDurationS: duration, bgmUrl: bgmUrl || undefined, notes: notes || undefined, useVoiceover, voVoice, language }),
       });
       const d = await r.json() as { ok?: boolean; bpm?: number; error?: string };
       if (!d.ok) setMsg('❌ ' + (d.error ?? 'Tạo storyboard thất bại'));
@@ -164,6 +165,11 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
             <option value="">— Không gắn sản phẩm cụ thể —</option>
             {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select value={language} onChange={e => setLanguage(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
+            <option value="vi">🇻🇳 Tiếng Việt (text + lồng tiếng)</option>
+            <option value="en">🇬🇧 English (text + voiceover)</option>
           </select>
           <div className="flex items-center gap-2">
             <label className="text-[11px] text-gray-400">Thời lượng</label>

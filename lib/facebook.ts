@@ -11,10 +11,15 @@ const GRAPH    = 'https://graph.facebook.com/v21.0';
 const APP_ID   = '1267157968709745';  // Same app as HLT
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://loveintea.wealthpsy.com';
 
-/** Make relative URL absolute so FB/IG servers can fetch it */
+/** Make relative URL absolute so FB/IG servers can fetch it.
+ *  For our own /api/images/ masters (4x, ~10MB) append ?w=1440 so the route
+ *  serves a web-optimized JPEG — FB/IG reject oversized photos ("Invalid parameter"). */
 function toAbsoluteUrl(url: string): string {
-  if (url.startsWith('http')) return url;
-  return `${SITE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  const abs = url.startsWith('http') ? url : `${SITE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  if (abs.includes('/api/images/') && !/[?&]w=/.test(abs)) {
+    return `${abs}${abs.includes('?') ? '&' : '?'}w=1440`;
+  }
+  return abs;
 }
 
 function getSetting(key: string): string {

@@ -3,9 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { filename: string } }
 ) {
   const { filename } = params;
@@ -40,6 +41,28 @@ export async function GET(
     : 'image/png';
 
   const isVideo = contentType.startsWith('video/');
+
+  // Resize-on-demand for images (?w=N) — used when publishing to FB/IG, whose
+  // photo upload rejects oversized files (our 4x masters are ~10MB / 4096px).
+  // Downsizes to max width N and re-encodes as JPEG q85 (well under the 4MB limit).
+  const wParam = req.nextUrl.searchParams.get('w');
+  const w = wParam ? Math.min(2048, Math.max(64, parseInt(wParam, 10) || 0)) : 0;
+  if (!isVideo && w) {
+    try {
+      const out = await sharp(buffer)
+        .resize({ width: w, withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+      return new NextResponse(new Uint8Array(out), {
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        },
+      });
+    } catch {
+      /* fall through to original on resize failure */
+    }
+  }
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
