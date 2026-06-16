@@ -17,7 +17,15 @@ import { generateJSON } from '@/lib/gemini';
 import { recordTemplateUse } from '@/lib/template-picker';
 
 interface SlideAnalysis { index?: number; role?: string; content?: string; text_on_image?: string; visual?: string }
-interface TplAnalysis { slides?: SlideAnalysis[]; structure?: string; skeleton?: string; style_keywords?: string[] }
+interface TplAnalysis {
+  // collection shape
+  slides?: SlideAnalysis[]; structure?: string; skeleton?: string; style_keywords?: string[];
+  // single-image (layout) shape
+  layout?: { description?: string };
+  colors?: { palette?: string[]; mood?: string };
+  product_placement?: { has_product?: boolean; position?: string; size?: string; style?: string };
+  content_direction?: string;
+}
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -37,7 +45,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     let analysis: TplAnalysis = {};
     try { analysis = JSON.parse(tpl.analysis || '{}'); } catch { /* */ }
-    const slidesMeta = analysis.slides ?? [];
+
+    // Chuẩn hoá meta cho TỪNG slide — đồng nhất template 1 ảnh (layout analysis)
+    // và template N ảnh (collection analysis). 1 ảnh → 1 prompt; N ảnh → N prompt.
+    const N = slideUrls.length;
+    const slidesMeta: SlideAnalysis[] = [];
+    if (analysis.slides?.length) {
+      for (let i = 0; i < N; i++) slidesMeta.push(analysis.slides[i] ?? analysis.slides[analysis.slides.length - 1] ?? {});
+    } else {
+      // Single-image layout analysis → 1 slide meta suy từ các trường layout.
+      const role = analysis.product_placement?.has_product ? 'product' : 'hook';
+      const content = analysis.content_direction || analysis.layout?.description || '';
+      const visual = [analysis.layout?.description, analysis.colors?.mood, analysis.product_placement?.style].filter(Boolean).join('. ');
+      for (let i = 0; i < N; i++) slidesMeta.push({ index: i + 1, role, content, visual });
+    }
 
     const product = productId
       ? db.prepare('SELECT * FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(productId, bid, productId) as Record<string, string> | undefined
@@ -46,7 +67,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     let styleKw = '';
     try { styleKw = (JSON.parse(tpl.tags || '[]') as string[]).join(', '); } catch { /* */ }
-    const styleBits = [styleKw, tpl.color_palette].filter(Boolean).join('. ');
+    const analysisKw = (analysis.style_keywords ?? []).join(', ');
+    const paletteMood = [analysis.colors?.palette?.join(', '), analysis.colors?.mood].filter(Boolean).join(' / ');
+    const styleBits = [styleKw, analysisKw, tpl.color_palette, paletteMood].filter(Boolean).join('. ');
 
     // ── Sinh ảnh từng slide theo thứ tự ──
     const productRoles = new Set(['product', 'ingredient', 'proof']);
@@ -80,7 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(bid) as Record<string, string> | undefined;
     const slideText = slidesMeta.map((s, i) => `${i + 1}. [${s.role}] ${s.content ?? ''}`).join('\n');
     const capPrompt = `Write a CAROUSEL caption in English (brand sells the US market) for the brand "${bid}".
-TEMPLATE STRUCTURE: ${analysis.structure ?? ''}
+TEMPLATE STRUCTURE: ${analysis.structure || analysis.content_direction || ''}
 SLIDES:\n${slideText}
 ${product ? `PRODUCT: ${product.name} — ${product.pitch ?? ''} (${product.theme ?? ''}, ingredients: ${product.ingredients ?? ''})` : 'Brand-level'}
 BRAND VOICE: ${dna?.voice_traits ?? '[]'} | Tagline: ${dna?.tagline ?? ''}
