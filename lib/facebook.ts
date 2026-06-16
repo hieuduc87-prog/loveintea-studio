@@ -12,12 +12,13 @@ const APP_ID   = '1267157968709745';  // Same app as HLT
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://loveintea.wealthpsy.com';
 
 /** Make relative URL absolute so FB/IG servers can fetch it.
- *  For our own /api/images/ masters (4x, ~10MB) append ?w=1440 so the route
- *  serves a web-optimized JPEG — FB/IG reject oversized photos ("Invalid parameter"). */
+ *  For our own /api/images/ masters (4x, ~10MB) append ?w=4096&q=92 so the route
+ *  serves a sharp full-res JPEG (~2-3MB, dưới giới hạn FB 4MB) — FB/IG reject the
+ *  raw 10MB masters ("Invalid parameter"). High quality để ảnh đăng nét. */
 function toAbsoluteUrl(url: string): string {
   const abs = url.startsWith('http') ? url : `${SITE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   if (abs.includes('/api/images/') && !/[?&]w=/.test(abs)) {
-    return `${abs}${abs.includes('?') ? '&' : '?'}w=1440`;
+    return `${abs}${abs.includes('?') ? '&' : '?'}w=4096&q=92`;
   }
   return abs;
 }

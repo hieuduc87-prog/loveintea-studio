@@ -42,16 +42,18 @@ export async function GET(
 
   const isVideo = contentType.startsWith('video/');
 
-  // Resize-on-demand for images (?w=N) — used when publishing to FB/IG, whose
-  // photo upload rejects oversized files (our 4x masters are ~10MB / 4096px).
-  // Downsizes to max width N and re-encodes as JPEG q85 (well under the 4MB limit).
+  // Resize-on-demand for images (?w=N, ?q=Q) — used both for fast thumbnails and
+  // for publishing to FB/IG, whose photo upload rejects our ~10MB 4x masters.
+  // Re-encodes as JPEG; default q85 for thumbnails, publish requests higher q for sharpness.
   const wParam = req.nextUrl.searchParams.get('w');
-  const w = wParam ? Math.min(2048, Math.max(64, parseInt(wParam, 10) || 0)) : 0;
+  const qParam = req.nextUrl.searchParams.get('q');
+  const w = wParam ? Math.min(4096, Math.max(64, parseInt(wParam, 10) || 0)) : 0;
+  const q = qParam ? Math.min(100, Math.max(40, parseInt(qParam, 10) || 0)) : 85;
   if (!isVideo && w) {
     try {
       const out = await sharp(buffer)
         .resize({ width: w, withoutEnlargement: true })
-        .jpeg({ quality: 85 })
+        .jpeg({ quality: q })
         .toBuffer();
       return new NextResponse(new Uint8Array(out), {
         headers: {
