@@ -25,6 +25,8 @@ export function CreateLabView({ brandId }: { brandId: string }) {
   const [productId, setProductId] = useState('');
   const [message, setMessage] = useState('');
   const [tone, setTone] = useState('');
+  const [lang, setLang] = useState('en');        // brand bán US → mặc định English
+  const [length, setLength] = useState('short');  // short | long
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState('');
   const [imagePrompt, setImagePrompt] = useState('');
@@ -51,7 +53,7 @@ export function CreateLabView({ brandId }: { brandId: string }) {
     try {
       const r = await fetch('/api/content/quick', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, productId: productId || undefined, message, tone: tone || undefined, n: 3, templateId: templateId || undefined }),
+        body: JSON.stringify({ brandId, productId: productId || undefined, message, tone: tone || undefined, n: 3, templateId: templateId || undefined, language: lang, length }),
       });
       const d = await r.json() as { ok?: boolean; variants?: Variant[]; error?: string };
       if (d.ok && d.variants?.length) {
@@ -150,10 +152,20 @@ export function CreateLabView({ brandId }: { brandId: string }) {
 
           {mode === 'ai' ? (
             <>
-              <input value={message} onChange={e => setMessage(e.target.value)} placeholder="Ý chính (vd: nhắc khách uống trà thư giãn tối Chủ nhật)"
+              <input value={message} onChange={e => setMessage(e.target.value)} placeholder="Ý chính / hook (vd: trà thư giãn cho tối Chủ nhật không ngủ được)"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white" />
               <input value={tone} onChange={e => setTone(e.target.value)} placeholder="Tông (tùy chọn: ấm áp / hài / sang…)"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white" />
+              <div className="flex gap-2">
+                <select value={lang} onChange={e => setLang(e.target.value)} className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white">
+                  <option value="en">🇬🇧 English (mặc định — bán US)</option>
+                  <option value="vi">🇻🇳 Tiếng Việt</option>
+                </select>
+                <select value={length} onChange={e => setLength(e.target.value)} className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white">
+                  <option value="short">✂️ Ngắn (punchy)</option>
+                  <option value="long">📖 Dài (storytelling)</option>
+                </select>
+              </div>
               <button onClick={aiGenerate} disabled={busy === 'ai'} className="w-full py-2 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-bold">
                 {busy === 'ai' ? '⟳ AI đang viết…' : '✨ Tạo nhanh (auto-detect từ DNA)'}
               </button>
@@ -170,9 +182,12 @@ export function CreateLabView({ brandId }: { brandId: string }) {
 
           <textarea value={caption} onChange={e => setCaption(e.target.value)} placeholder="Caption" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white resize-none h-28" />
           <input value={hashtags} onChange={e => setHashtags(e.target.value)} placeholder="#hashtags" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white" />
-          <div className="flex gap-2">
-            <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="Ảnh URL (hoặc tạo AI)" className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white" />
-            <button onClick={genImage} disabled={busy === 'img'} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs disabled:opacity-50">{busy === 'img' ? '⟳' : '🖼 Tạo ảnh'}</button>
+          <div>
+            <p className="text-[10px] text-gray-500 mb-1">Ảnh bài đăng — dán link ảnh có sẵn, hoặc bấm <b>Tạo ảnh</b> để AI tạo (bám sản phẩm + template + ảnh đang dán làm tham chiếu)</p>
+            <div className="flex gap-2">
+              <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="Dán link ảnh (vd https://…) hoặc để trống rồi bấm Tạo ảnh" className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white" />
+              <button onClick={genImage} disabled={busy === 'img'} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs disabled:opacity-50 whitespace-nowrap">{busy === 'img' ? '⟳' : '🖼 Tạo ảnh'}</button>
+            </div>
           </div>
           <div className="flex items-center gap-2 pt-1 border-t border-gray-800">
             <input type="datetime-local" value={schedAt} onChange={e => setSchedAt(e.target.value)} className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white" />

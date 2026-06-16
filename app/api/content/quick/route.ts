@@ -13,11 +13,17 @@ import { getExpertKnowledgeBlock } from '@/lib/brand-knowledge';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { brandId?: string; productId?: string; message?: string; tone?: string; platform?: string; n?: number; templateId?: string };
+    const body = await req.json() as { brandId?: string; productId?: string; message?: string; tone?: string; platform?: string; n?: number; templateId?: string; language?: string; length?: string };
     const brandId = body.brandId || 'loveintea';
     const message = (body.message || '').trim();
     if (!message) return NextResponse.json({ error: 'message required' }, { status: 400 });
     const n = Math.min(5, Math.max(1, body.n || 1));
+    // Brand bán US → mặc định caption Tiếng Anh. Đổi 'vi' nếu cần.
+    const langName = (body.language ?? 'en').toLowerCase().startsWith('vi') ? 'Vietnamese' : 'English';
+    const isLong = (body.length ?? 'short').toLowerCase().startsWith('l');
+    const lengthRule = isLong
+      ? 'Length: LONG-FORM — 3-5 short paragraphs, storytelling, build desire then CTA.'
+      : 'Length: SHORT — 1-2 punchy paragraphs, scannable, fast to the CTA.';
 
     const db = getDb();
     const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;
@@ -53,7 +59,13 @@ ${rules.length ? `ACTIVE RULES:\n${rules.map((r, i) => `${i + 1}. ${r}`).join('\
 ${getExpertKnowledgeBlock(brandId)}
 ${templateBlock}
 
-Trả ONLY JSON: {"variants":[{"caption":"...","hashtags":"#a #b","image_prompt":"50-90 từ English, vertical, no text in image","targeting":{"segment":"...","insight":"...","behavior":"..."}}]}`;
+OUTPUT REQUIREMENTS:
+- Write the caption AND hashtags in ${langName}. Do NOT mix languages. (Brand bán thị trường US → mặc định English.)
+- Start every caption with a STRONG scroll-stopping hook (first line): a bold claim, a pain point, a question, or a surprising fact. The hook must earn the next line.
+- ${lengthRule}
+- Hashtags: 5-10 relevant ${langName} hashtags.
+
+Trả ONLY JSON: {"variants":[{"caption":"...","hashtags":"#a #b","image_prompt":"50-90 words English, vertical, no text in image","targeting":{"segment":"...","insight":"...","behavior":"..."}}]}`;
 
     const out = await generateJSON<{ variants: Array<{ caption: string; hashtags: string; image_prompt: string; targeting?: Record<string, string> }> }>(prompt);
     return NextResponse.json({ ok: true, variants: (out.variants ?? []).slice(0, n) });

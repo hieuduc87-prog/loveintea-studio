@@ -25,6 +25,13 @@ const STATUS_STYLES = {
 const STATUS_LABELS = { unused: 'Unused', scheduled: 'Scheduled', aired: 'Aired' };
 const SOURCE_LABELS = { generated: 'AI Generated', upload: 'Uploaded', product_photo: 'Product Photo' };
 const TAG_TYPES = ['product', 'season', 'format', 'content_goal', 'occasion', 'custom'];
+
+// Video vs ảnh + thumbnail nhẹ. Ảnh gốc là bản 4x (~10MB) → grid phải xin bản
+// resize qua ?w=N để load nhanh, tránh kéo cả trăm MB khi mở Library.
+const isVideoAsset = (a: { file_type?: string; url: string }) =>
+  a.file_type === 'video' || /\.(mp4|mov|webm|avi)$/i.test(a.url);
+const thumbUrl = (url: string, w: number) =>
+  url.includes('/api/images/') && !/[?&]w=/.test(url) ? `${url}${url.includes('?') ? '&' : '?'}w=${w}` : url;
 const TAG_TYPE_LABELS: Record<string, string> = {
   product: 'Product', season: 'Time', format: 'Format',
   content_goal: 'Goal', occasion: 'Occasion', custom: 'Custom',
@@ -401,15 +408,26 @@ export function AssetDamView({ brandId = 'loveintea' }: { brandId?: string }) {
                 {asset.folder && (
                   <span className="absolute bottom-1.5 right-1.5 z-10 text-[8px] bg-black/70 text-brand-300 px-1 rounded">🗂 {asset.folder}</span>
                 )}
-                <div className="aspect-square bg-gray-900">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={asset.url}
-                    alt={asset.filename}
-                    loading="lazy"
-                    className="w-full h-full object-cover"
-                    onError={e => { (e.target as HTMLImageElement).style.opacity = '0.2'; }}
-                  />
+                <div className="aspect-square bg-gray-900 relative">
+                  {isVideoAsset(asset) ? (
+                    <>
+                      <video
+                        src={`${asset.url}#t=0.1`}
+                        muted playsInline preload="metadata"
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute bottom-1 left-1 text-[8px] bg-black/70 text-white px-1 rounded flex items-center gap-0.5">▶ video</span>
+                    </>
+                  ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={thumbUrl(asset.url, 400)}
+                      alt={asset.filename}
+                      loading="lazy"
+                      className="w-full h-full object-cover"
+                      onError={e => { (e.target as HTMLImageElement).style.opacity = '0.2'; }}
+                    />
+                  )}
                 </div>
 
                 {/* Status badge */}
@@ -465,8 +483,12 @@ export function AssetDamView({ brandId = 'loveintea' }: { brandId?: string }) {
 
           {/* Preview */}
           <div className="mx-4 mt-4 rounded-xl overflow-hidden bg-gray-800 flex-shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={selected.url} alt="" className="w-full object-contain max-h-48" />
+            {isVideoAsset(selected) ? (
+              <video src={selected.url} controls muted playsInline preload="metadata" className="w-full object-contain max-h-48" />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={thumbUrl(selected.url, 600)} alt="" className="w-full object-contain max-h-48" />
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -610,8 +632,12 @@ export function AssetDamView({ brandId = 'loveintea' }: { brandId?: string }) {
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
           onClick={() => setLightbox(null)}>
           <div className="relative max-w-4xl max-h-[90vh]" onClick={e => e.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={lightbox.url} alt="" className="max-h-[90vh] object-contain rounded-xl" />
+            {isVideoAsset(lightbox) ? (
+              <video src={lightbox.url} controls autoPlay muted playsInline className="max-h-[90vh] object-contain rounded-xl" />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={thumbUrl(lightbox.url, 1440)} alt="" className="max-h-[90vh] object-contain rounded-xl" />
+            )}
             <div className="absolute top-3 right-3 flex gap-2">
               <a href={lightbox.url} download
                 className="px-3 py-1.5 bg-black/70 hover:bg-black/90 text-white text-xs rounded-lg backdrop-blur">

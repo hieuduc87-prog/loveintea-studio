@@ -82,8 +82,8 @@ ${rules.length ? `ACTIVE RULES:\n${rules.map((r, i) => `${i + 1}. ${r}`).join('\
 ${getExpertKnowledgeBlock(brandId)}
 
 REQUIREMENTS:
-1. caption: Vietnamese, on-brand voice, benefit-led, follows the hook + copy direction, obeys compliance neverSay/alwaysSay. Natural length for the surface (Reel cover = short; feed = 2-4 short paragraphs). Include 1 clear CTA.
-2. hashtags: 5-10 relevant Vietnamese/English hashtags, space-separated, each starting with #.
+1. caption: English (brand sells the US market — default English, do NOT write Vietnamese), on-brand voice, benefit-led. Open with a STRONG scroll-stopping hook, then follow the copy direction, obey compliance neverSay/alwaysSay. Natural length for the surface (Reel cover = short; feed = 2-4 short paragraphs). Include 1 clear CTA.
+2. hashtags: 5-10 relevant English hashtags, space-separated, each starting with #.
 3. image_prompt: a 50-90 word English prompt for an image generator matching the visual direction — describe the product scene, lighting, mood, composition (vertical). NO text/letters in the image.
 4. targeting: which audience SEGMENT this post speaks to, the INSIGHT it leverages, and the BEHAVIOR it targets — short Vietnamese phrases drawn from the brand's strategy${dna?.target_audience ? `\n   (Khách hàng: ${dna.target_audience})` : ''}${dna?.insight ? `\n   (Insight brand: ${dna.insight})` : ''}${dna?.behavior ? `\n   (Hành vi: ${dna.behavior})` : ''}.
 
