@@ -71,10 +71,15 @@ export async function editProductImage(opts: {
   }
 
   const imageBuffer = fs.readFileSync(productImagePath);
+  // MIME đúng theo đuôi file (template slides có thể là .webp/.jpg, không phải png)
+  const ext = path.extname(productImagePath).toLowerCase();
+  const mime = ext === '.webp' ? 'image/webp'
+    : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+    : 'image/png';
   const imageFile = new File(
     [imageBuffer],
     path.basename(productImagePath),
-    { type: 'image/png' }
+    { type: mime }
   );
 
   const response = await withQuotaFallback(client => client.images.edit({
