@@ -68,6 +68,16 @@ function LoginContent() {
         </p>
       </div>
 
+      {/* Test/handover guide — public, no login needed */}
+      <a
+        href="/brand/test-tool.html"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-5 w-full max-w-sm flex items-center justify-center gap-2 bg-brand-600/15 hover:bg-brand-600/25 border border-brand-700/40 text-brand-300 text-sm font-medium rounded-xl px-5 py-3 transition-colors"
+      >
+        🧪 Hướng dẫn &amp; Bộ test tính năng (bàn giao)
+      </a>
+
       {/* Footer */}
       <p className="mt-8 text-xs text-gray-700">loveintea.wealthpsy.com</p>
     </div>
