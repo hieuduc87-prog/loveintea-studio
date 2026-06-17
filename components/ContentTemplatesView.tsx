@@ -157,6 +157,22 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
     }
   }
 
+  // Template chưa phân tích → chưa có "prompt thật" để bám khi tạo content. Phân tích hết 1 lần.
+  const isUnanalyzed = (t: Template) => !t.analysis || t.analysis === '{}' || t.analysis.trim() === '';
+  const [analyzingAll, setAnalyzingAll] = useState(false);
+  const [analyzeProg, setAnalyzeProg] = useState('');
+  async function analyzeAllMissing() {
+    const missing = templates.filter(isUnanalyzed);
+    if (!missing.length) { setAnalyzeProg('✓ Tất cả template đã có prompt phân tích'); return; }
+    setAnalyzingAll(true);
+    for (let i = 0; i < missing.length; i++) {
+      setAnalyzeProg(`Đang phân tích ${i + 1}/${missing.length}: ${missing[i].name}…`);
+      try { await reAnalyze(missing[i].id); } catch { /* skip lỗi, làm tiếp */ }
+    }
+    setAnalyzingAll(false);
+    setAnalyzeProg(`✓ Xong — đã phân tích ${missing.length} template`);
+  }
+
   const catColor = (cat: string) => CATEGORIES.find(c => c.id === cat)?.color ?? 'bg-gray-500';
   const catLabel = (cat: string) => CATEGORIES.find(c => c.id === cat)?.label ?? cat;
 
@@ -180,6 +196,13 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {(() => { const n = templates.filter(isUnanalyzed).length; return n > 0 ? (
+            <button onClick={analyzeAllMissing} disabled={analyzingAll}
+              className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-white text-xs font-medium rounded-lg disabled:opacity-50"
+              title="Phân tích các template chưa có prompt — để khi tạo content bám đúng template">
+              {analyzingAll ? '⟳ Đang phân tích…' : `⚠ Phân tích ${n} template chưa có prompt`}
+            </button>
+          ) : null; })()}
           <button onClick={load} className="text-xs text-gray-600 hover:text-white px-3 py-1.5 bg-gray-800 rounded-lg">
             ↻ Refresh
           </button>
@@ -193,6 +216,7 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
           </button>
         </div>
       </div>
+      {analyzeProg && <p className="text-[11px] text-amber-400 mb-3 flex-shrink-0">{analyzeProg}</p>}
 
       {/* Create template — chọn loại */}
       {showCreate && (
