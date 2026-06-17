@@ -10,8 +10,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generateJSON } from '@/lib/gemini';
 import { getExpertKnowledgeBlock } from '@/lib/brand-knowledge';
+import { createJob, finishJob, failJob } from '@/lib/jobs';
 
 export async function POST(req: NextRequest) {
+  let jobId = '';
   try {
     const body = await req.json() as { brandId?: string; productId?: string; message?: string; tone?: string; segment?: string; platform?: string; n?: number; templateId?: string; language?: string; length?: string };
     const brandId = body.brandId || 'loveintea';
@@ -68,9 +70,13 @@ OUTPUT REQUIREMENTS:
 
 Trả ONLY JSON: {"variants":[{"caption":"...","hashtags":"#a #b","image_prompt":"50-90 words English, vertical, no text in image","targeting":{"segment":"...","insight":"...","behavior":"..."}}]}`;
 
+    jobId = createJob({ brandId, kind: 'content', source: 'CreateLab', title: `Tạo content (${n} biến thể): ${message.slice(0, 50)}`, meta: { productId: body.productId, language: langName, n } });
     const out = await generateJSON<{ variants: Array<{ caption: string; hashtags: string; image_prompt: string; targeting?: Record<string, string> }> }>(prompt);
-    return NextResponse.json({ ok: true, variants: (out.variants ?? []).slice(0, n) });
+    const variants = (out.variants ?? []).slice(0, n);
+    finishJob(jobId, { count: variants.length });
+    return NextResponse.json({ ok: true, variants });
   } catch (e) {
+    failJob(jobId, e);
     return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }

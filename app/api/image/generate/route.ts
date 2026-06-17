@@ -10,14 +10,17 @@ import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
 import { resolveProductImagePath } from '@/lib/plan-generate';
+import { createJob, logJob, finishJob, failJob } from '@/lib/jobs';
 
 export async function POST(req: NextRequest) {
+  let jobId = '';
   try {
     const { prompt, productId, brandId, refImageUrl, templateId } = await req.json() as {
       prompt?: string; productId?: string; brandId?: string; refImageUrl?: string; templateId?: string;
     };
     if (!prompt?.trim()) return NextResponse.json({ error: 'prompt required' }, { status: 400 });
     const db = getDb();
+    jobId = createJob({ brandId, kind: 'image', source: 'CreateLab', title: `Tạo ảnh: ${prompt.slice(0, 60)}`, meta: { productId, templateId, refImageUrl } });
 
     // ── Fold template style into the prompt so output bám theo template đã chọn ──
     let finalPrompt = prompt;
@@ -55,13 +58,16 @@ export async function POST(req: NextRequest) {
     }
     if (!basePath && templateImageUrl) basePath = resolveProductImagePath(templateImageUrl.split('?')[0]);
 
+    logJob(jobId, basePath ? `Edit từ ảnh gốc${templateId ? ' + template' : ''}…` : 'Generate ảnh mới…');
     const raw = basePath
       ? await editProductImage({ productImagePath: basePath, prompt: finalPrompt, size: '1024x1536' })
       : await generateImage({ prompt: finalPrompt, size: '1024x1536' });
     const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
+    finishJob(jobId, { url });
     return NextResponse.json({ ok: true, url });
   } catch (e) {
     console.error('[api] image/generate', e);
+    failJob(jobId, e);
     return NextResponse.json({ error: `Tạo ảnh lỗi: ${String(e instanceof Error ? e.message : e).slice(0, 200)}` }, { status: 500 });
   }
 }

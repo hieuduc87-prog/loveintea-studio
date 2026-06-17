@@ -768,6 +768,28 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN voiceover_url TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN vo_voice TEXT DEFAULT 'nova'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN reference_recipe_json TEXT`); } catch { /* already exists */ }
+  // ── Unified Job Queue — mọi nút "Tạo" (ảnh/content/carousel/plan/video) ghi 1 job để theo dõi ──
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS jobs (
+      id           TEXT PRIMARY KEY,
+      brand_id     TEXT DEFAULT 'loveintea',
+      kind         TEXT NOT NULL,              -- image | content | carousel | plan | reference
+      title        TEXT,
+      source       TEXT,                       -- nơi bấm tạo: CreateLab | Template | PlanCalendar | ...
+      status       TEXT DEFAULT 'running',     -- pending | running | done | failed
+      progress     INTEGER DEFAULT 0,
+      log          TEXT DEFAULT '',
+      error        TEXT,
+      result_json  TEXT,
+      meta_json    TEXT,
+      duration_ms  INTEGER,
+      created_at   TEXT DEFAULT (datetime('now')),
+      started_at   TEXT,
+      completed_at TEXT
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_status  ON jobs(status)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at)`);
+  } catch { /* already exists */ }
   // Product knowledge template + photo shot-list requirements
   try { db.exec(`ALTER TABLE products ADD COLUMN knowledge_json TEXT DEFAULT '{}'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE products ADD COLUMN shot_req_json TEXT DEFAULT ''`); } catch { /* already exists */ }

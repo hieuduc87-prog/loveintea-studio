@@ -15,6 +15,7 @@ import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-i
 import { resolveProductImagePath } from '@/lib/plan-generate';
 import { generateJSON } from '@/lib/gemini';
 import { recordTemplateUse } from '@/lib/template-picker';
+import { createJob, logJob, progressJob, finishJob, failJob } from '@/lib/jobs';
 
 interface SlideAnalysis { index?: number; role?: string; content?: string; text_on_image?: string; visual?: string }
 interface TplAnalysis {
@@ -28,6 +29,7 @@ interface TplAnalysis {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  let jobId = '';
   try {
     const { id } = params;
     const { productId, brandId } = await req.json().catch(() => ({})) as { productId?: string; brandId?: string };
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const tpl = db.prepare('SELECT name, image_url, slides_json, analysis, tags, color_palette FROM content_templates WHERE id=?')
       .get(id) as { name?: string; image_url?: string; slides_json?: string; analysis?: string; tags?: string; color_palette?: string } | undefined;
     if (!tpl) return NextResponse.json({ error: 'Template không tồn tại' }, { status: 404 });
+    jobId = createJob({ brandId: bid, kind: 'carousel', source: 'Template', title: `Carousel từ template: ${tpl.name ?? id}`, meta: { templateId: id, productId } });
 
     let slideUrls: Array<{ url: string }> = [];
     try { slideUrls = JSON.parse(tpl.slides_json || '[]'); } catch { /* */ }
@@ -98,12 +101,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           : await generateImage({ prompt, size: '1024x1536' });
         const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
         if (url) images.push(url);
+        logJob(jobId, `slide ${i + 1}/${slideUrls.length} ✓`);
       } catch (e) {
-        slideErrors.push(`slide ${i + 1}: ${String(e instanceof Error ? e.message : e).slice(0, 160)}`);
+        const m = `slide ${i + 1}: ${String(e instanceof Error ? e.message : e).slice(0, 160)}`;
+        slideErrors.push(m); logJob(jobId, `⚠ ${m}`);
       }
+      progressJob(jobId, ((i + 1) / slideUrls.length) * 90);
     }
 
     if (!images.length) {
+      failJob(jobId, slideErrors.join(' | ') || 'Không sinh được ảnh nào');
       return NextResponse.json({ error: `Không sinh được ảnh nào. ${slideErrors.join(' | ') || 'Kiểm tra OPENAI_API_KEY / quota.'}` }, { status: 500 });
     }
 
@@ -132,9 +139,11 @@ Return ONLY JSON: {"caption":"...","hashtags":"#a #b"}`;
       .run(postId, bid, 'facebook,instagram', 'carousel', fullCaption, images[0], JSON.stringify(images), id);
     try { recordTemplateUse(id); } catch { /* */ }
 
+    finishJob(jobId, { postId, count: images.length, url: images[0], warnings: slideErrors.length || undefined });
     return NextResponse.json({ ok: true, postId, images, caption: fullCaption, count: images.length, warnings: slideErrors.length ? slideErrors : undefined });
   } catch (e) {
     console.error('[api] template-generate', e);
+    failJob(jobId, e);
     return NextResponse.json({ error: `Tạo ảnh từ template lỗi: ${String(e instanceof Error ? e.message : e).slice(0, 200)}` }, { status: 500 });
   }
 }

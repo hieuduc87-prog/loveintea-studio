@@ -16,6 +16,7 @@ import { generateFromPlanItem, planItemDateToISO, resolveProductImagePath, PlanI
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
 import { pickTemplate, recordTemplateUse } from '@/lib/template-picker';
 import { autoTagPost, PostTag } from '@/lib/post-tags';
+import { createJob, finishJob, failJob } from '@/lib/jobs';
 
 function surfaceToFormat(surface: string): string | undefined {
   const s = (surface || '').toLowerCase();
@@ -29,6 +30,7 @@ function surfaceToFormat(surface: string): string | undefined {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: planId } = await params;
   const db = getDb();
+  let jobId = '';
   try {
     const body = await req.json().catch(() => ({})) as { itemIds?: string[]; withImage?: boolean; schedule?: boolean; useTemplate?: boolean };
     const withImage = Boolean(body.withImage);
@@ -49,6 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const created: Array<{ itemId: string; postId: string }> = [];
     const skipped: string[] = [];
     const errors: Array<{ itemId: string; error: string }> = [];
+    jobId = createJob({ brandId: plan.brand_id, kind: 'plan', source: 'PlanCalendar', title: `Tạo bài từ plan (${items.length} item${withImage ? ' + ảnh' : ''})`, meta: { withImage, schedule, useTemplate } });
 
     for (const item of items) {
       // Skip if a post already exists for this plan item
@@ -122,8 +125,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
+    if (errors.length && !created.length) failJob(jobId, errors.map(e => e.error).join(' | '));
+    else finishJob(jobId, { created: created.length, skipped: skipped.length, errors: errors.length });
     return NextResponse.json({ ok: true, created, skipped, errors });
   } catch (e) {
+    failJob(jobId, e);
     return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }
