@@ -7,12 +7,19 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../db';
-import { ffmpeg, probe, extractFrames, blackFrameCheck, detectBeats, IMAGES_DIR, TMP_DIR } from './ffmpeg';
+import { ffmpeg, probe, probeFull, extractFrames, pixelFrameCheck, frozenCheck, measureLufs, maxBlackSpan, detectBeats, IMAGES_DIR, TMP_DIR } from './ffmpeg';
 import { Storyboard, Segment } from './director';
 import { overlayHtml, OverlayProject } from './overlay-template';
 
 const FPS = 30;
 const W = 1080, H = 1920;
+const XF = 0.25; // crossfade duration between segments (s) — smooth without killing beat-sync
+// Gentle, uniform warm cinematic grade — gives clips + AI stills a consistent on-brand look
+// (lifts blue shadow → warmer, small contrast/sat pop). Tune here.
+const GRADE_VF = "eq=contrast=1.06:saturation=1.10:brightness=0.012,curves=b='0/0.05 1/0.94':r='0/0 0.5/0.53 1/1'";
+// Reels/Shorts loudness spec (OpenMontage sound-design): -14 LUFS, true peak -1 dBTP.
+// (Was -16 = podcast/talking-head; quieter than the IG/TikTok normalized feed.)
+const LN = 'loudnorm=I=-14:TP=-1.0:LRA=9';
 
 function log(lines: string[], msg: string) {
   lines.push(`[${new Date().toISOString().slice(11, 19)}] ${msg}`);
@@ -55,26 +62,62 @@ async function resolveSegmentInput(seg: Segment, db: ReturnType<typeof getDb>, w
   return { file: f, isVideo: false };
 }
 
-/** Encode one uniform segment (1080x1920@30, h264, no audio). Stills get Ken Burns. */
+/** Encode one uniform segment (1080x1920@30, h264, no audio). Stills get Ken Burns / punch-in. */
 async function encodeSegment(input: string, isVideo: boolean, durS: number, out: string, idx: number) {
   if (isVideo) {
+    // center-crop to 9:16 (no black pad), uniform grade for consistency across mixed sources
     await ffmpeg([
       '-ss', '0', '-t', durS.toFixed(3), '-i', input,
-      '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${FPS}`,
+      '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${FPS},${GRADE_VF}`,
       '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', out,
     ]);
   } else {
     const frames = Math.round(durS * FPS);
-    // Alternate zoom direction per segment for variety (deterministic by index)
-    const zExpr = idx % 2 === 0 ? `1+0.10*on/${frames}` : `1.10-0.10*on/${frames}`;
+    // 3-way motion rotation (deterministic by index) — every still MOVES from frame 0
+    // (viral rule: static frame gets scrolled). 0=zoom-in, 1=zoom-out, 2=punch-in reveal.
+    const mode = idx % 3;
+    const zExpr = mode === 0
+      ? `1+0.12*on/${frames}`                                   // slow zoom in
+      : mode === 1
+        ? `1.12-0.12*on/${frames}`                              // slow zoom out
+        : `if(lt(on,${Math.round(frames * 0.18)}),1+0.30*on/${Math.round(frames * 0.18)},1.30)`; // fast punch-in then hold
     await ffmpeg([
       '-i', input,
       '-vf', `scale=${W * 2}:${H * 2}:force_original_aspect_ratio=increase,crop=${W * 2}:${H * 2},` +
-        `zoompan=z='${zExpr}':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${FPS}`,
+        `zoompan=z='${zExpr}':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${FPS},${GRADE_VF}`,
       '-frames:v', String(frames),
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', out,
     ]);
   }
+}
+
+/**
+ * Join segments with a short crossfade (xfade chain) instead of hard concat.
+ * Output duration = sum(durs) - (n-1)*XF. Returns the new total duration so the
+ * overlay timeline can be scaled to stay in sync.
+ */
+async function concatWithTransitions(segFiles: string[], durs: number[], out: string): Promise<number> {
+  if (segFiles.length === 1) {
+    await ffmpeg(['-i', segFiles[0], '-c', 'copy', out]);
+    return durs[0];
+  }
+  const inputs: string[] = [];
+  segFiles.forEach(f => inputs.push('-i', f));
+  const parts: string[] = [];
+  let acc = durs[0];        // accumulated stream duration so far
+  let prev = '[0:v]';
+  for (let k = 1; k < segFiles.length; k++) {
+    const offset = Math.max(0, acc - XF);
+    const label = k === segFiles.length - 1 ? '[v]' : `[vx${k}]`;
+    parts.push(`${prev}[${k}:v]xfade=transition=fade:duration=${XF}:offset=${offset.toFixed(3)}${label}`);
+    acc = acc + durs[k] - XF;
+    prev = label;
+  }
+  await ffmpeg([
+    ...inputs, '-filter_complex', parts.join(';'),
+    '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', out,
+  ]);
+  return acc;
 }
 
 async function renderOverlayFrames(project: OverlayProject, framesDir: string, totalFrames: number) {
@@ -82,7 +125,7 @@ async function renderOverlayFrames(project: OverlayProject, framesDir: string, t
   const { default: puppeteer } = await import('puppeteer-core');
   const browser = await puppeteer.launch({
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--hide-scrollbars', '--force-color-profile=srgb'],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--hide-scrollbars', '--force-color-profile=srgb', '--allow-file-access-from-files', '--font-render-hinting=none'],
   });
   try {
     const page = await browser.newPage();
@@ -128,23 +171,28 @@ export async function renderProject(projectId: string): Promise<void> {
       try { bpm = (await detectBeats(bgmFile)).bpm; log(logs, `BPM detected: ${bpm?.toFixed(1)}`); } catch (e) { log(logs, `BPM detect failed: ${e}`); }
     }
 
-    // S2 + S4 — resolve inputs and encode uniform segments
+    // S2 + S4 — resolve inputs and encode uniform segments (with grade + Ken Burns/punch-in)
     const segFiles: string[] = [];
+    const segDurs: number[] = [];
     for (let i = 0; i < board.segments.length; i++) {
       const seg = board.segments[i];
       const { file, isVideo } = await resolveSegmentInput(seg, db, work, i, logs);
       const out = path.join(work, `seg_${i}.mp4`);
       await encodeSegment(file, isVideo, seg.dur_s, out, i);
       segFiles.push(out);
+      segDurs.push(seg.dur_s);
       log(logs, `seg${i}: ${seg.source} ${seg.dur_s}s encoded`);
     }
-    const concatList = path.join(work, 'list.txt');
-    fs.writeFileSync(concatList, segFiles.map(f => `file '${f}'`).join('\n'));
+    // S4 — join with crossfade (xfade chain). Total compresses by (n-1)*XF.
     const bg = path.join(work, 'bg.mp4');
-    await ffmpeg(['-f', 'concat', '-safe', '0', '-i', concatList, '-c', 'copy', bg]);
+    const sumDur = segDurs.reduce((a, b) => a + b, 0);
+    await concatWithTransitions(segFiles, segDurs, bg);
     const bgMeta = await probe(bg);
     const durS = bgMeta.duration;
-    log(logs, `bg track: ${durS.toFixed(2)}s`);
+    // Overlay timeline is built from storyboard dur_s (hard-cut grid); scale it to the
+    // crossfade-compressed bg so captions stay aligned (drift ≤ XF/2 ≈ 0.12s).
+    const tScale = sumDur > 0 ? durS / sumDur : 1;
+    log(logs, `bg track: ${durS.toFixed(2)}s (xfade ${XF}s, scale ${tScale.toFixed(3)})`);
 
     // S5 — overlay frames (deterministic HTML)
     const dna = db.prepare('SELECT colors_json FROM brand_dna WHERE brand_id=?').get(brandId) as { colors_json: string } | undefined;
@@ -158,8 +206,8 @@ export async function renderProject(projectId: string): Promise<void> {
 
     let cursor = 0;
     const overlaySegs = board.segments.map(s => {
-      const startMs = cursor * 1000; cursor += s.dur_s;
-      return { startMs, endMs: cursor * 1000, text: s.text, anim: s.text_anim };
+      const startMs = cursor * tScale * 1000; cursor += s.dur_s;
+      return { startMs, endMs: cursor * tScale * 1000, text: s.text, anim: s.text_anim };
     });
     const totalFrames = Math.round(durS * FPS);
     log(logs, `overlay: rendering ${totalFrames} frames…`);
@@ -190,17 +238,17 @@ export async function renderProject(projectId: string): Promise<void> {
     const hasBgm = Boolean(bgmFile && fs.existsSync(bgmFile));
     const baseInputs = ['-i', bg, '-framerate', String(FPS), '-i', overlayInput];
     const vOverlay = '[0:v][1:v]overlay=0:0:format=auto[v]';
-    const LN = 'loudnorm=I=-16:TP=-1.5:LRA=11';
 
     if (hasBgm && voFile) {
-      // VO + BGM with sidechain ducking (BGM dips when narration speaks) — hubframe audio rule
+      // VO + BGM frequency-aware ducking (vpcore mixer): cut 300-1000Hz on BGM where the
+      // human voice lives + sidechain dip (attack 5ms/release 200ms = fast Reels). VO stays crisp.
       await ffmpeg([
         ...baseInputs, '-i', bgmFile!, '-i', voFile,
         '-filter_complex',
         `${vOverlay};` +
         `[3:a]asplit=2[voa][vob];` +
-        `[2:a]volume=0.8,atrim=0:${D},afade=t=out:st=${fadeStart}:d=1[bgmt];` +
-        `[bgmt][voa]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=300[duck];` +
+        `[2:a]volume=0.7,equalizer=f=600:width_type=h:width=700:g=-5,atrim=0:${D},afade=t=out:st=${fadeStart}:d=1[bgmt];` +
+        `[bgmt][voa]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=200[duck];` +
         `[duck][vob]amix=inputs=2:duration=first:normalize=0[mx];[mx]${LN}[a]`,
         '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
         '-pix_fmt', 'yuv420p', '-r', String(FPS), '-c:a', 'aac', '-b:a', '160k', '-t', D, final,
@@ -229,13 +277,29 @@ export async function renderProject(projectId: string): Promise<void> {
     }
     log(logs, `composite done (bgm=${hasBgm}, vo=${Boolean(voFile)})`);
 
-    // S7 — QA (exit 0 ≠ video đúng)
+    // S7 — QA: exit 0 ≠ video đúng (quizzlee). Read real pixels + hard numeric gates (vpcore post_render).
+    const expectAudio = hasBgm || Boolean(voFile);
     const qaFrames = await extractFrames(final, path.join(work, 'qa'), 6);
-    const qa = blackFrameCheck(qaFrames);
-    if (!qa.ok) throw new Error(`QA failed: ${qa.bad.length}/6 black frames`);
-    const fMeta = await probe(final);
-    if (Math.abs(fMeta.duration - durS) > durS * 0.08) throw new Error(`QA duration drift: ${fMeta.duration.toFixed(1)}s vs ${durS.toFixed(1)}s`);
-    log(logs, `QA pass: ${fMeta.duration.toFixed(1)}s ${fMeta.width}x${fMeta.height}`);
+    const px = await pixelFrameCheck(qaFrames);
+    if (!px.ok) throw new Error(`QA blank frames: ${px.bad.map(b => b.reason).join(', ')}`);
+    if (await frozenCheck(qaFrames)) throw new Error('QA frozen: sampled frames identical (video stuck)');
+    const fMeta = await probeFull(final);
+    if (fMeta.width !== W || fMeta.height !== H) throw new Error(`QA resolution: ${fMeta.width}x${fMeta.height} ≠ ${W}x${H}`);
+    const durTol = Math.max(3, durS * 0.1);
+    if (Math.abs(fMeta.duration - durS) > durTol) throw new Error(`QA duration drift: ${fMeta.duration.toFixed(1)}s vs ${durS.toFixed(1)}s`);
+    if (fMeta.bitrateKbps && fMeta.bitrateKbps < 600) throw new Error(`QA bitrate too low: ${fMeta.bitrateKbps}kbps (<600 = encode broke)`);
+    if (expectAudio && !fMeta.hasAudio) throw new Error('QA: audio expected but no audio stream');
+    const blackSpan = await maxBlackSpan(final);
+    if (blackSpan > 2) throw new Error(`QA black span ${blackSpan.toFixed(1)}s (>2s)`);
+    let lufsNote = '';
+    if (expectAudio) {
+      const lufs = await measureLufs(final);
+      if (lufs != null) {
+        lufsNote = ` ${lufs.toFixed(1)} LUFS`;
+        if (lufs < -23 || lufs > -9) log(logs, `⚠ QA loudness out of range: ${lufs.toFixed(1)} LUFS (target -14)`);
+      }
+    }
+    log(logs, `QA pass: ${fMeta.duration.toFixed(1)}s ${fMeta.width}x${fMeta.height} ${fMeta.bitrateKbps}kbps${lufsNote} black=${blackSpan.toFixed(1)}s`);
 
     // S8 — publish to library
     const outName = `vid_${projectId}.mp4`;

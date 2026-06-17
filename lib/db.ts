@@ -767,6 +767,7 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN vo_script TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN voiceover_url TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN vo_voice TEXT DEFAULT 'nova'`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN reference_recipe_json TEXT`); } catch { /* already exists */ }
   // Product knowledge template + photo shot-list requirements
   try { db.exec(`ALTER TABLE products ADD COLUMN knowledge_json TEXT DEFAULT '{}'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE products ADD COLUMN shot_req_json TEXT DEFAULT ''`); } catch { /* already exists */ }

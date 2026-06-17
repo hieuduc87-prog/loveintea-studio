@@ -22,7 +22,8 @@ export function overlayHtml(p: OverlayProject): string {
     font-size:42px; font-weight:900; line-height:1.2; color:#fff;
     text-shadow:0 2px 16px rgba(0,0,0,.75); opacity:0; }
   #hook .accent { color:${p.colors.accent}; }
-  #caption { position:absolute; bottom:170px; left:30px; right:30px; text-align:center; opacity:0; }
+  /* bottom 300-400px is covered by IG/TikTok/Shorts UI (caption/share/buttons) — keep text above ~340px */
+  #caption { position:absolute; bottom:340px; left:30px; right:30px; text-align:center; opacity:0; }
   #caption span { display:inline; background:rgba(0,0,0,.55); color:#fff; font-size:26px;
     font-weight:700; line-height:1.7; padding:6px 14px; border-radius:12px;
     -webkit-box-decoration-break:clone; box-decoration-break:clone; }

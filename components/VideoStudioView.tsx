@@ -45,6 +45,7 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
   const [bgmName, setBgmName] = useState('');
   const [useVoiceover, setUseVoiceover] = useState(true);
   const [voVoice, setVoVoice] = useState('nova');
+  const [referenceClipId, setReferenceClipId] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -122,11 +123,11 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
     try {
       const r = await fetch('/api/video/projects', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, purpose, productId: productId || undefined, targetDurationS: duration, bgmUrl: bgmUrl || undefined, notes: notes || undefined, useVoiceover, voVoice, language }),
+        body: JSON.stringify({ brandId, purpose, productId: productId || undefined, targetDurationS: duration, bgmUrl: bgmUrl || undefined, notes: notes || undefined, useVoiceover, voVoice, language, referenceClipId: referenceClipId || undefined }),
       });
-      const d = await r.json() as { ok?: boolean; bpm?: number; error?: string };
+      const d = await r.json() as { ok?: boolean; bpm?: number; error?: string; recipe?: { scenes: number; structure?: string } | null };
       if (!d.ok) setMsg('❌ ' + (d.error ?? 'Tạo storyboard thất bại'));
-      else { setMsg(`✅ Storyboard sẵn sàng${d.bpm ? ` — beat-sync ${Math.round(d.bpm)} BPM` : ''}. Bấm Render để dựng video.`); setNotes(''); await load(); }
+      else { setMsg(`✅ Storyboard sẵn sàng${d.bpm ? ` — beat-sync ${Math.round(d.bpm)} BPM` : ''}${d.recipe ? ` — học công thức ${d.recipe.scenes} cảnh từ video mẫu` : ''}. Bấm Render để dựng video.`); setNotes(''); await load(); }
     } catch (e) { setMsg('❌ ' + String(e)); }
     setCreating(false);
   }
@@ -185,6 +186,18 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
           </label>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ghi chú cho AI director (tùy chọn): thông điệp chính, ưu đãi, không khí…"
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white resize-none h-16" />
+          <label className="block">
+            <span className="text-[11px] text-gray-400">🎯 Học công thức từ video mẫu viral (tùy chọn) — AI phân tích cấu trúc/nhịp/góc máy của clip rồi dựng lại bằng nội dung brand</span>
+            <select value={referenceClipId} onChange={e => setReferenceClipId(e.target.value)}
+              className="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
+              <option value="">— Không học mẫu (tự do sáng tạo) —</option>
+              {clips.map(c => {
+                let t: Record<string, unknown> = {}; try { t = JSON.parse(c.tags_json); } catch { /* */ }
+                return <option key={c.id} value={c.id}>{String(t.subject ?? 'clip')} · {Math.round(c.duration_s)}s</option>;
+              })}
+            </select>
+            <span className="text-[10px] text-gray-600">Upload clip viral mẫu vào kho rồi chọn ở đây. AI giữ công thức thắng, thay nội dung của bạn.</span>
+          </label>
           <div className="flex items-center gap-2 flex-wrap">
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={useVoiceover} onChange={e => setUseVoiceover(e.target.checked)} className="rounded accent-brand-500" />
