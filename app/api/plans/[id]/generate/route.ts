@@ -15,8 +15,9 @@ import { getDb } from '@/lib/db';
 import { generateFromPlanItem, planItemDateToISO, resolveProductImagePath, PlanItemRow } from '@/lib/plan-generate';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
 import { pickTemplate, recordTemplateUse } from '@/lib/template-picker';
+import { generateTemplateImages } from '@/lib/template-generate';
 import { autoTagPost, PostTag } from '@/lib/post-tags';
-import { createJob, finishJob, failJob } from '@/lib/jobs';
+import { createJob, logJob, finishJob, failJob } from '@/lib/jobs';
 
 function surfaceToFormat(surface: string): string | undefined {
   const s = (surface || '').toLowerCase();
@@ -62,12 +63,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // Template operating flow: pick a template (rotation + win-bias) for this surface,
         // read its analysed structure/skeleton so the post mirrors the template for THIS product.
         let templateId: string | null = null;
+        let templateKind = '';
         let templateGuide: { structure?: string; skeleton?: string } | undefined;
         let styleHint = '';
         if (useTemplate) {
           const tpl = pickTemplate(plan.brand_id, { format: surfaceToFormat(item.surface) });
           if (tpl) {
             templateId = tpl.id;
+            templateKind = tpl.kind;
             try {
               const a = JSON.parse(tpl.analysis || '{}') as { style_keywords?: string[]; layout?: { description?: string }; structure?: string; skeleton?: string };
               styleHint = [a.style_keywords?.join(', '), a.layout?.description].filter(Boolean).join('. ');
@@ -81,26 +84,47 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (styleHint) imagePrompt = `${gen.image_prompt}\n\nFollow this template style/layout: ${styleHint}`;
 
         let imageUrl = '';
+        let imagesJson: string | null = null;
+        let contentType = 'single';
         if (withImage) {
-          const product = item.product_id
-            ? db.prepare('SELECT image_url FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(item.product_id, plan.brand_id, item.product_id) as { image_url: string } | undefined
-            : undefined;
-          const productPath = resolveProductImagePath(product?.image_url);
-          let raw: string;
-          if (productPath) raw = await editProductImage({ productImagePath: productPath, prompt: imagePrompt, size: '1024x1536' });
-          else raw = await generateImage({ prompt: imagePrompt, size: '1024x1536' });
-          imageUrl = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
+          if (templateId && templateKind === 'collection') {
+            // Template carousel → sinh ĐỦ N ảnh theo template (giữ caption theo plan item).
+            logJob(jobId, `item ${item.id.slice(0, 6)}: carousel template…`);
+            const tg = await generateTemplateImages({
+              templateId, productId: item.product_id ?? undefined, brandId: plan.brand_id,
+              withCaption: false, onLog: m => logJob(jobId, `  ${m}`),
+            });
+            if (tg.images.length) {
+              imageUrl = tg.images[0];
+              imagesJson = JSON.stringify(tg.images);
+              contentType = tg.images.length > 1 ? 'carousel' : 'single';
+            }
+          } else {
+            // 1 ảnh: dùng ảnh template làm base (giữ bố cục) nếu có, không thì packshot, cuối cùng generate.
+            const product = item.product_id
+              ? db.prepare('SELECT image_url FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(item.product_id, plan.brand_id, item.product_id) as { image_url: string } | undefined
+              : undefined;
+            let basePath = resolveProductImagePath(product?.image_url);
+            if (!basePath && templateId) {
+              const ti = db.prepare('SELECT image_url FROM content_templates WHERE id=?').get(templateId) as { image_url?: string } | undefined;
+              basePath = resolveProductImagePath((ti?.image_url || '').split('?')[0]);
+            }
+            const raw = basePath
+              ? await editProductImage({ productImagePath: basePath, prompt: imagePrompt, size: '1024x1536' })
+              : await generateImage({ prompt: imagePrompt, size: '1024x1536' });
+            imageUrl = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
+          }
         }
 
         const scheduledAt = schedule ? planItemDateToISO(item.date) : null;
         const status = schedule && scheduledAt ? 'scheduled' : 'draft';
         const postId = uuid();
         db.prepare(`INSERT INTO posts
-          (id, brand_id, plan_id, plan_item_id, sku_id, caption, hashtags, image_url, image_prompt,
+          (id, brand_id, plan_id, plan_item_id, sku_id, caption, hashtags, image_url, images_json, content_type, image_prompt,
            platforms, status, scheduled_at, review_status, template_id)
-          VALUES (?,?,?,?,?,?,?,?,?, 'facebook,instagram', ?, ?, 'pending', ?)`)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?, 'facebook,instagram', ?, ?, 'pending', ?)`)
           .run(postId, plan.brand_id, planId, item.id, item.product_id ?? '',
-            gen.caption, gen.hashtags, imageUrl, imagePrompt, status, scheduledAt, templateId);
+            gen.caption, gen.hashtags, imageUrl, imagesJson, contentType, imagePrompt, status, scheduledAt, templateId);
         if (templateId) recordTemplateUse(templateId);
 
         // Multi-tag the post from the start (product/template via structured cols + AI targeting + plan dims)
