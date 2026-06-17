@@ -39,8 +39,8 @@ export async function buildStoryboard(opts: {
 }): Promise<Storyboard> {
   const db = getDb();
   const { brandId, purpose, productId, targetDurationS, bpm, notes, recipe } = opts;
-  // Ngôn ngữ cho toàn bộ text/hook/CTA/voiceover. Mặc định Tiếng Việt.
-  const langName = (opts.language ?? 'vi').toLowerCase().startsWith('en') ? 'English' : 'Vietnamese';
+  // Ngôn ngữ cho toàn bộ text/hook/CTA/voiceover. Mặc định English (brand bán US).
+  const langName = (opts.language ?? 'en').toLowerCase().startsWith('vi') ? 'Vietnamese' : 'English';
 
   const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;
   const product = productId

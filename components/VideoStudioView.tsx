@@ -40,7 +40,7 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
   const [productId, setProductId] = useState('');
   const [duration, setDuration] = useState(20);
   const [notes, setNotes] = useState('');
-  const [language, setLanguage] = useState('vi');
+  const [language, setLanguage] = useState('en');
   const [bgmUrl, setBgmUrl] = useState('');
   const [bgmName, setBgmName] = useState('');
   const [useVoiceover, setUseVoiceover] = useState(true);
@@ -169,8 +169,8 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
           </select>
           <select value={language} onChange={e => setLanguage(e.target.value)}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
+            <option value="en">🇬🇧 English (text + voiceover) — mặc định, bán US</option>
             <option value="vi">🇻🇳 Tiếng Việt (text + lồng tiếng)</option>
-            <option value="en">🇬🇧 English (text + voiceover)</option>
           </select>
           <div className="flex items-center gap-2">
             <label className="text-[11px] text-gray-400">Thời lượng</label>
