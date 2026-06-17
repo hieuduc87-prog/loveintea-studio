@@ -62,21 +62,29 @@ export async function POST(req: NextRequest) {
     const ws1 = wb.Sheets[wb.SheetNames[0]];
     const rows1: unknown[][] = XLSX.utils.sheet_to_json(ws1, { header: 1, defval: '' });
 
-    // Header detection — linh hoạt: quét vài cột đầu của mỗi dòng, chấp nhận
-    // "date" (EN) hoặc "ngày" (VI), không phân biệt hoa thường / khoảng trắng.
-    const isDateHeader = (v: unknown) => {
-      const s = String(v ?? '').trim().toLowerCase();
-      return s === 'date' || s === 'ngày' || s === 'ngay' || s.startsWith('date') || s.startsWith('ngày');
-    };
+    // Header detection — LINH HOẠT: quét MỌI cột mỗi dòng. Một dòng là tiêu đề nếu
+    // (a) có ô tên cột ngày (nhiều biến thể EN/VI), HOẶC (b) chứa ≥2 từ khoá cột kế hoạch.
+    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+    const DATE_WORDS = ['date', 'ngày', 'ngay', 'day', 'ngày đăng', 'ngay dang', 'thời gian', 'thoi gian', 'posting', 'post date'];
+    const isDateHeader = (v: unknown) => { const s = norm(v); return !!s && DATE_WORDS.some(w => s === w || s.startsWith(w)); };
+    const KEYWORDS = ['surface', 'platform', 'nền tảng', 'purpose', 'mục đích', 'pillar', 'trụ', 'wave', 'đợt', 'hook', 'caption', 'content', 'nội dung', 'segment', 'audience', 'đối tượng', 'rtb', 'usp', 'sku', 'product', 'sản phẩm', 'context', 'visual', 'copy', 'hashtag', 'theme', 'chủ đề'];
+    const keywordHits = (row: unknown[]) => row.reduce((n: number, c) => n + (KEYWORDS.some(k => norm(c).includes(k)) ? 1 : 0), 0);
     let headerIdx = -1;
     for (let i = 0; i < rows1.length; i++) {
       const row = rows1[i] as unknown[];
-      if (row.slice(0, 4).some(isDateHeader)) { headerIdx = i; break; }
+      if (row.some(isDateHeader) || keywordHits(row) >= 2) { headerIdx = i; break; }
     }
+    // Fallback: không có dòng tiêu đề rõ → tìm dòng đầu tiên mà cột 0 parse được thành ngày
+    // (coi như dữ liệu bắt đầu ngay tại đó, không header → headerIdx = dòng-trước).
     if (headerIdx < 0) {
-      const preview = rows1.slice(0, 5).map(r => String((r as unknown[])[0] ?? '').trim()).filter(Boolean).join(', ');
+      for (let i = 0; i < rows1.length; i++) {
+        if (parseDate(cell(rows1[i] as unknown[], 0))) { headerIdx = i - 1; break; }
+      }
+    }
+    if (headerIdx < 0 && !rows1.some(r => parseDate(cell(r as unknown[], 0)))) {
+      const preview = rows1.slice(0, 6).map(r => (r as unknown[]).slice(0, 4).map(c => String(c ?? '').trim()).filter(Boolean).join(' | ')).filter(Boolean).join('  ··  ');
       return NextResponse.json({
-        error: `Không tìm thấy dòng tiêu đề ở Sheet 1. Cần một cột tên "Date" (hoặc "Ngày") trong 4 cột đầu. Các giá trị cột đầu đọc được: ${preview || '(trống)'}`,
+        error: `Không nhận ra dòng tiêu đề ở Sheet 1. Cần cột ngày ("Date"/"Ngày"...) hoặc các cột kế hoạch (Surface, Purpose, Hook...). 6 dòng đầu đọc được: ${preview || '(trống)'}`,
       }, { status: 400 });
     }
 

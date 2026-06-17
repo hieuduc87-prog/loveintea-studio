@@ -74,6 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // ── Sinh ảnh từng slide theo thứ tự ──
     const productRoles = new Set(['product', 'ingredient', 'proof']);
     const images: string[] = [];
+    const slideErrors: string[] = [];
     for (let i = 0; i < slideUrls.length; i++) {
       const meta = slidesMeta[i] ?? {};
       const role = (meta.role || (i === 0 ? 'hook' : 'other')).toLowerCase();
@@ -90,14 +91,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const tplSlidePath = resolveProductImagePath((slideUrls[i].url || '').split('?')[0]);
       const base = (productRoles.has(role) && packshotPath) ? packshotPath : (tplSlidePath || packshotPath);
 
-      const raw = base
-        ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536' })
-        : await generateImage({ prompt, size: '1024x1536' });
-      const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
-      if (url) images.push(url);
+      // 1 slide lỗi (quota / ảnh hỏng) KHÔNG kéo đổ cả mẻ — sinh tiếp các slide còn lại.
+      try {
+        const raw = base
+          ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536' })
+          : await generateImage({ prompt, size: '1024x1536' });
+        const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
+        if (url) images.push(url);
+      } catch (e) {
+        slideErrors.push(`slide ${i + 1}: ${String(e instanceof Error ? e.message : e).slice(0, 160)}`);
+      }
     }
 
-    if (!images.length) return NextResponse.json({ error: 'Không sinh được ảnh nào' }, { status: 500 });
+    if (!images.length) {
+      return NextResponse.json({ error: `Không sinh được ảnh nào. ${slideErrors.join(' | ') || 'Kiểm tra OPENAI_API_KEY / quota.'}` }, { status: 500 });
+    }
 
     // ── Caption bám structure template (English mặc định — brand bán US) ──
     const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(bid) as Record<string, string> | undefined;
@@ -124,8 +132,9 @@ Return ONLY JSON: {"caption":"...","hashtags":"#a #b"}`;
       .run(postId, bid, 'facebook,instagram', 'carousel', fullCaption, images[0], JSON.stringify(images), id);
     try { recordTemplateUse(id); } catch { /* */ }
 
-    return NextResponse.json({ ok: true, postId, images, caption: fullCaption, count: images.length });
+    return NextResponse.json({ ok: true, postId, images, caption: fullCaption, count: images.length, warnings: slideErrors.length ? slideErrors : undefined });
   } catch (e) {
-    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
+    console.error('[api] template-generate', e);
+    return NextResponse.json({ error: `Tạo ảnh từ template lỗi: ${String(e instanceof Error ? e.message : e).slice(0, 200)}` }, { status: 500 });
   }
 }

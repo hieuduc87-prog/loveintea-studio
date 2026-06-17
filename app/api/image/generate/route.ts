@@ -23,14 +23,25 @@ export async function POST(req: NextRequest) {
     let finalPrompt = prompt;
     let templateImageUrl: string | undefined;
     if (templateId) {
-      const t = db.prepare('SELECT image_url, tags, color_palette FROM content_templates WHERE id=?')
-        .get(templateId) as { image_url?: string; tags?: string; color_palette?: string } | undefined;
+      const t = db.prepare('SELECT image_url, tags, color_palette, analysis FROM content_templates WHERE id=?')
+        .get(templateId) as { image_url?: string; tags?: string; color_palette?: string; analysis?: string } | undefined;
       if (t) {
         templateImageUrl = t.image_url;
         let styleTags = '';
         try { styleTags = (JSON.parse(t.tags || '[]') as string[]).join(', '); } catch { /* */ }
-        const styleBits = [styleTags, t.color_palette].filter(Boolean).join('. ');
-        if (styleBits) finalPrompt = `${prompt}\n\nMatch this visual style/layout: ${styleBits}.`;
+        // Phần lớn "DNA" template nằm trong analysis JSON (layout/style_keywords/colors),
+        // KHÔNG ở cột tags/color_palette → trước đây bỏ qua khiến ảnh "không liên quan template".
+        let a: { layout?: { description?: string }; style_keywords?: string[]; colors?: { palette?: string[]; mood?: string }; structure?: string; content_direction?: string } = {};
+        try { a = JSON.parse(t.analysis || '{}'); } catch { /* */ }
+        const styleBits = [
+          styleTags,
+          (a.style_keywords ?? []).join(', '),
+          a.layout?.description,
+          [a.colors?.palette?.join(', '), a.colors?.mood].filter(Boolean).join(' / '),
+          t.color_palette,
+          a.content_direction,
+        ].filter(Boolean).join('. ');
+        if (styleBits) finalPrompt = `${prompt}\n\nMatch this template's visual style, layout and composition closely: ${styleBits}.`;
       }
     }
 
@@ -50,6 +61,7 @@ export async function POST(req: NextRequest) {
     const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
     return NextResponse.json({ ok: true, url });
   } catch (e) {
-    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
+    console.error('[api] image/generate', e);
+    return NextResponse.json({ error: `Tạo ảnh lỗi: ${String(e instanceof Error ? e.message : e).slice(0, 200)}` }, { status: 500 });
   }
 }
