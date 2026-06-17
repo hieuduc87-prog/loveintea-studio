@@ -81,6 +81,7 @@ export default function KanbanPage() {
   const [imgDragOver, setImgDragOver] = useState(false);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [dropTargetCol, setDropTargetCol] = useState<Status | null>(null);
+  const [fixingAll, setFixingAll] = useState(false);
   const [features, setFeatures] = useState<FeatureTab[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -137,6 +138,21 @@ export default function KanbanPage() {
     } else {
       setCards(prev => prev.map(c => c.id === id ? { ...c, status: card.status } : c));
     }
+  };
+
+  // Fix tất cả — đẩy mọi card ở "Cần làm" (+ "Fix lỗi" để retry) sang 🤖 Auto Fix một lần.
+  const fixAll = async () => {
+    const pending = cards.filter(c => c.status === 'todo' || c.status === 'fix_failed');
+    if (!pending.length) { alert('Không có card nào ở "Cần làm" / "Fix lỗi" để đẩy sang Auto Fix.'); return; }
+    if (!confirm(`Đẩy ${pending.length} card sang 🤖 Auto Fix để Claude tự sửa lần lượt?`)) return;
+    setFixingAll(true);
+    setCards(prev => prev.map(c => (c.status === 'todo' || c.status === 'fix_failed') ? { ...c, status: 'auto_fix' } : c));
+    try {
+      await Promise.all(pending.map(c => fetch(`/api/kanban/${c.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'auto_fix' }),
+      })));
+    } finally { setFixingAll(false); load(); }
   };
 
   const handleDragStart = (e: React.DragEvent, cardId: string) => {
@@ -196,11 +212,19 @@ export default function KanbanPage() {
           <h1 className="text-lg font-bold" style={{ color: 'var(--text-1)' }}>Kanban Board</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Kéo card vào 🤖 Auto Fix để Claude tự sửa</p>
         </div>
-        <a href="/api/kanban/claude-brief" target="_blank" rel="noreferrer"
-          className="text-xs px-3 py-1.5 rounded-md border"
-          style={{ borderColor: 'var(--border)', color: 'var(--text-2)', backgroundColor: 'var(--bg-2)' }}>
-          Claude Brief ↗
-        </a>
+        <div className="flex items-center gap-2">
+          <button onClick={fixAll} disabled={fixingAll}
+            className="text-xs px-3 py-1.5 rounded-md font-semibold disabled:opacity-50"
+            style={{ backgroundColor: '#8b5cf6', color: '#fff' }}
+            title='Đẩy mọi card "Cần làm" + "Fix lỗi" sang Auto Fix'>
+            {fixingAll ? '⏳ Đang đẩy…' : '⚡ Fix tất cả'}
+          </button>
+          <a href="/api/kanban/claude-brief" target="_blank" rel="noreferrer"
+            className="text-xs px-3 py-1.5 rounded-md border"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-2)', backgroundColor: 'var(--bg-2)' }}>
+            Claude Brief ↗
+          </a>
+        </div>
       </div>
 
       {/* Board */}
