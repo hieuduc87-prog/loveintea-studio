@@ -82,10 +82,22 @@ async function post(name, path, body, check) {
   const collection = (tpls?.templates || []).find(t => t.kind === 'collection') || (tpls?.templates || [])[0];
   let tplPostId = null;
   if (collection) {
-    const tg = await post(`template generate (${collection.kind})`, `/api/content-templates/${collection.id}/generate`,
+    const tg = await post(`template generate (${collection.kind}) — start`, `/api/content-templates/${collection.id}/generate`,
       { productId: prodId, brandId: 'loveintea' },
-      d => d.postId && d.images?.length ? null : 'no postId/images');
-    tplPostId = tg?.postId;
+      d => d.jobId ? null : 'no jobId');
+    // chạy nền → poll Job Queue tới khi xong
+    if (tg?.jobId) {
+      let done = null;
+      for (let i = 0; i < 60; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const jr = await req('GET', '/api/jobs?limit=120');
+        const job = (jr.data?.jobs || []).find(j => j.id === tg.jobId);
+        if (job && (job.status === 'done' || job.status === 'failed')) { done = job; break; }
+      }
+      if (!done) rec('template generate (poll)', false, 'timeout chờ job');
+      else if (done.status === 'failed') rec('template generate (poll)', false, done.error || 'job failed');
+      else { const res = JSON.parse(done.result_json || '{}'); tplPostId = res.postId; rec('template generate (poll)', !!res.postId, `done, ${res.count} ảnh`); }
+    }
   }
 
   const cleanup = { posts: [], projects: [] };

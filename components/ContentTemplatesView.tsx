@@ -1200,24 +1200,38 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
   const [productId, setProductId] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  const [result, setResult] = useState<{ images: string[]; postId: string } | null>(null);
+  const [result, setResult] = useState<{ url?: string; count?: number } | null>(null);
 
   useEffect(() => {
     fetch(`/api/products?brand=${tpl.brand_id}`).then(r => r.json()).then(d => setProducts(d.products ?? [])).catch(() => {});
   }, [tpl.brand_id]);
 
   async function generate() {
-    setBusy(true); setMsg(''); setResult(null);
+    setBusy(true); setMsg('⟳ Đang gửi yêu cầu…'); setResult(null);
     try {
       const r = await fetch(`/api/content-templates/${tpl.id}/generate`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brandId: tpl.brand_id, productId: productId || undefined }),
       });
-      const d = await r.json() as { ok?: boolean; postId?: string; images?: string[]; count?: number; error?: string };
-      if (d.ok && d.images?.length) {
-        setResult({ images: d.images, postId: d.postId! });
-        setMsg(`✓ Đã tạo post carousel ${d.count} ảnh — vào Review & Queue để duyệt/đăng.`);
-      } else setMsg('✗ ' + (d.error ?? 'Lỗi tạo post'));
+      const d = await r.json() as { ok?: boolean; jobId?: string; error?: string };
+      if (!d.ok || !d.jobId) { setMsg('✗ ' + (d.error ?? 'Lỗi tạo post')); setBusy(false); return; }
+      // Carousel chạy NỀN → poll Job Queue tới khi xong (tránh timeout với nhiều slide).
+      const jobId = d.jobId;
+      for (let i = 0; i < 90; i++) {
+        await new Promise(res => setTimeout(res, 3000));
+        const jr = await fetch('/api/jobs?limit=120').then(x => x.json()).catch(() => null);
+        const job = (jr?.jobs ?? []).find((j: { id: string }) => j.id === jobId) as { status: string; progress: number; error?: string; result_json?: string } | undefined;
+        if (!job) { setMsg('⟳ Đang tạo…'); continue; }
+        if (job.status === 'running' || job.status === 'pending') { setMsg(`⟳ Đang sinh ảnh… ${job.progress || 0}%`); continue; }
+        if (job.status === 'failed') { setMsg('✗ ' + (job.error ?? 'Lỗi tạo ảnh')); break; }
+        if (job.status === 'done') {
+          let res: { count?: number; url?: string } = {};
+          try { res = JSON.parse(job.result_json || '{}'); } catch { /* */ }
+          setResult({ url: res.url, count: res.count });
+          setMsg(`✓ Đã tạo post carousel ${res.count ?? ''} ảnh — vào Review & Queue để duyệt/đăng.`);
+          break;
+        }
+      }
     } catch (e) { setMsg('✗ ' + String(e)); }
     setBusy(false);
   }
@@ -1237,13 +1251,11 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
           {busy ? `⟳ Đang sinh ${slideCount} ảnh…` : `✨ Tạo ${slideCount} ảnh → 1 post`}
         </button>
       </div>
-      {msg && <p className={`text-xs mt-2 ${msg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>{msg}</p>}
-      {result && (
-        <div className="flex gap-1.5 mt-2 overflow-x-auto">
-          {result.images.map((u, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={`${u}${u.includes('?') ? '&' : '?'}w=300`} alt="" className="w-16 h-24 object-cover rounded-lg border border-gray-700 flex-shrink-0" />
-          ))}
+      {msg && <p className={`text-xs mt-2 ${msg.startsWith('✓') ? 'text-emerald-400' : msg.startsWith('✗') ? 'text-red-400' : 'text-gray-400'}`}>{msg}</p>}
+      {result?.url && (
+        <div className="mt-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`${result.url}${result.url.includes('?') ? '&' : '?'}w=300`} alt="" className="w-16 h-20 object-cover rounded-lg border border-gray-700" />
         </div>
       )}
     </div>
