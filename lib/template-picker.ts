@@ -73,8 +73,10 @@ export function pickTemplate(brandId: string, opts: { format?: string; category?
     const winScore = r.metric_rows > 0 ? (r.avg_engaged / maxEng) : 0;           // 0..1, performance bias
     const ageDays = r.last_used_at ? (now - new Date(r.last_used_at).getTime()) / 86_400_000 : 999;
     const recency = Math.min(1, ageDays / 7);                                    // 0..1, fresher rotation gets higher
-    // 60% performance + 40% rotation; never-used (last_used_at null) floats up via recency=1
-    return { r, score: winScore * 0.6 + recency * 0.4 - r.usage_count * 0.001 };
+    // 60% performance + 40% rotation; never-used (last_used_at null) floats up via recency=1.
+    // + jitter ngẫu nhiên 0..0.25: phá thế hòa điểm → CHỌN NGẪU NHIÊN có trọng số (đa dạng template,
+    //   không lặp 1 mẫu khi điểm bằng nhau), nhưng template win/mới vẫn ưu thế rõ.
+    return { r, score: winScore * 0.6 + recency * 0.4 - r.usage_count * 0.001 + Math.random() * 0.25 };
   }).sort((a, b) => b.score - a.score);
 
   const { r } = scored[0];
