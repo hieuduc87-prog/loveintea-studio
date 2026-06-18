@@ -27,9 +27,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const fullCaption = caption + (hashtags ? `\n\n${hashtags}` : '');
 
     const postId = uuid();
-    getDb().prepare(`INSERT INTO posts (id, brand_id, platforms, content_type, caption, image_url, images_json, template_id, status, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?, 'draft', datetime('now'), datetime('now'))`)
-      .run(postId, bid, 'facebook,instagram', images.length > 1 ? 'carousel' : 'single', fullCaption, images[0], JSON.stringify(images), id);
+    getDb().prepare(`INSERT INTO posts (id, brand_id, sku_id, platforms, content_type, caption, image_url, images_json, template_id, status, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?, 'draft', datetime('now'), datetime('now'))`)
+      .run(postId, bid, productId ?? '', 'facebook,instagram', images.length > 1 ? 'carousel' : 'single', fullCaption, images[0], JSON.stringify(images), id);
     try { recordTemplateUse(id); } catch { /* */ }
 
     finishJob(jobId, { postId, count: images.length, url: images[0], warnings: warnings.length || undefined });
