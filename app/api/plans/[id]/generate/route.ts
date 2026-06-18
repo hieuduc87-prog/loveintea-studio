@@ -82,6 +82,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const gen = await generateFromPlanItem(item, templateGuide);
         let imagePrompt = gen.image_prompt;
         if (styleHint) imagePrompt = `${gen.image_prompt}\n\nFollow this template style/layout: ${styleHint}`;
+        // Brand bán US: ảnh KHÔNG được có chữ Tiếng Việt. Ưu tiên không chữ; nếu có thì English.
+        imagePrompt += '\n\nCRITICAL: Do NOT render any text, letters, or words in the image. If any text is truly unavoidable, it MUST be in ENGLISH only — NEVER Vietnamese.';
 
         let imageUrl = '';
         let imagesJson: string | null = null;

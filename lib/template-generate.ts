@@ -91,7 +91,7 @@ export async function generateTemplateImages(opts: {
       meta.visual ? `Composition/style: ${meta.visual}.` : '',
       product ? `Featured product: ${product.name} — ${product.pitch ?? ''} (${product.theme ?? ''}${product.ingredients ? `, ingredients: ${product.ingredients}` : ''}).` : '',
       styleBits ? `Match the template aesthetic: ${styleBits}.` : '',
-      'Photorealistic, premium, on-brand. NO text, NO letters, NO logos in the image.',
+      'Photorealistic, premium, on-brand. NO text, NO letters, NO logos in the image (if any text is unavoidable, ENGLISH only — never Vietnamese).',
     ].filter(Boolean).join(' ');
 
     const tplSlidePath = resolveProductImagePath((slideUrls[i].url || '').split('?')[0]);

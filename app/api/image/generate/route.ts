@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Brand bán US: ảnh không được có chữ Tiếng Việt.
+    finalPrompt += '\n\nCRITICAL: Do NOT render text/letters/words in the image. If any text is unavoidable, ENGLISH only — never Vietnamese.';
+
     // ── Base image priority: ref người dùng nhập → product packshot → ảnh template ──
     let basePath: string | null = null;
     if (refImageUrl) basePath = resolveProductImagePath(refImageUrl.split('?')[0]);
