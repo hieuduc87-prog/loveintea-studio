@@ -19,6 +19,7 @@ interface Product {
 interface ProductImage {
   id: string; product_id: string; image_url: string;
   type: string; caption: string; is_hero: number; sort_order: number;
+  angle?: string; ref_role?: string; ai_label?: string;
 }
 
 const IMAGE_TYPES = [
@@ -66,6 +67,27 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
     await fetch(`/api/products/${selected.id}/images?imageId=${imageId}`, { method: 'DELETE' });
     setImages(imgs => imgs.filter(im => im.id !== imageId));
     setLightbox(null);
+  }
+
+  // AI phân loại ảnh → gắn ref_role/angle/nhãn để luồng gen tự chọn ảnh ref phù hợp
+  const [classifying, setClassifying] = useState(false);
+  const [classifyMsg, setClassifyMsg] = useState('');
+  async function classifyImages(all = false) {
+    if (!selected) return;
+    setClassifying(true); setClassifyMsg('AI đang phân loại ảnh…');
+    try {
+      const r = await fetch(`/api/products/${selected.id}/images/classify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all }),
+      });
+      const d = await r.json() as { ok?: boolean; classified?: number; error?: string };
+      if (!d.ok) setClassifyMsg('❌ ' + (d.error ?? 'lỗi'));
+      else {
+        setClassifyMsg(`✓ Đã phân loại ${d.classified ?? 0} ảnh`);
+        const ir = await fetch(`/api/products/${selected.id}/images`);
+        setImages(((await ir.json()).images ?? []) as ProductImage[]);
+      }
+    } catch (e) { setClassifyMsg('❌ ' + String(e)); }
+    setClassifying(false);
   }
 
   // Add product form
@@ -295,12 +317,20 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
                     )}
                     <input ref={uploadRef} type="file" accept="image/*,video/*" className="hidden" multiple
                       onChange={e => { uploadFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+                    {images.length > 0 && (
+                      <button onClick={() => classifyImages(false)} disabled={classifying}
+                        title="AI đọc & phân loại ảnh (góc/vai trò) để khi gen ảnh tự chọn ảnh ref phù hợp"
+                        className="px-3 py-1.5 bg-purple-700/80 hover:bg-purple-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">
+                        {classifying ? '⟳ Đang phân loại…' : '🏷 AI phân loại ảnh'}
+                      </button>
+                    )}
                     <button onClick={() => uploadRef.current?.click()} disabled={uploading}
                       className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">
                       {uploading ? `⟳ ${uploadPct || ''}%` : '⬆ Upload ảnh / video (≤200MB)'}
                     </button>
                   </div>
                 </div>
+                {classifyMsg && <p className={`text-[11px] mb-2 ${classifyMsg.startsWith('✓') ? 'text-purple-300' : 'text-red-400'}`}>{classifyMsg}</p>}
 
                 {imgLoading ? (
                   <div className="text-center text-gray-500 py-10">Loading…</div>
@@ -324,8 +354,11 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={img.image_url} alt="" className="w-full h-full object-cover" loading="lazy" />
                         </div>
+                        {img.ref_role && (
+                          <span className="absolute top-1 left-1 text-[8px] text-white bg-purple-700/85 px-1.5 py-0.5 rounded font-medium">{img.ref_role}{img.angle && img.angle !== 'unknown' ? `·${img.angle}` : ''}</span>
+                        )}
                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-[9px] text-gray-300 bg-black/40 px-1 rounded capitalize">{img.type}</span>
+                          <span className="text-[9px] text-gray-300 bg-black/40 px-1 rounded capitalize">{img.ai_label || img.type}</span>
                           {img.is_hero ? <span className="text-[9px] text-yellow-400 ml-1">★ Hero</span> : null}
                         </div>
                       </div>

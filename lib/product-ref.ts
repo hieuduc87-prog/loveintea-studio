@@ -17,7 +17,11 @@ const ROLE_PREF: Record<string, string[]> = {
   lifestyle: ['lifestyle', 'packshot'],
 };
 
-interface PImg { image_url: string; ref_role: string | null; is_hero: number }
+interface PImg { image_url: string; ref_role: string | null; is_hero: number; angle: string | null }
+
+// góc đẹp nhất làm base edit (chính diện rõ bao bì) → kém dần
+const ANGLE_RANK: Record<string, number> = { front: 0, '45': 1, side: 2, top: 3, detail: 4, back: 5 };
+const angleScore = (a: string | null) => ANGLE_RANK[(a || '').toLowerCase()] ?? 9;
 
 /**
  * Trả image_url ảnh ref tốt nhất cho (productId, role). null nếu sản phẩm không có ảnh.
@@ -27,13 +31,17 @@ export function pickProductRefUrl(productId: string | null | undefined, role = '
   if (!productId) return null;
   const db = getDb();
   const imgs = db.prepare(
-    'SELECT image_url, ref_role, is_hero FROM product_images WHERE product_id=? ORDER BY is_hero DESC, sort_order ASC'
+    'SELECT image_url, ref_role, is_hero, angle FROM product_images WHERE product_id=? ORDER BY is_hero DESC, sort_order ASC'
   ).all(productId) as PImg[];
   if (imgs.length) {
+    const wantFront = ['product', 'hero', 'cta', 'packshot'].includes((role || '').toLowerCase());
     const prefs = ROLE_PREF[(role || '').toLowerCase()] ?? ['packshot', 'lifestyle'];
     for (const pref of prefs) {
-      const hit = imgs.find(i => (i.ref_role || '') === pref);
-      if (hit) return hit.image_url;
+      const group = imgs.filter(i => (i.ref_role || '') === pref);
+      if (!group.length) continue;
+      // cảnh sản phẩm: chọn góc chính diện nhất; cảnh khác: giữ thứ tự hero/sort
+      if (wantFront) group.sort((a, b) => angleScore(a.angle) - angleScore(b.angle));
+      return group[0].image_url;
     }
     // chưa phân loại / không khớp → ảnh hero, rồi ảnh đầu
     const hero = imgs.find(i => i.is_hero === 1);
