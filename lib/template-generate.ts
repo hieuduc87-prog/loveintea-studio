@@ -7,6 +7,7 @@ import { v4 as uuid } from 'uuid';
 import { getDb } from './db';
 import { editProductImage, generateImage, saveImageToFile } from './openai-image';
 import { resolveProductImagePath } from './plan-generate';
+import { pickProductRefUrl } from './product-ref';
 import { generateJSON } from './gemini';
 
 interface SlideAnalysis { index?: number; role?: string; content?: string; text_on_image?: string; visual?: string }
@@ -95,7 +96,11 @@ export async function generateTemplateImages(opts: {
     ].filter(Boolean).join(' ');
 
     const tplSlidePath = resolveProductImagePath((slideUrls[i].url || '').split('?')[0]);
-    const base = (productRoles.has(role) && packshotPath) ? packshotPath : (tplSlidePath || packshotPath);
+    // Chọn ảnh ref đúng vai trò slide (packshot cho cảnh sản phẩm, ingredient cho nguyên liệu...)
+    const refPath = resolveProductImagePath((pickProductRefUrl(productId, role) || '').split('?')[0]);
+    const base = productRoles.has(role)
+      ? (refPath || tplSlidePath || packshotPath)    // slide sản phẩm: ưu tiên ảnh ref khớp vai trò → giữ đúng bao bì
+      : (tplSlidePath || refPath || packshotPath);   // slide khác: giữ bố cục template slide
 
     try {
       const raw = base

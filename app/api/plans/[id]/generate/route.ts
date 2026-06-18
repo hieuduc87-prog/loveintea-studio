@@ -16,6 +16,7 @@ import { generateFromPlanItem, planItemDateToISO, resolveProductImagePath, PlanI
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
 import { pickTemplate, recordTemplateUse } from '@/lib/template-picker';
 import { generateTemplateImages } from '@/lib/template-generate';
+import { pickProductRefUrl } from '@/lib/product-ref';
 import { autoTagPost, PostTag } from '@/lib/post-tags';
 import { createJob, logJob, finishJob, failJob } from '@/lib/jobs';
 
@@ -102,11 +103,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               contentType = tg.images.length > 1 ? 'carousel' : 'single';
             }
           } else {
-            // 1 ảnh: dùng ảnh template làm base (giữ bố cục) nếu có, không thì packshot, cuối cùng generate.
-            const product = item.product_id
-              ? db.prepare('SELECT image_url FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(item.product_id, plan.brand_id, item.product_id) as { image_url: string } | undefined
-              : undefined;
-            let basePath = resolveProductImagePath(product?.image_url);
+            // 1 ảnh: ưu tiên ảnh ref sản phẩm đã phân loại (packshot) → ảnh template → generate.
+            let basePath = resolveProductImagePath((pickProductRefUrl(item.product_id, 'product') || '').split('?')[0]);
             if (!basePath && templateId) {
               const ti = db.prepare('SELECT image_url FROM content_templates WHERE id=?').get(templateId) as { image_url?: string } | undefined;
               basePath = resolveProductImagePath((ti?.image_url || '').split('?')[0]);

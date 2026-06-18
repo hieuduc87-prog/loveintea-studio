@@ -809,6 +809,11 @@ function initSchema(db: Database.Database) {
   // Carousel posts: ordered list of image URLs (FB/IG multi-photo). image_url = ảnh đầu (cover).
   try { db.exec(`ALTER TABLE posts ADD COLUMN images_json TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN content_type TEXT DEFAULT 'post'`); } catch { /* already exists */ }
+  // Phân loại ảnh sản phẩm (Gemini Vision) → chọn ảnh ref phù hợp khi gen ảnh
+  try { db.exec(`ALTER TABLE product_images ADD COLUMN angle TEXT`); } catch { /* already exists */ }       // front|back|side|45|top|macro|in_use|flat_lay|detail
+  try { db.exec(`ALTER TABLE product_images ADD COLUMN ref_role TEXT`); } catch { /* already exists */ }    // packshot|ingredient|lifestyle|texture|scale|other — vai trò làm base khi gen
+  try { db.exec(`ALTER TABLE product_images ADD COLUMN ai_label TEXT`); } catch { /* already exists */ }    // tên ngắn dễ đọc
+  try { db.exec(`ALTER TABLE product_images ADD COLUMN analysis_json TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN last_used_at TEXT`); } catch { /* already exists */ }
   try { db.exec(`CREATE INDEX IF NOT EXISTS idx_posts_template ON posts(template_id) WHERE template_id IS NOT NULL`); } catch { /* already exists */ }
   // Multi-tag every post across dimensions (segment/insight/behavior/usp/...) for win-rate aggregation
