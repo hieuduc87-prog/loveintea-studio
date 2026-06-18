@@ -144,7 +144,24 @@ export async function saveImageToFile(
   const base64 = base64DataUrl.replace(/^data:image\/\w+;base64,/, '');
   const buffer = Buffer.from(base64, 'base64');
   const filePath = path.join(imagesDir, filename);
-  fs.writeFileSync(filePath, buffer);
+
+  // CHUẨN 4:5 (1080×1350) — hợp cả Instagram feed lẫn Facebook. gpt-image xuất 2:3 (cao hơn)
+  // → center-crop về 4:5 trước khi upscale. Lỗi sharp thì giữ ảnh gốc.
+  let outBuf: Uint8Array = buffer;
+  try {
+    const sharp = (await import('sharp')).default;
+    const meta = await sharp(buffer).metadata();
+    const w = meta.width ?? 0, h = meta.height ?? 0;
+    if (w && h) {
+      const target = 4 / 5;
+      let cw = w, ch = h;
+      if (w / h > target) cw = Math.round(h * target); else ch = Math.round(w / target);
+      if (cw !== w || ch !== h) {
+        outBuf = await sharp(buffer).extract({ left: Math.round((w - cw) / 2), top: Math.round((h - ch) / 2), width: cw, height: ch }).toBuffer();
+      }
+    }
+  } catch { /* giữ ảnh gốc nếu crop lỗi */ }
+  fs.writeFileSync(filePath, outBuf);
 
   // Upscale 4x with Lanczos (1024×1536 → 4096×6144) — ~1-2s on Apple Silicon
   try {
