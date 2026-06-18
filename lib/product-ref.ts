@@ -34,19 +34,17 @@ export function pickProductRefUrl(productId: string | null | undefined, role = '
     'SELECT image_url, ref_role, is_hero, angle FROM product_images WHERE product_id=? ORDER BY is_hero DESC, sort_order ASC'
   ).all(productId) as PImg[];
   if (imgs.length) {
-    const wantFront = ['product', 'hero', 'cta', 'packshot'].includes((role || '').toLowerCase());
     const prefs = ROLE_PREF[(role || '').toLowerCase()] ?? ['packshot', 'lifestyle'];
     for (const pref of prefs) {
       const group = imgs.filter(i => (i.ref_role || '') === pref);
       if (!group.length) continue;
-      // cảnh sản phẩm: chọn góc chính diện nhất; cảnh khác: giữ thứ tự hero/sort
-      if (wantFront) group.sort((a, b) => angleScore(a.angle) - angleScore(b.angle));
+      // LUÔN ưu tiên góc MẶT TRƯỚC (front → 45 → side...) cho mọi vai trò — base edit chuẩn nhất.
+      group.sort((a, b) => angleScore(a.angle) - angleScore(b.angle));
       return group[0].image_url;
     }
-    // chưa phân loại / không khớp → ảnh hero, rồi ảnh đầu
-    const hero = imgs.find(i => i.is_hero === 1);
-    if (hero) return hero.image_url;
-    return imgs[0].image_url;
+    // chưa phân loại / không khớp → ưu tiên front, rồi hero, rồi ảnh đầu
+    const sorted = [...imgs].sort((a, b) => angleScore(a.angle) - angleScore(b.angle) || (b.is_hero - a.is_hero));
+    return sorted[0].image_url;
   }
   // không có product_images → packshot mặc định của sản phẩm
   const p = db.prepare('SELECT image_url FROM products WHERE id=?').get(productId) as { image_url?: string } | undefined;
