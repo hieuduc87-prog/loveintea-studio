@@ -6,9 +6,16 @@ import { SKUS } from '@/lib/brand-dna';
 
 interface Post {
   id: string; sku_id: string; caption: string; image_url?: string;
+  images_json?: string; content_type?: string;
   status: 'draft'|'scheduled'|'published'|'failed'; platform: string;
   scheduled_at?: string; published_at?: string;
   fb_post_id?: string; ig_post_id?: string; created_at: string; cell_id?: string;
+}
+
+// Carousel: lấy đủ ảnh từ images_json, fallback về image_url đơn.
+function postImages(p: { images_json?: string; image_url?: string }): string[] {
+  try { const a = JSON.parse(p.images_json || '[]'); if (Array.isArray(a) && a.length) return a as string[]; } catch { /* */ }
+  return p.image_url ? [p.image_url] : [];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -85,7 +92,7 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           caption: post.caption,
-          imageUrls: post.image_url ? [post.image_url] : [],
+          imageUrls: postImages(post),
           brandId,
           platforms: [...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])],
           // datetime-local input is browser-local time — convert to ISO UTC
@@ -200,28 +207,33 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
                   <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white text-sm">✕ Close</button>
                 </div>
 
-                {/* Image */}
-                {selected.image_url && (
+                {/* Image(s) — carousel hiện ĐỦ ảnh từ images_json */}
+                {(() => { const imgs = postImages(selected); return imgs.length ? (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Image</p>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                        {imgs.length > 1 ? `Carousel · ${imgs.length} ảnh` : 'Image'}
+                      </p>
                       <div className="flex gap-2">
-                        <a href={selected.image_url} download={`loveintea-${selected.sku_id}-${selected.id}.png`}
+                        <a href={imgs[0]} download={`loveintea-${selected.sku_id}-${selected.id}.png`}
                           className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs rounded-lg transition-colors">⬇ Download</a>
-                        <button onClick={() => navigator.clipboard.writeText(selected.image_url!.startsWith('/') ? `https://loveintea.wealthpsy.com${selected.image_url}` : selected.image_url!)}
+                        <button onClick={() => navigator.clipboard.writeText(imgs[0].startsWith('/') ? `https://loveintea.wealthpsy.com${imgs[0]}` : imgs[0])}
                           className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs rounded-lg transition-colors">Copy URL</button>
                       </div>
                     </div>
-                    <div className="rounded-xl overflow-hidden bg-gray-800 max-w-xs">
-                      {selected.image_url.startsWith('data:') ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={selected.image_url} alt="" className="w-full" />
-                      ) : (
-                        <Image src={selected.image_url} alt="" width={320} height={400} className="object-cover w-full" />
-                      )}
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {imgs.map((u, i) => (
+                        <div key={i} className="rounded-xl overflow-hidden bg-gray-800 w-40 flex-shrink-0 relative">
+                          {u.startsWith('data:')
+                            // eslint-disable-next-line @next/next/no-img-element
+                            ? <img src={u} alt="" className="w-full aspect-[4/5] object-cover" />
+                            : <Image src={`${u}${u.includes('?') ? '&' : '?'}w=400`} alt="" width={160} height={200} className="object-cover w-full aspect-[4/5]" unoptimized />}
+                          {imgs.length > 1 && <span className="absolute top-1 left-1 text-[9px] bg-black/70 text-white px-1.5 py-0.5 rounded-full">{i + 1}/{imgs.length}</span>}
+                        </div>
+                      ))}
                     </div>
                   </div>
-                )}
+                ) : null; })()}
 
                 {/* Caption */}
                 <div>

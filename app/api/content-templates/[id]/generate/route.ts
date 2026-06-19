@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         VALUES (?,?,?,?,?,?,?,?,?, 'draft', datetime('now'), datetime('now'))`)
         .run(postId, bid, productId ?? '', 'facebook,instagram', images.length > 1 ? 'carousel' : 'single', fullCaption, images[0], JSON.stringify(images), id);
       try { recordTemplateUse(id); } catch { /* */ }
-      finishJob(jobId, { postId, count: images.length, url: images[0], warnings: warnings.length || undefined });
+      finishJob(jobId, { postId, count: images.length, url: images[0], images, warnings: warnings.length || undefined });
     } catch (e) {
       console.error('[api] template-generate', e);
       failJob(jobId, e);

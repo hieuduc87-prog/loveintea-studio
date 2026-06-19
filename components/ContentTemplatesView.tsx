@@ -1200,7 +1200,7 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
   const [productId, setProductId] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  const [result, setResult] = useState<{ url?: string; count?: number } | null>(null);
+  const [result, setResult] = useState<{ images?: string[]; count?: number } | null>(null);
 
   useEffect(() => {
     fetch(`/api/products?brand=${tpl.brand_id}`).then(r => r.json()).then(d => setProducts(d.products ?? [])).catch(() => {});
@@ -1225,9 +1225,9 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
         if (job.status === 'running' || job.status === 'pending') { setMsg(`⟳ Đang sinh ảnh… ${job.progress || 0}%`); continue; }
         if (job.status === 'failed') { setMsg('✗ ' + (job.error ?? 'Lỗi tạo ảnh')); break; }
         if (job.status === 'done') {
-          let res: { count?: number; url?: string } = {};
+          let res: { count?: number; url?: string; images?: string[] } = {};
           try { res = JSON.parse(job.result_json || '{}'); } catch { /* */ }
-          setResult({ url: res.url, count: res.count });
+          setResult({ images: res.images ?? (res.url ? [res.url] : []), count: res.count });
           setMsg(`✓ Đã tạo post carousel ${res.count ?? ''} ảnh — vào Review & Queue để duyệt/đăng.`);
           break;
         }
@@ -1252,12 +1252,17 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
         </button>
       </div>
       {msg && <p className={`text-xs mt-2 ${msg.startsWith('✓') ? 'text-emerald-400' : msg.startsWith('✗') ? 'text-red-400' : 'text-gray-400'}`}>{msg}</p>}
-      {result?.url && (
-        <div className="mt-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`${result.url}${result.url.includes('?') ? '&' : '?'}w=300`} alt="" className="w-16 h-20 object-cover rounded-lg border border-gray-700" />
+      {result?.images?.length ? (
+        <div className="flex gap-1.5 mt-2 overflow-x-auto">
+          {result.images.map((u, i) => (
+            <div key={i} className="relative flex-shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`${u}${u.includes('?') ? '&' : '?'}w=300`} alt="" className="w-16 h-20 object-cover rounded-lg border border-gray-700" />
+              {result.images!.length > 1 && <span className="absolute top-0.5 left-0.5 text-[8px] bg-black/70 text-white px-1 rounded-full">{i + 1}</span>}
+            </div>
+          ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
