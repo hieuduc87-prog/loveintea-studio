@@ -67,10 +67,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         let templateKind = '';
         let templateGuide: { structure?: string; skeleton?: string } | undefined;
         let styleHint = '';
-        if (useTemplate) {
+        // Surface=Carousel BẮT BUỘC ra carousel → ép dùng collection template kể cả khi không tick "dùng template".
+        const wantCarousel = /carousel/i.test(item.surface || '');
+        if (useTemplate || wantCarousel) {
           // Auto-match: chủ đề content của plan item → template khớp nhất; carousel surface → collection.
           const intent = [item.purpose, item.pillar, item.hook, item.copy_direction, item.context, item.visual_direction].filter(Boolean).join(' ');
-          const wantKind = /carousel/i.test(item.surface || '') ? 'collection' : 'single';
+          const wantKind = wantCarousel ? 'collection' : 'single';
           const tpl = pickTemplate(plan.brand_id, { format: surfaceToFormat(item.surface), kind: wantKind, intent });
           if (tpl) {
             templateId = tpl.id;

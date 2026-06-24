@@ -37,10 +37,11 @@ export async function generateTemplateImages(opts: {
   productId?: string;
   brandId?: string;
   withCaption?: boolean;           // true = sinh caption bám structure (mặc định true)
+  customPrompt?: string;           // yêu cầu thêm của người dùng (làm rõ scene/đạo cụ...)
   onLog?: (msg: string) => void;
   onProgress?: (pct: number) => void;
 }): Promise<TemplateGenResult> {
-  const { templateId, productId, onLog, onProgress } = opts;
+  const { templateId, productId, customPrompt, onLog, onProgress } = opts;
   const bid = opts.brandId || 'loveintea';
   const db = getDb();
 
@@ -79,28 +80,34 @@ export async function generateTemplateImages(opts: {
   const paletteMood = [analysis.colors?.palette?.join(', '), analysis.colors?.mood].filter(Boolean).join(' / ');
   const styleBits = [styleKw, analysisKw, tpl.color_palette, paletteMood].filter(Boolean).join('. ');
 
-  const productRoles = new Set(['product', 'ingredient', 'proof']);
   const images: string[] = [];
   const warnings: string[] = [];
 
   for (let i = 0; i < slideUrls.length; i++) {
     const meta = slidesMeta[i] ?? {};
     const role = (meta.role || (i === 0 ? 'hook' : 'other')).toLowerCase();
+    const tplSlidePath = resolveProductImagePath((slideUrls[i].url || '').split('?')[0]);
+    const refPath = resolveProductImagePath((pickProductRefUrl(productId, role) || '').split('?')[0]);
+
+    // QUY TẮC THAY SẢN PHẨM (card: tool phải thay product Loveintea vào đúng góc template, KHÔNG giữ product mẫu):
+    // - Có sản phẩm → base = ảnh REF Loveintea (giữ ĐÚNG bao bì), prompt mô tả bố cục/góc của slide template để tái dựng.
+    // - Không sản phẩm → base = ảnh template slide (giữ bố cục).
+    const base = productId
+      ? (refPath || packshotPath || tplSlidePath)
+      : (tplSlidePath || refPath || packshotPath);
+    const usingProductBase = Boolean(productId && (refPath || packshotPath));
+
     const prompt = [
       `Vertical 2:3 social media image, slide ${i + 1} of ${slideUrls.length} in a carousel (role: ${role}).`,
-      meta.content ? `Scene: ${meta.content}.` : '',
-      meta.visual ? `Composition/style: ${meta.visual}.` : '',
-      product ? `Featured product: ${product.name} — ${product.pitch ?? ''} (${product.theme ?? ''}${product.ingredients ? `, ingredients: ${product.ingredients}` : ''}).` : '',
+      meta.content ? `Scene/composition to recreate: ${meta.content}.` : '',
+      meta.visual ? `Camera angle/layout/style: ${meta.visual}.` : '',
+      usingProductBase
+        ? `Place the EXACT product shown in the reference image (keep its packaging, label, colour 100% unchanged — do NOT invent or alter the product) into this composition/angle. The reference IS our product: ${product?.name ?? ''}.`
+        : (product ? `Featured product: ${product.name} — ${product.pitch ?? ''} (${product.theme ?? ''}${product.ingredients ? `, ingredients: ${product.ingredients}` : ''}).` : ''),
       styleBits ? `Match the template aesthetic: ${styleBits}.` : '',
+      customPrompt ? `Extra instruction: ${customPrompt}.` : '',
       'Photorealistic, premium, on-brand. NO text, NO letters, NO logos in the image (if any text is unavoidable, ENGLISH only — never Vietnamese).',
     ].filter(Boolean).join(' ');
-
-    const tplSlidePath = resolveProductImagePath((slideUrls[i].url || '').split('?')[0]);
-    // Chọn ảnh ref đúng vai trò slide (packshot cho cảnh sản phẩm, ingredient cho nguyên liệu...)
-    const refPath = resolveProductImagePath((pickProductRefUrl(productId, role) || '').split('?')[0]);
-    const base = productRoles.has(role)
-      ? (refPath || tplSlidePath || packshotPath)    // slide sản phẩm: ưu tiên ảnh ref khớp vai trò → giữ đúng bao bì
-      : (tplSlidePath || refPath || packshotPath);   // slide khác: giữ bố cục template slide
 
     try {
       const raw = base

@@ -30,9 +30,13 @@ const angleScore = (a: string | null) => ANGLE_RANK[(a || '').toLowerCase()] ?? 
 export function pickProductRefUrl(productId: string | null | undefined, role = 'product'): string | null {
   if (!productId) return null;
   const db = getDb();
+  // product_id của plan item có thể là SLUG ('hibiscus') ≠ products.id ('prod-hibiscus').
+  // Resolve về id chuẩn để khớp product_images (nếu không, packshot trả null → AI bịa bao bì).
+  const prod = db.prepare('SELECT id, image_url FROM products WHERE id=? OR slug=? LIMIT 1').get(productId, productId) as { id: string; image_url?: string } | undefined;
+  const pid = prod?.id ?? productId;
   const imgs = db.prepare(
     'SELECT image_url, ref_role, is_hero, angle FROM product_images WHERE product_id=? ORDER BY is_hero DESC, sort_order ASC'
-  ).all(productId) as PImg[];
+  ).all(pid) as PImg[];
   if (imgs.length) {
     const prefs = ROLE_PREF[(role || '').toLowerCase()] ?? ['packshot', 'lifestyle'];
     for (const pref of prefs) {
@@ -47,6 +51,5 @@ export function pickProductRefUrl(productId: string | null | undefined, role = '
     return sorted[0].image_url;
   }
   // không có product_images → packshot mặc định của sản phẩm
-  const p = db.prepare('SELECT image_url FROM products WHERE id=?').get(productId) as { image_url?: string } | undefined;
-  return p?.image_url ?? null;
+  return prod?.image_url ?? null;
 }

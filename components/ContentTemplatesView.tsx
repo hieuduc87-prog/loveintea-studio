@@ -1198,6 +1198,7 @@ function UploadModal({
 function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: number }) {
   const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
   const [productId, setProductId] = useState('');
+  const [customPrompt, setCustomPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [result, setResult] = useState<{ images?: string[]; count?: number } | null>(null);
@@ -1211,7 +1212,7 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
     try {
       const r = await fetch(`/api/content-templates/${tpl.id}/generate`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId: tpl.brand_id, productId: productId || undefined }),
+        body: JSON.stringify({ brandId: tpl.brand_id, productId: productId || undefined, customPrompt: customPrompt.trim() || undefined }),
       });
       const d = await r.json() as { ok?: boolean; jobId?: string; error?: string };
       if (!d.ok || !d.jobId) { setMsg('✗ ' + (d.error ?? 'Lỗi tạo post')); setBusy(false); return; }
@@ -1239,7 +1240,10 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
   return (
     <div className="border-t border-gray-800 pt-4">
       <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">🎬 Tạo post từ template ({slideCount} ảnh)</p>
-      <p className="text-[11px] text-gray-500 mb-2">Chọn sản phẩm → AI sinh {slideCount} ảnh theo đúng thứ tự + bố cục template, gộp thành 1 post carousel (caption tự viết bám cấu trúc).</p>
+      <p className="text-[11px] text-gray-500 mb-2">Chọn sản phẩm → AI thay <b>sản phẩm Loveintea</b> vào đúng góc/bố cục template (giữ nguyên bao bì), sinh {slideCount} ảnh → 1 post carousel.</p>
+      <input value={customPrompt} onChange={e => setCustomPrompt(e.target.value)}
+        placeholder="Yêu cầu thêm (tùy chọn): vd 'đặt trên bàn gỗ, ánh sáng sáng', 'thêm tách trà'…"
+        className="w-full mb-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white" />
       <div className="flex gap-2">
         <select value={productId} onChange={e => setProductId(e.target.value)}
           className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white">

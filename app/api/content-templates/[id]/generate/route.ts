@@ -15,7 +15,7 @@ import { createJob, logJob, progressJob, finishJob, failJob } from '@/lib/jobs';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const { id } = params;
-  const { productId, brandId } = await req.json().catch(() => ({})) as { productId?: string; brandId?: string };
+  const { productId, brandId, customPrompt } = await req.json().catch(() => ({})) as { productId?: string; brandId?: string; customPrompt?: string };
   const bid = brandId || 'loveintea';
   const db = getDb();
   const tpl = db.prepare('SELECT name FROM content_templates WHERE id=?').get(id) as { name?: string } | undefined;
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   void (async () => {
     try {
       const { images, caption, hashtags, warnings } = await generateTemplateImages({
-        templateId: id, productId, brandId: bid,
+        templateId: id, productId, brandId: bid, customPrompt,
         onLog: m => logJob(jobId, m), onProgress: p => progressJob(jobId, p),
       });
       const fullCaption = caption + (hashtags ? `\n\n${hashtags}` : '');
