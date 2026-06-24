@@ -18,7 +18,7 @@ import { pickTemplate, recordTemplateUse } from '@/lib/template-picker';
 import { generateTemplateImages } from '@/lib/template-generate';
 import { pickProductRefUrl } from '@/lib/product-ref';
 import { autoTagPost, PostTag } from '@/lib/post-tags';
-import { createJob, logJob, finishJob, failJob } from '@/lib/jobs';
+import { createJob, logJob, progressJob, finishJob, failJob } from '@/lib/jobs';
 
 function surfaceToFormat(surface: string): string | undefined {
   const s = (surface || '').toLowerCase();
@@ -54,8 +54,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const skipped: string[] = [];
     const errors: Array<{ itemId: string; error: string }> = [];
     jobId = createJob({ brandId: plan.brand_id, kind: 'plan', source: 'PlanCalendar', title: `Tạo bài từ plan (${items.length} item${withImage ? ' + ảnh' : ''})`, meta: { withImage, schedule, useTemplate } });
+    const total = items.length;
 
-    for (const item of items) {
+    // CHẠY NỀN — carousel/ảnh nhiều item vượt 100s → Cloudflare 524 nếu await đồng bộ.
+    // Trả jobId ngay, theo dõi tiến độ/kết quả ở Job Queue (client poll job).
+    void (async () => {
+     try {
+      let processed = 0;
+      for (const item of items) {
       // Skip if a post already exists for this plan item
       const existing = db.prepare('SELECT id FROM posts WHERE plan_item_id=?').get(item.id) as { id: string } | undefined;
       if (existing) { skipped.push(item.id); continue; }
@@ -152,11 +158,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       } catch (e) {
         errors.push({ itemId: item.id, error: (console.error('[api]', e), 'Có lỗi hệ thống').slice(0, 200) });
       }
-    }
+      processed++; progressJob(jobId, (processed / Math.max(1, total)) * 100);
+      logJob(jobId, `${processed}/${total} — ${created.length} tạo, ${skipped.length} bỏ qua, ${errors.length} lỗi`);
+      }
 
-    if (errors.length && !created.length) failJob(jobId, errors.map(e => e.error).join(' | '));
-    else finishJob(jobId, { created: created.length, skipped: skipped.length, errors: errors.length });
-    return NextResponse.json({ ok: true, created, skipped, errors });
+      if (errors.length && !created.length) failJob(jobId, errors.map(e => e.error).join(' | '));
+      else finishJob(jobId, { created: created.length, skipped: skipped.length, errors: errors.length });
+     } catch (e) { console.error('[api] plan-generate bg', e); failJob(jobId, e); }
+    })();
+
+    return NextResponse.json({ ok: true, jobId, async: true, total });
   } catch (e) {
     failJob(jobId, e);
     return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });

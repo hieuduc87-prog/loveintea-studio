@@ -181,26 +181,36 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
     return { overdue, mismatch, unapproved };
   })();
 
-  // ── Run generation ──
+  // ── Run generation (chạy NỀN — gửi 1 lần, poll Job Queue tới khi xong; tránh Cloudflare 524 với carousel/ảnh) ──
   async function runItems(itemIds: string[]) {
     if (!selectedPlanId || !itemIds.length) return;
-    setRunning(true); setMsg('');
-    let done = 0, fail = 0;
-    for (const itemId of itemIds) {
-      setRunProgress(`${done + fail + 1}/${itemIds.length}`);
-      try {
-        const r = await fetch(`/api/plans/${selectedPlanId}/generate`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ itemIds: [itemId], withImage, schedule: autoSchedule, useTemplate }),
-        });
-        const d = await r.json() as { created?: unknown[]; errors?: unknown[] };
-        if (d.created?.length) done++; else fail++;
-      } catch { fail++; }
-      await loadDetail(selectedPlanId);
-    }
-    await loadPosts();
+    setRunning(true); setMsg(''); setRunProgress('0%');
+    try {
+      const r = await fetch(`/api/plans/${selectedPlanId}/generate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds, withImage, schedule: autoSchedule, useTemplate }),
+      });
+      const d = await r.json() as { ok?: boolean; jobId?: string; error?: string };
+      if (!d.ok || !d.jobId) { setMsg('✗ ' + (d.error ?? 'Lỗi tạo bài')); setRunning(false); setRunProgress(''); return; }
+      // poll job tới done/failed (carousel nhiều ảnh có thể vài phút)
+      for (let i = 0; i < 200; i++) {
+        await new Promise(res => setTimeout(res, 3000));
+        const jr = await fetch('/api/jobs?limit=120').then(x => x.json()).catch(() => null);
+        const job = (jr?.jobs ?? []).find((j: { id: string }) => j.id === d.jobId) as { status: string; progress: number; result_json?: string; error?: string } | undefined;
+        if (!job) { setRunProgress('…'); continue; }
+        setRunProgress(`${job.progress || 0}%`);
+        await loadDetail(selectedPlanId);
+        if (job.status === 'failed') { setMsg('✗ ' + (job.error ?? 'Lỗi tạo bài')); break; }
+        if (job.status === 'done') {
+          let res: { created?: number; skipped?: number; errors?: number } = {};
+          try { res = JSON.parse(job.result_json || '{}'); } catch { /* */ }
+          setMsg(`✓ Tạo ${res.created ?? 0} bài${res.skipped ? `, bỏ qua ${res.skipped}` : ''}${res.errors ? `, ${res.errors} lỗi` : ''}`);
+          break;
+        }
+      }
+    } catch (e) { setMsg('✗ ' + String(e)); }
+    await loadPosts(); await loadDetail(selectedPlanId);
     setRunning(false); setRunProgress('');
-    setMsg(`✓ Tạo ${done} bài${fail ? `, ${fail} lỗi` : ''}`);
     setSel(new Set());
   }
   const ungeneratedItems = () => (detail?.items ?? []).filter(it => !itemPost(it.id)).map(it => it.id);

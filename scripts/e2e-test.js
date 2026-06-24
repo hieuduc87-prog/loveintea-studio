@@ -111,10 +111,24 @@ async function post(name, path, body, check) {
     const detail = await req('GET', `/api/plans/${planId}`);
     const itemId = detail.data?.items?.find(i => i.id)?.id;
     if (itemId) {
-      const pg = await post('plan generate (auto bài + ảnh + template)', `/api/plans/${planId}/generate`,
+      const pg = await post('plan generate (auto) — start', `/api/plans/${planId}/generate`,
         { itemIds: [itemId], withImage: true, useTemplate: true },
-        d => (d.created?.length || d.skipped?.length) ? null : (d.errors?.length ? d.errors[0].error : 'no created/skipped'));
-      (pg?.created || []).forEach(c => cleanup.posts.push(c.postId));
+        d => d.jobId ? null : 'no jobId');
+      if (pg?.jobId) {
+        let done = null;
+        for (let i = 0; i < 80; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          const jr = await req('GET', '/api/jobs?limit=120');
+          const job = (jr.data?.jobs || []).find(j => j.id === pg.jobId);
+          if (job && (job.status === 'done' || job.status === 'failed')) { done = job; break; }
+        }
+        if (!done) rec('plan generate (poll)', false, 'timeout');
+        else if (done.status === 'failed') rec('plan generate (poll)', false, done.error || 'failed');
+        else { const res = JSON.parse(done.result_json || '{}'); rec('plan generate (poll)', true, `created ${res.created}, skipped ${res.skipped}`); }
+      }
+      // dọn post tạo từ item này
+      const after = await req('GET', '/api/posts?brand=loveintea');
+      (after.data?.posts || []).filter(p => p.plan_item_id === itemId).forEach(p => cleanup.posts.push(p.id));
     } else rec('plan generate', true, 'skip — plan không có item');
   } else rec('plan generate', true, 'skip — chưa có plan');
 
