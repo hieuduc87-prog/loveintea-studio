@@ -19,7 +19,7 @@ const PATCHABLE_COLUMNS = new Set([
   'caption', 'hashtags', 'image_prompt', 'image_url', 'platforms', 'status',
   'scheduled_at', 'published_at', 'fb_post_id', 'fb_scheduled_id', 'ig_post_id',
   'notes', 'review_status', 'review_notes', 'cta', 'sku_id', 'segment_id',
-  'rtb_id', 'usp_id', 'narrative_id', 'context_id', 'cell_id',
+  'rtb_id', 'usp_id', 'narrative_id', 'context_id', 'cell_id', 'publish_mode',
 ]);
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {

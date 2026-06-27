@@ -109,6 +109,7 @@ export async function publishDuePosts() {
     WHERE status = 'scheduled'
       AND scheduled_at IS NOT NULL
       AND datetime(scheduled_at) <= datetime('now')
+      AND COALESCE(publish_mode, 'api') <> 'manual'
   `).all() as DuePost[];
 
   if (due.length === 0) return;

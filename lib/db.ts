@@ -809,6 +809,8 @@ function initSchema(db: Database.Database) {
   // Carousel posts: ordered list of image URLs (FB/IG multi-photo). image_url = ảnh đầu (cover).
   try { db.exec(`ALTER TABLE posts ADD COLUMN images_json TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN content_type TEXT DEFAULT 'post'`); } catch { /* already exists */ }
+  // Chế độ đăng: api (scheduler tự đăng qua Graph API) | manual (nhân viên tự đăng tay native lên page → reach tốt hơn, scheduler KHÔNG đụng)
+  try { db.exec(`ALTER TABLE posts ADD COLUMN publish_mode TEXT DEFAULT 'api'`); } catch { /* already exists */ }
   // Phân loại ảnh sản phẩm (Gemini Vision) → chọn ảnh ref phù hợp khi gen ảnh
   try { db.exec(`ALTER TABLE product_images ADD COLUMN angle TEXT`); } catch { /* already exists */ }       // front|back|side|45|top|macro|in_use|flat_lay|detail
   try { db.exec(`ALTER TABLE product_images ADD COLUMN ref_role TEXT`); } catch { /* already exists */ }    // packshot|ingredient|lifestyle|texture|scale|other — vai trò làm base khi gen
