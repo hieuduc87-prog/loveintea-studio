@@ -78,11 +78,30 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
   const [postTags, setPostTags] = useState<Array<{ dimension: string; value: string; label?: string; source?: string }>>([]);
   const [newTagDim, setNewTagDim] = useState('segment');
   const [newTagVal, setNewTagVal] = useState('');
+  const [capDraft, setCapDraft] = useState('');
+  const [savingCap, setSavingCap] = useState(false);
 
   useEffect(() => {
-    if (!selectedPost) { setPostTags([]); return; }
+    if (!selectedPost) { setPostTags([]); setCapDraft(''); return; }
+    setCapDraft(selectedPost.caption || '');
     fetch(`/api/posts/${selectedPost.id}/tags`).then(r => r.json()).then(d => setPostTags(d.tags ?? [])).catch(() => setPostTags([]));
   }, [selectedPost]);
+
+  async function saveCaption() {
+    if (!selectedPost) return;
+    setSavingCap(true);
+    try {
+      const r = await fetch(`/api/posts/${selectedPost.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption: capDraft }),
+      });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); setMsg(`⚠ Lưu caption lỗi: ${e.error || r.status}`); return; }
+      setAllPosts(prev => prev.map(p => p.id === selectedPost.id ? { ...p, caption: capDraft } : p));
+      setSelectedPost(prev => prev ? { ...prev, caption: capDraft } : prev);
+      setMsg('✓ Đã lưu caption');
+    } catch { setMsg('⚠ Lưu caption thất bại'); }
+    finally { setSavingCap(false); }
+  }
 
   async function saveTags(next: Array<{ dimension: string; value: string; label?: string }>) {
     if (!selectedPost) return;
@@ -434,7 +453,20 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
                   <button onClick={() => setSelectedPost(null)} className="text-gray-500 hover:text-white text-sm">✕</button>
                 </div>
                 {selectedPost.image_url && /* eslint-disable-next-line @next/next/no-img-element */ <img src={selectedPost.image_url} alt="" className="w-full rounded-lg" />}
-                <p className="text-xs text-gray-300 line-clamp-5">{selectedPost.caption || '(chưa có caption)'}</p>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[9px] font-bold text-gray-500 uppercase">Caption</p>
+                    {capDraft !== (selectedPost.caption || '') && (
+                      <button onClick={saveCaption} disabled={savingCap}
+                        className="text-[10px] px-2 py-0.5 rounded bg-brand-600 hover:bg-brand-500 text-white font-bold disabled:opacity-50">
+                        {savingCap ? 'Đang lưu…' : '💾 Lưu'}
+                      </button>
+                    )}
+                  </div>
+                  <textarea value={capDraft} onChange={e => setCapDraft(e.target.value)}
+                    rows={5} placeholder="(chưa có caption — gõ để soạn)"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 resize-y focus:border-brand-500 focus:outline-none" />
+                </div>
                 {selectedPost.scheduled_at && <p className="text-[10px] text-gray-500">🗓 {new Date(selectedPost.scheduled_at).toLocaleString('vi-VN')}</p>}
                 {/* Multi-tags (auto + manual) — for win-rate aggregation */}
                 <div className="border-t border-gray-800 pt-2">

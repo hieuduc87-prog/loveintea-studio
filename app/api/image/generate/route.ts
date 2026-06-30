@@ -48,18 +48,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Brand bán US: ảnh không được có chữ Tiếng Việt.
-    finalPrompt += '\n\nCRITICAL: Do NOT render text/letters/words in the image. If any text is unavoidable, ENGLISH only — never Vietnamese.';
-
     // ── Base image priority: ref người dùng nhập → product packshot → ảnh template ──
     let basePath: string | null = null;
-    if (refImageUrl) basePath = resolveProductImagePath(refImageUrl.split('?')[0]);
+    let editingProductBase = false;
+    if (refImageUrl) { basePath = resolveProductImagePath(refImageUrl.split('?')[0]); editingProductBase = Boolean(basePath); }
     if (!basePath && productId) {
       const p = db.prepare('SELECT image_url FROM products WHERE id=? OR (brand_id=? AND slug=?)')
         .get(productId, brandId || 'loveintea', productId) as { image_url: string } | undefined;
       basePath = resolveProductImagePath(p?.image_url);
+      editingProductBase = Boolean(basePath);
     }
     if (!basePath && templateImageUrl) basePath = resolveProductImagePath(templateImageUrl.split('?')[0]);
+
+    // Tỉ lệ thực tế cho mọi ảnh (card: hộp trà không to bất thường so với lá trà).
+    finalPrompt += '\n\nKeep realistic real-world proportions and believable scale between objects — the product must be sized naturally relative to surrounding props (no oversized, floating or giant product).';
+    // Khi edit TỪ ảnh sản phẩm/ref: giữ NGUYÊN text in trên bao bì, chỉ cấm THÊM chữ overlay.
+    // Khi tạo ảnh mới (không base sản phẩm): cấm mọi chữ (brand bán US, tránh chữ Tiếng Việt).
+    finalPrompt += editingProductBase
+      ? '\n\nCRITICAL: Preserve the product packaging EXACTLY as in the reference — keep all printed label text/wording, logos and colour sharp and legible; do NOT redraw, translate, blur or remove them. Do NOT add any extra overlay text/captions/watermarks beyond what is already on the packaging.'
+      : '\n\nCRITICAL: Do NOT render text/letters/words in the image. If any text is unavoidable, ENGLISH only — never Vietnamese.';
 
     logJob(jobId, basePath ? `Edit từ ảnh gốc${templateId ? ' + template' : ''}…` : 'Generate ảnh mới…');
     const raw = basePath

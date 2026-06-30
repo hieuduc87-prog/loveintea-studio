@@ -74,6 +74,14 @@ export async function generateTemplateImages(opts: {
     : undefined;
   const packshotPath = resolveProductImagePath(product?.image_url);
 
+  // Gợi ý kích thước thật để giữ TỈ LỆ hợp lý (card: hộp trà không được to quá so với lá trà).
+  // Best-effort: bắt mẫu "11.5x7x14cm" / "11,5 x 7 x 14 cm" trong knowledge_json.
+  let sizeHint = '';
+  try {
+    const m = (product?.knowledge_json || '').match(/\d{1,3}(?:[.,]\d)?\s*[x×*]\s*\d{1,3}(?:[.,]\d)?\s*[x×*]\s*\d{1,3}(?:[.,]\d)?\s*(?:cm|mm)?/i);
+    if (m) sizeHint = m[0].replace(/\s+/g, '').replace(/[*×]/g, 'x');
+  } catch { /* */ }
+
   let styleKw = '';
   try { styleKw = (JSON.parse(tpl.tags || '[]') as string[]).join(', '); } catch { /* */ }
   const analysisKw = (analysis.style_keywords ?? []).join(', ');
@@ -102,11 +110,15 @@ export async function generateTemplateImages(opts: {
       meta.content ? `Scene/composition to recreate: ${meta.content}.` : '',
       meta.visual ? `Camera angle/layout/style: ${meta.visual}.` : '',
       usingProductBase
-        ? `Place the EXACT product shown in the reference image (keep its packaging, label, colour 100% unchanged — do NOT invent or alter the product) into this composition/angle. The reference IS our product: ${product?.name ?? ''}.`
+        ? `Place the EXACT product shown in the reference image into this composition/angle. Keep its packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical to the reference — do NOT invent, redraw, translate, blur or omit any text on the packaging; the product's printed label must stay sharp and fully legible. The reference IS our product: ${product?.name ?? ''}.`
         : (product ? `Featured product: ${product.name} — ${product.pitch ?? ''} (${product.theme ?? ''}${product.ingredients ? `, ingredients: ${product.ingredients}` : ''}).` : ''),
       styleBits ? `Match the template aesthetic: ${styleBits}.` : '',
       customPrompt ? `Extra instruction: ${customPrompt}.` : '',
-      'Photorealistic, premium, on-brand. NO text, NO letters, NO logos in the image (if any text is unavoidable, ENGLISH only — never Vietnamese).',
+      // Tỉ lệ THỰC TẾ: sản phẩm không được phóng to bất thường so với đạo cụ xung quanh.
+      `Keep realistic real-world proportions and believable scale between objects: the product must be sized naturally relative to surrounding props (e.g. a small tea box must NOT be oversized next to tea leaves, cups, hands or table items); no floating, no giant or shrunken product.${sizeHint ? ` Real product size ≈ ${sizeHint} — respect this physical scale.` : ''}`,
+      usingProductBase
+        ? 'Photorealistic, premium, on-brand. Do NOT add any extra overlay text, captions, headings, watermarks or new logos beyond what is already printed on the product packaging.'
+        : 'Photorealistic, premium, on-brand. NO added text, NO letters, NO logos in the image (if any text is unavoidable, ENGLISH only — never Vietnamese).',
     ].filter(Boolean).join(' ');
 
     try {
