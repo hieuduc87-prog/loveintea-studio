@@ -18,6 +18,26 @@ function postImages(p: { images_json?: string; image_url?: string }): string[] {
   return p.image_url ? [p.image_url] : [];
 }
 
+// Tải 1 ảnh (fetch blob để download được kể cả nhiều ảnh liên tiếp — trình duyệt chặn nhiều <a download>).
+async function downloadImage(url: string, filename: string) {
+  try {
+    const full = url.includes('/api/images/') ? `${url}${url.includes('?') ? '&' : '?'}w=4096&q=95` : url;
+    const blob = await (await fetch(full)).blob();
+    const obj = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = obj; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(obj);
+  } catch { window.open(url, '_blank'); }
+}
+// Tải TẤT CẢ ảnh carousel tuần tự.
+async function downloadAllImages(imgs: string[], prefix: string) {
+  for (let i = 0; i < imgs.length; i++) {
+    await downloadImage(imgs[i], `${prefix}-${i + 1}.png`);
+    if (i < imgs.length - 1) await new Promise(r => setTimeout(r, 400));
+  }
+}
+
 const STATUS_COLORS: Record<string, string> = {
   draft:     'text-gray-400 bg-gray-800',
   scheduled: 'text-yellow-400 bg-yellow-900/30',
@@ -215,20 +235,23 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
                         {imgs.length > 1 ? `Carousel · ${imgs.length} ảnh` : 'Image'}
                       </p>
                       <div className="flex gap-2">
-                        <a href={imgs[0]} download={`loveintea-${selected.sku_id}-${selected.id}.png`}
-                          className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs rounded-lg transition-colors">⬇ Download</a>
+                        <button onClick={() => downloadAllImages(imgs, `loveintea-${selected.sku_id}-${selected.id}`)}
+                          className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs rounded-lg transition-colors">⬇ {imgs.length > 1 ? `Tải cả ${imgs.length} ảnh` : 'Tải ảnh'}</button>
                         <button onClick={() => navigator.clipboard.writeText(imgs[0].startsWith('/') ? `https://loveintea.wealthpsy.com${imgs[0]}` : imgs[0])}
                           className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs rounded-lg transition-colors">Copy URL</button>
                       </div>
                     </div>
                     <div className="flex gap-2 overflow-x-auto pb-1">
                       {imgs.map((u, i) => (
-                        <div key={i} className="rounded-xl overflow-hidden bg-gray-800 w-40 flex-shrink-0 relative">
+                        <div key={i} className="rounded-xl overflow-hidden bg-gray-800 w-40 flex-shrink-0 relative group">
                           {u.startsWith('data:')
                             // eslint-disable-next-line @next/next/no-img-element
                             ? <img src={u} alt="" className="w-full aspect-[4/5] object-cover" />
                             : <Image src={`${u}${u.includes('?') ? '&' : '?'}w=400`} alt="" width={160} height={200} className="object-cover w-full aspect-[4/5]" unoptimized />}
                           {imgs.length > 1 && <span className="absolute top-1 left-1 text-[9px] bg-black/70 text-white px-1.5 py-0.5 rounded-full">{i + 1}/{imgs.length}</span>}
+                          <button onClick={() => downloadImage(u, `loveintea-${selected.sku_id}-${selected.id}-${i + 1}.png`)}
+                            title={`Tải ảnh ${i + 1}`}
+                            className="absolute bottom-1 right-1 w-6 h-6 bg-black/70 hover:bg-black text-white text-xs rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">⬇</button>
                         </div>
                       ))}
                     </div>
