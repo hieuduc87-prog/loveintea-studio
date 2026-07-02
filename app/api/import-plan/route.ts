@@ -88,7 +88,35 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const dataRows = rows1.slice(headerIdx + 1).filter(r => cell(r as unknown[], 0));
+    // MAP CỘT THEO TÊN HEADER (không hardcode index) — file có thể thêm cột đầu (STT…) hoặc
+    // đổi thứ tự → nếu cứ đọc cột 0 làm date sẽ lấy nhầm số thứ tự → lịch sai bét (bug tháng 7).
+    const headerRow = (headerIdx >= 0 ? rows1[headerIdx] : []) as unknown[];
+    const colOf = (keywords: string[], fb: number) => {
+      for (let i = 0; i < headerRow.length; i++) { const h = norm(headerRow[i]); if (h && keywords.some(k => h.includes(k))) return i; }
+      return fb;
+    };
+    const C = {
+      date: colOf(['date', 'ngày', 'ngay'], 0),
+      day: colOf(['day of week', 'weekday', 'thứ', 'thu '], 1),
+      wave: colOf(['wave', 'đợt', 'dot'], 2),
+      surface: colOf(['surface', 'format', 'định dạng', 'nền tảng'], 3),
+      purpose: colOf(['purpose', 'mục đích'], 4),
+      pillar: colOf(['pillar', 'trụ'], 5),
+      segment: colOf(['segment', 'audience', 'đối tượng'], 6),
+      rtb: colOf(['rtb'], 7),
+      usp: colOf(['usp'], 8),
+      sku: colOf(['sku', 'product', 'sản phẩm'], 9),
+      context: colOf(['context', 'bối cảnh'], 10),
+      hook: colOf(['hook'], 11),
+      copy: colOf(['copy', 'caption', 'nội dung'], 12),
+      visual: colOf(['visual', 'hình', 'ảnh'], 13),
+      hashtags: colOf(['hashtag'], 14),
+      repurpose: colOf(['repurpose', 'tái'], 15),
+      tree: colOf(['tree'], 16),
+      winband: colOf(['win'], 17),
+    };
+
+    const dataRows = rows1.slice(headerIdx + 1).filter(r => cell(r as unknown[], C.date));
 
     // ── Sheet 2: Stories & Highlights ────────────────────────────
     const storiesData: { daily: { day: string; theme: string; signal: string }[]; highlights: { name: string; holds: string; cover: string }[] } = {
@@ -129,7 +157,7 @@ export async function POST(req: NextRequest) {
     const planTitle = file.name.replace(/\.xlsx?$/i, '').replace(/_/g, ' ');
 
     // Detect date range from rows
-    const dates = dataRows.map(r => parseDate(cell(r as unknown[], 0))).filter(Boolean) as string[];
+    const dates = dataRows.map(r => parseDate(cell(r as unknown[], C.date))).filter(Boolean) as string[];
     const minDate = dates.length ? dates.sort()[0] : null;
     const maxDate = dates.length ? dates.sort()[dates.length - 1] : null;
 
@@ -162,24 +190,24 @@ export async function POST(req: NextRequest) {
 
     for (let idx = 0; idx < dataRows.length; idx++) {
       const r = dataRows[idx] as unknown[];
-      const dateRaw  = cell(r, 0);
-      const dayOfWeek = cell(r, 1);
-      const wave     = cell(r, 2);
-      const surface  = cell(r, 3);
-      const purpose  = cell(r, 4);
-      const pillar   = cell(r, 5);
-      const segment  = cell(r, 6);
-      const rtb      = cell(r, 7);
-      const usp      = cell(r, 8);
-      const skuRaw   = cell(r, 9);
-      const context  = cell(r, 10);
-      const hook     = cell(r, 11);
-      const copyDir  = cell(r, 12);
-      const visualDir = cell(r, 13);
-      const hashtags = cell(r, 14);
-      const repurpose = cell(r, 15);
-      const treeId   = cell(r, 16);
-      const winBand  = cell(r, 17);
+      const dateRaw  = cell(r, C.date);
+      const dayOfWeek = cell(r, C.day);
+      const wave     = cell(r, C.wave);
+      const surface  = cell(r, C.surface);
+      const purpose  = cell(r, C.purpose);
+      const pillar   = cell(r, C.pillar);
+      const segment  = cell(r, C.segment);
+      const rtb      = cell(r, C.rtb);
+      const usp      = cell(r, C.usp);
+      const skuRaw   = cell(r, C.sku);
+      const context  = cell(r, C.context);
+      const hook     = cell(r, C.hook);
+      const copyDir  = cell(r, C.copy);
+      const visualDir = cell(r, C.visual);
+      const hashtags = cell(r, C.hashtags);
+      const repurpose = cell(r, C.repurpose);
+      const treeId   = cell(r, C.tree);
+      const winBand  = cell(r, C.winband);
 
       if (!hook && !skuRaw) continue;
 
