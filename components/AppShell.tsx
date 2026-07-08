@@ -424,6 +424,13 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
 
           <div className="flex-1" />
 
+          {(userRole === 'admin' || userRole === 'root_admin') && (
+            <a href="/platform" title="BigAI MKT — Platform Console"
+              className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1 transition-colors flex items-center gap-1">
+              🛰 <span className="hidden sm:inline">Platform</span>
+            </a>
+          )}
+
           <HelpDrawer tabId={tab} onOpenFullGuide={() => changeTab('guide')} />
 
           {session?.user && (
