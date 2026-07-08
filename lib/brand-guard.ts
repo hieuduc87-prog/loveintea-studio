@@ -15,12 +15,15 @@ import { NextRequest, NextResponse } from 'next/server';
 /** The trusted brand id for this request (set by middleware). Falls back to the
  *  query param only for internal/server contexts that bypass middleware. */
 export function getBrandId(req: NextRequest): string {
-  return (
-    req.headers.get('x-brand-id') ||
-    req.nextUrl.searchParams.get('brand') ||
-    req.nextUrl.searchParams.get('brandId') ||
-    ''
-  );
+  const header = req.headers.get('x-brand-id');
+  if (header) return header;
+  const q = req.nextUrl.searchParams.get('brand') || req.nextUrl.searchParams.get('brandId');
+  if (q) return q;
+  // Backward-compat: a super-admin (all-brands) with no explicit brand keeps the
+  // legacy 'loveintea' default so admin dashboards that omit ?brand keep working.
+  // Customers NEVER reach here — middleware always injects their x-brand-id header.
+  if (req.headers.get('x-brand-all') === '1') return 'loveintea';
+  return '';
 }
 
 export function isAllBrands(req: NextRequest): boolean {
