@@ -19,6 +19,16 @@ interface TplAnalysis {
   content_direction?: string;
 }
 
+// Slide này có hiện BAO BÌ sản phẩm không, theo VAI TRÒ (card e617a81f: carousel cần cân bằng
+// nguyên liệu ↔ sản phẩm — KHÔNG nhét hộp/bao bì vào mọi slide). Chỉ vai trò hướng-sản-phẩm mới
+// hiện bao bì; hook/ingredient/benefit/how_to/proof/lifestyle chỉ hiện nguyên liệu.
+// Bias NGUYÊN LIỆU: role dính "ingredient" thắng (kể cả "product/ingredient") → không bao bì.
+function slideShowsProduct(role: string): boolean {
+  const r = (role || '').toLowerCase();
+  if (/ingredient|nguyen lieu|nguyên liệu|raw|texture|hook|benefit|how[_ -]?to|lifestyle|proof/.test(r)) return false;
+  return /product|san pham|sản phẩm|packshot|packaging|bao bi|bao bì|hero|cta/.test(r);
+}
+
 export interface TemplateGenResult {
   images: string[];
   caption: string;
@@ -63,10 +73,18 @@ export async function generateTemplateImages(opts: {
   if (analysis.slides?.length) {
     for (let i = 0; i < N; i++) slidesMeta.push(analysis.slides[i] ?? analysis.slides[analysis.slides.length - 1] ?? {});
   } else {
-    const role = analysis.product_placement?.has_product ? 'product' : 'hook';
+    // Không có phân tích từng slide → gán vai trò CÂN BẰNG (tránh nhét bao bì vào mọi slide):
+    // slide đầu = hook, slide cuối = product, các slide giữa = ingredient. 1 slide: theo has_product.
     const content = analysis.content_direction || analysis.layout?.description || '';
     const visual = [analysis.layout?.description, analysis.colors?.mood, analysis.product_placement?.style].filter(Boolean).join('. ');
-    for (let i = 0; i < N; i++) slidesMeta.push({ index: i + 1, role, content, visual });
+    for (let i = 0; i < N; i++) {
+      let role: string;
+      if (N === 1) role = analysis.product_placement?.has_product ? 'product' : 'hook';
+      else if (i === 0) role = 'hook';
+      else if (i === N - 1) role = 'product';
+      else role = 'ingredient';
+      slidesMeta.push({ index: i + 1, role, content, visual });
+    }
   }
 
   const product = productId
@@ -97,28 +115,32 @@ export async function generateTemplateImages(opts: {
     const tplSlidePath = resolveProductImagePath((slideUrls[i].url || '').split('?')[0]);
     const refPath = resolveProductImagePath((pickProductRefUrl(productId, role) || '').split('?')[0]);
 
-    // QUY TẮC THAY SẢN PHẨM (card: tool phải thay product Loveintea vào đúng góc template, KHÔNG giữ product mẫu):
-    // - Có sản phẩm → base = ảnh REF Loveintea (giữ ĐÚNG bao bì), prompt mô tả bố cục/góc của slide template để tái dựng.
-    // - Không sản phẩm → base = ảnh template slide (giữ bố cục).
-    const base = productId
+    // QUY TẮC THAY SẢN PHẨM theo VAI TRÒ slide (card e617a81f):
+    // - Slide vai trò SẢN PHẨM (product/cta/hero/packaging) → base = ảnh REF Loveintea, ép ĐÚNG bao bì vào bố cục slide.
+    // - Slide vai trò NGUYÊN LIỆU/hook/benefit/how_to/proof → base = ảnh template slide (giữ bố cục),
+    //   CHỈ hiện nguyên liệu của sản phẩm, TUYỆT ĐỐI không hộp/bao bì → carousel cân bằng nguyên liệu ↔ sản phẩm.
+    const showProduct = Boolean(productId) && slideShowsProduct(role);
+    const base = showProduct
       ? (refPath || packshotPath || tplSlidePath)
       : (tplSlidePath || refPath || packshotPath);
-    const usingProductBase = Boolean(productId && (refPath || packshotPath));
+    const usingProductBase = showProduct && Boolean(refPath || packshotPath);
 
     const prompt = [
       `Vertical 2:3 social media image, slide ${i + 1} of ${slideUrls.length} in a carousel (role: ${role}).`,
       meta.content ? `Scene/composition to recreate: ${meta.content}.` : '',
       meta.visual ? `Camera angle/layout/style: ${meta.visual}.` : '',
-      usingProductBase
+      showProduct
         ? `Place the EXACT product shown in the reference image into this composition/angle. Keep its packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical to the reference — do NOT invent, redraw, translate, blur or omit any text on the packaging; the product's printed label must stay sharp and fully legible. The reference IS our product: ${product?.name ?? ''}.`
-        : (product ? `Featured product: ${product.name} — ${product.pitch ?? ''} (${product.theme ?? ''}${product.ingredients ? `, ingredients: ${product.ingredients}` : ''}).` : ''),
+        : (product
+            ? `This is an INGREDIENT / lifestyle slide — feature the raw or freshly prepared INGREDIENTS of "${product.name}"${product.ingredients ? ` (${product.ingredients})` : ''} arranged naturally (loose herbs, roots, flowers, dried tea, bowls, fresh produce), keeping the template slide's composition. Do NOT show the product's box, packaging, sachet, pouch, printed label or any logo in this slide — ingredients only.${product.theme ? ` Theme: ${product.theme}.` : ''}`
+            : ''),
       styleBits ? `Match the template aesthetic: ${styleBits}.` : '',
       customPrompt ? `Extra instruction: ${customPrompt}.` : '',
-      // Tỉ lệ THỰC TẾ: sản phẩm không được phóng to bất thường so với đạo cụ xung quanh.
-      `Keep realistic real-world proportions and believable scale between objects: the product must be sized naturally relative to surrounding props (e.g. a small tea box must NOT be oversized next to tea leaves, cups, hands or table items); no floating, no giant or shrunken product.${sizeHint ? ` Real product size ≈ ${sizeHint} — respect this physical scale.` : ''}`,
-      usingProductBase
+      // Tỉ lệ THỰC TẾ: mọi vật thể/nguyên liệu tự nhiên, không phóng to bất thường.
+      `Keep realistic real-world proportions and believable scale between all objects (ingredients, cups, hands, props${showProduct ? ', and the product box' : ''}); nothing oversized, floating, giant or shrunken.${sizeHint && showProduct ? ` Real product size ≈ ${sizeHint} — respect this physical scale.` : ''}`,
+      showProduct
         ? 'Photorealistic, premium, on-brand. Do NOT add any extra overlay text, captions, headings, watermarks or new logos beyond what is already printed on the product packaging.'
-        : 'Photorealistic, premium, on-brand. NO added text, NO letters, NO logos in the image (if any text is unavoidable, ENGLISH only — never Vietnamese).',
+        : 'Photorealistic, premium, on-brand. NO product packaging, NO box, NO sachet, NO added text, NO letters, NO logos in the image (if any text is unavoidable, ENGLISH only — never Vietnamese).',
     ].filter(Boolean).join(' ');
 
     try {
