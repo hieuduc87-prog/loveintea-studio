@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
-  const brand = req.nextUrl.searchParams.get('brand') || 'loveintea';
+  const brand = getBrandId(req);
   const includeItems = req.nextUrl.searchParams.get('include_items') === '1';
   const plans = db.prepare(`
     SELECT cp.*,

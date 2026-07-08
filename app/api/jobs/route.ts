@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 interface UnifiedJob {
   id: string; brand_id: string; kind: string; title: string; source: string | null;
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   const status = req.nextUrl.searchParams.get('status');
   const limit = Math.min(200, parseInt(req.nextUrl.searchParams.get('limit') ?? '80'));
-  const brandId = req.nextUrl.searchParams.get('brandId');
+  const brandId = getBrandId(req);
 
   // ── jobs table ──
   const jobRows = db.prepare(

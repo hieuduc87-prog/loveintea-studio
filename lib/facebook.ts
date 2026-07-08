@@ -54,7 +54,7 @@ export interface ChannelCreds {
   pageToken: string;
   igId: string;
   pageName: string;
-  source: 'channel' | 'legacy';
+  source: 'channel' | 'legacy' | 'none';
 }
 
 /** Resolve FB/IG credentials for a brand: channels row first, legacy env/settings fallback. */
@@ -79,6 +79,13 @@ export function getChannelCreds(brandId?: string): ChannelCreds {
         }
       }
     } catch { /* fall through to legacy */ }
+  }
+  // TENANT ISOLATION: only the built-in 'loveintea' store may fall back to the
+  // legacy env/settings credentials. Any other brand with no channel row returns
+  // EMPTY creds (source:'none') so publishing fails loudly ("store chưa nối
+  // Facebook") instead of silently posting to the Loveintea page.
+  if (brandId && brandId !== 'loveintea') {
+    return { pageId: '', pageToken: '', igId: '', pageName: '', source: 'none' };
   }
   return { pageId: pageId(), pageToken: token(), igId: igAccountId(), pageName: getSetting('FB_PAGE_NAME'), source: 'legacy' };
 }
@@ -119,7 +126,14 @@ export async function postToFacebook(opts: {
     const creds = getChannelCreds(opts.brandId);
     const tok = creds.pageToken;
     const pid = creds.pageId;
-    if (!tok || !pid) return { ok: false, error: 'FB credentials not configured.' };
+    if (!tok || !pid) {
+      return {
+        ok: false,
+        error: creds.source === 'none'
+          ? 'Store chưa kết nối Facebook — vào Channels để nối Page trước khi đăng.'
+          : 'FB credentials not configured.',
+      };
+    }
 
     const { caption, imageUrls, scheduledAt } = opts;
 

@@ -6,9 +6,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { tagPerformance } from '@/lib/post-tags';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
-  const brandId = req.nextUrl.searchParams.get('brand') || 'loveintea';
+  const brandId = getBrandId(req);
   const db = getDb();
 
   // Per-product performance (published posts + avg engagement)

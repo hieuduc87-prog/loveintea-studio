@@ -11,12 +11,13 @@ import { getDb } from '@/lib/db';
 import { generateJSON } from '@/lib/gemini';
 import { getExpertKnowledgeBlock } from '@/lib/brand-knowledge';
 import { createJob, finishJob, failJob } from '@/lib/jobs';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   let jobId = '';
   try {
     const body = await req.json() as { brandId?: string; productId?: string; message?: string; tone?: string; segment?: string; platform?: string; n?: number; templateId?: string; language?: string; length?: string };
-    const brandId = body.brandId || 'loveintea';
+    const brandId = getBrandId(req) || body.brandId || '';
     const message = (body.message || '').trim();
     if (!message) return NextResponse.json({ error: 'message required' }, { status: 400 });
     const n = Math.min(5, Math.max(1, body.n || 1));

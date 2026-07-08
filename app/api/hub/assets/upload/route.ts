@@ -4,13 +4,14 @@ import { v4 as uuid } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   try {
     const db = getDb();
     const fd = await req.formData();
     const files   = fd.getAll('files') as File[];
-    const brandId = (fd.get('brand_id') as string)   || 'loveintea';
+    const brandId = getBrandId(req) || (fd.get('brand_id') as string);
     const productId = (fd.get('product_id') as string) || null;
 
     if (!files.length) return NextResponse.json({ error: 'No files' }, { status: 400 });

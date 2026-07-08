@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { assertResourceBrand } from '@/lib/brand-guard';
 import fs from 'fs';
 import path from 'path';
 
@@ -12,6 +13,11 @@ export async function PATCH(
     const db = getDb();
     const body = await req.json();
     const { id } = params;
+
+    const own = db.prepare('SELECT brand_id FROM content_templates WHERE id = ?').get(id) as { brand_id?: string } | undefined;
+    if (!own) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const denied = assertResourceBrand(req, own.brand_id);
+    if (denied) return denied;
 
     const fields: string[] = [];
     const values: (string | number)[] = [];
@@ -41,13 +47,16 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const db = getDb();
     const { id } = params;
-    const row = db.prepare('SELECT image_url, thumbnail_url FROM content_templates WHERE id = ?').get(id) as { image_url?: string; thumbnail_url?: string } | undefined;
+    const row = db.prepare('SELECT image_url, thumbnail_url, brand_id FROM content_templates WHERE id = ?').get(id) as { image_url?: string; thumbnail_url?: string; brand_id?: string } | undefined;
+    if (!row) return NextResponse.json({ ok: true });
+    const denied = assertResourceBrand(req, row.brand_id);
+    if (denied) return denied;
 
     db.prepare('DELETE FROM content_templates WHERE id = ?').run(id);
 

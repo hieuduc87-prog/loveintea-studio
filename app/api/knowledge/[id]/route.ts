@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
 // GET /api/knowledge/[id] — return full doc content
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const db = getDb();
     const doc = db
@@ -13,6 +14,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     if (!doc) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+    const denied = assertResourceBrand(req, doc.brand_id as string | undefined);
+    if (denied) return denied;
 
     return NextResponse.json({ doc });
   } catch (e) {

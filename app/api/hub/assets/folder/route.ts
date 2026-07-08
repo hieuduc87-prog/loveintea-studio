@@ -6,9 +6,10 @@ export const dynamic = 'force-dynamic';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
-  const brandId = req.nextUrl.searchParams.get('brand') || 'loveintea';
+  const brandId = getBrandId(req);
   const db = getDb();
   const rows = db.prepare(
     `SELECT COALESCE(folder,'') AS folder, COUNT(*) AS n FROM assets WHERE brand_id=? GROUP BY COALESCE(folder,'')`

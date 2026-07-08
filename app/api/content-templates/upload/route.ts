@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { getDb } from '@/lib/db';
 import { analyzeTemplateLayout } from '@/lib/gemini';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     const aspectRatio = (fd.get('aspect_ratio') as string) || '2:3';
     const tags = (fd.get('tags') as string) || '[]';
     const notes = (fd.get('notes') as string) || '';
-    const brandId = (fd.get('brand_id') as string) || 'loveintea';
+    const brandId = getBrandId(req) || (fd.get('brand_id') as string);
 
     const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
     const imagesDir = path.join(dataDir, 'images');

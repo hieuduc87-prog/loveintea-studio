@@ -2,11 +2,12 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
   const p = req.nextUrl.searchParams;
-  const brandId   = p.get('brand')   || 'loveintea';
+  const brandId   = getBrandId(req);
   const productId = p.get('product') || '';
   const status    = p.get('status')  || '';
   const platform  = p.get('platform')|| '';
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
   };
 
   const id = uuid();
-  const brandId = body.brand_id || 'loveintea';
+  const brandId = getBrandId(req) || body.brand_id;
 
   db.prepare(`
     INSERT INTO content_log

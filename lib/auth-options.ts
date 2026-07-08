@@ -58,6 +58,23 @@ export const authOptions: NextAuthOptions = {
           token.is_approved = dbUser.is_approved;
         }
       }
+
+      // Refresh brand access on EVERY request (cheap indexed query) so a newly
+      // assigned brand takes effect without forcing the user to re-login.
+      // Admins/root_admins bypass membership entirely (super-admin: all brands).
+      if (token.id) {
+        const db = getDb();
+        const isAdmin = token.role === 'admin' || token.role === 'root_admin';
+        token.allBrands = isAdmin;
+        if (isAdmin) {
+          token.brands = [];
+        } else {
+          const rows = db
+            .prepare('SELECT brand_id FROM brand_members WHERE user_id = ?')
+            .all(token.id) as Array<{ brand_id: string }>;
+          token.brands = rows.map((r) => r.brand_id);
+        }
+      }
       return token;
     },
 
@@ -65,6 +82,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = (token.role as string) || 'viewer';
+        session.user.brands = (token.brands as string[]) || [];
+        session.user.allBrands = Boolean(token.allBrands);
 
         // Update last_login + sync name/image
         if (token.id) {

@@ -1,11 +1,12 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 // GET /api/scoreboard?brandId=X — get scoreboard with verdicts
 export async function GET(req: NextRequest) {
   try {
-    const brandId = req.nextUrl.searchParams.get('brandId') || 'loveintea';
+    const brandId = getBrandId(req);
     const db = getDb();
 
     // Get current scoreboard entries

@@ -13,7 +13,7 @@ export async function GET() {
 
   // Brand scoping: admins see all; members see assigned brands;
   // users with no membership rows see all (legacy single-team behavior)
-  let brands;
+  let brands: unknown[];
   if (role === 'admin' || role === 'root_admin' || !userId) {
     brands = db.prepare(`
       SELECT b.*,
@@ -22,12 +22,10 @@ export async function GET() {
     `).all();
   } else {
     const memberships = db.prepare(`SELECT brand_id FROM brand_members WHERE user_id = ?`).all(userId) as Array<{ brand_id: string }>;
+    // TENANT ISOLATION: a non-admin with no membership sees NOTHING (no more
+    // legacy "see all"). Customers only ever see stores explicitly assigned.
     if (memberships.length === 0) {
-      brands = db.prepare(`
-        SELECT b.*,
-          (SELECT COUNT(*) FROM products p WHERE p.brand_id = b.id) as product_count
-        FROM brands b ORDER BY b.name
-      `).all();
+      brands = [];
     } else {
       const placeholders = memberships.map(() => '?').join(',');
       brands = db.prepare(`
@@ -42,6 +40,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const db = getDb();
+  // Creating a store is a super-admin (platform-owner) action only.
+  const session = await getServerSession(authOptions);
+  const role = session?.user?.role ?? 'viewer';
+  if (role !== 'admin' && role !== 'root_admin') {
+    return NextResponse.json({ error: 'Forbidden — chỉ super-admin được tạo store.' }, { status: 403 });
+  }
   const body = await req.json() as {
     name: string; slug?: string; domain?: string; logo_url?: string;
   };

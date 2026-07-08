@@ -2,11 +2,12 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
   const status = req.nextUrl.searchParams.get('status');
-  const brand = req.nextUrl.searchParams.get('brand') || 'loveintea';
+  const brand = getBrandId(req);
   let query = 'SELECT * FROM posts WHERE brand_id = ?';
   const params: string[] = [brand];
   if (status) { query += ' AND status = ?'; params.push(status); }
@@ -20,12 +21,15 @@ export async function POST(req: NextRequest) {
     const db = getDb();
     const body = await req.json();
     const id = uuid();
+    // TENANT ISOLATION: brand comes from the middleware-validated header, never
+    // from the request body (a customer could otherwise inject another store's id).
+    const trustedBrand = getBrandId(req) || 'loveintea';
     db.prepare(`
       INSERT INTO posts (id, brand_id, sku_id, segment_id, rtb_id, usp_id, narrative_id, context_id, cta, cell_id, caption, hashtags, image_url, image_prompt, platforms, notes, brief_id, rule_version, plan_item_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
-      body.brandId ?? body.brand_id ?? 'loveintea',
+      trustedBrand,
       body.skuId ?? body.sku_id ?? '',
       body.segmentId ?? '',
       body.rtbId ?? '',

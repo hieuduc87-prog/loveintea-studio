@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { reviewContent } from '@/lib/o3-engine';
+import { getBrandId } from '@/lib/brand-guard';
 
 // POST /api/review — run 3-gate review on a post
 export async function POST(req: NextRequest) {
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
     };
 
     let captionText = caption || '';
-    const bid = brandId || 'loveintea';
+    const bid = getBrandId(req) || brandId || 'loveintea';
 
     // If postId provided, fetch caption from DB
     if (postId && !captionText) {

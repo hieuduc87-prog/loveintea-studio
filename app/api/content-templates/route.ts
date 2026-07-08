@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 // POST — create an EMPTY template shell (metadata only); images added later via /[id]/slides
 export async function POST(req: NextRequest) {
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
     getDb().prepare(`INSERT INTO content_templates
       (id, brand_id, name, category, purpose, format, aspect_ratio, image_url, thumbnail_url, kind, slides_json, file_type)
       VALUES (?,?,?,?,?,?,?, '', '', ?, '[]', ?)`)
-      .run(id, b.brandId || 'loveintea', b.name?.trim() || 'Template mới', b.category || 'general',
+      .run(id, getBrandId(req) || b.brandId, b.name?.trim() || 'Template mới', b.category || 'general',
         b.purpose || '', b.format || (fileType === 'video' ? 'reel_cover' : 'post'), b.aspect_ratio || '2:3', kind, fileType);
     return NextResponse.json({ ok: true, id });
   } catch (e) {
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const db = getDb();
-  const brand = req.nextUrl.searchParams.get('brand') || 'loveintea';
+  const brand = getBrandId(req);
   const category = req.nextUrl.searchParams.get('category');
   const format = req.nextUrl.searchParams.get('format');
   const active = req.nextUrl.searchParams.get('active');

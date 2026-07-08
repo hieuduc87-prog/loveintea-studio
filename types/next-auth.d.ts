@@ -5,6 +5,10 @@ declare module 'next-auth' {
     user: {
       id: string;
       role: string;
+      /** Brand ids this user may access (empty for admins — see allBrands). */
+      brands: string[];
+      /** True for admin/root_admin: may access every brand (super-admin). */
+      allBrands: boolean;
     } & DefaultSession['user'];
   }
 
@@ -19,5 +23,9 @@ declare module 'next-auth/jwt' {
     id?: string;
     role?: string;
     is_approved?: number;
+    /** Brand ids this user may access (refreshed each request). */
+    brands?: string[];
+    /** True for admin/root_admin. */
+    allBrands?: boolean;
   }
 }

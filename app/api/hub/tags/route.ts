@@ -2,10 +2,11 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
-  const brandId = req.nextUrl.searchParams.get('brand') || 'loveintea';
+  const brandId = getBrandId(req);
   const tags = db.prepare(
     `SELECT t.*,
       (SELECT COUNT(*) FROM asset_tags at2 WHERE at2.tag_id = t.id) as usage_count
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const db = getDb();
   const body = await req.json() as { name: string; type?: string; color?: string; brand_id?: string };
-  const brandId = body.brand_id || 'loveintea';
+  const brandId = getBrandId(req) || body.brand_id || '';
   const slug = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const id = uuid();
 

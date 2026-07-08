@@ -12,9 +12,10 @@ import { getDb } from '@/lib/db';
 import { buildStoryboard, VideoRecipe } from '@/lib/video/director';
 import { analyzeReferenceVideo, analysisToRecipe } from '@/lib/video/analyze-reference';
 import { detectBeats, IMAGES_DIR } from '@/lib/video/ffmpeg';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
-  const brandId = req.nextUrl.searchParams.get('brandId') || 'loveintea';
+  const brandId = getBrandId(req);
   const projects = getDb().prepare(
     'SELECT * FROM video_projects WHERE brand_id=? ORDER BY created_at DESC LIMIT 100'
   ).all(brandId);
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
       targetDurationS?: number; bgmUrl?: string; notes?: string;
       useVoiceover?: boolean; voVoice?: string; language?: string; referenceClipId?: string;
     };
-    const brandId = body.brandId || 'loveintea';
+    const brandId = getBrandId(req) || body.brandId || '';
     const purpose = body.purpose || 'promo';
     const targetDurationS = Math.min(60, Math.max(10, body.targetDurationS || 20));
     const db = getDb();

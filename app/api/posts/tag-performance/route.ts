@@ -6,9 +6,10 @@ export const dynamic = 'force-dynamic';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { tagPerformance } from '@/lib/post-tags';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
-  const brandId = req.nextUrl.searchParams.get('brand') || 'loveintea';
+  const brandId = getBrandId(req);
   const rows = tagPerformance(brandId);
   // group by dimension for the UI
   const byDim: Record<string, typeof rows> = {};

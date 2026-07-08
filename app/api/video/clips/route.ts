@@ -12,9 +12,10 @@ import path from 'path';
 import { getDb } from '@/lib/db';
 import { probe, IMAGES_DIR } from '@/lib/video/ffmpeg';
 import { analyzeClip } from '@/lib/video/analyze';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
-  const brandId = req.nextUrl.searchParams.get('brandId') || 'loveintea';
+  const brandId = getBrandId(req);
   const productId = req.nextUrl.searchParams.get('productId');
   const db = getDb();
   const clips = productId
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get('file') as File | null;
-    const brandId = (form.get('brandId') as string) || 'loveintea';
+    const brandId = getBrandId(req) || (form.get('brandId') as string);
     const productId = (form.get('productId') as string) || null;
     if (!file) return NextResponse.json({ error: 'file required' }, { status: 400 });
 

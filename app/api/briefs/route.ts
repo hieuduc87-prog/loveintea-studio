@@ -2,11 +2,12 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generateBrief } from '@/lib/o3-engine';
+import { getBrandId } from '@/lib/brand-guard';
 
 // GET /api/briefs?brandId=X — list briefs
 export async function GET(req: NextRequest) {
   try {
-    const brandId = req.nextUrl.searchParams.get('brandId') || 'loveintea';
+    const brandId = getBrandId(req);
     const db = getDb();
     const rows = db.prepare(
       `SELECT * FROM briefs WHERE brand_id = ? ORDER BY created_at DESC LIMIT 100`
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const brief = await generateBrief({
-      brandId: body.brandId || 'loveintea',
+      brandId: getBrandId(req) || body.brandId || '',
       planItemId: body.planItemId,
       channel: body.channel || 'instagram',
       skuId: body.skuId,

@@ -2,11 +2,12 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
+import { getBrandId } from '@/lib/brand-guard';
 
 // GET /api/rules?brandId=X — list active rules
 export async function GET(req: NextRequest) {
   try {
-    const brandId = req.nextUrl.searchParams.get('brandId') || 'loveintea';
+    const brandId = getBrandId(req);
     const showAll = req.nextUrl.searchParams.get('all') === '1';
     const db = getDb();
 

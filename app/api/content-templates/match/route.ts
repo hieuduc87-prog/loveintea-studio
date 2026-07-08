@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generateJSON } from '@/lib/gemini';
+import { getBrandId } from '@/lib/brand-guard';
 
 interface MatchRequest {
   brandId?: string;
@@ -23,7 +24,7 @@ interface TemplateRow {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as MatchRequest;
-    const brandId = body.brandId || 'loveintea';
+    const brandId = getBrandId(req) || body.brandId || '';
     const limit = body.limit || 3;
 
     const db = getDb();

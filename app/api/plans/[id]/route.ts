@@ -1,13 +1,16 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
 
-  const plan = db.prepare('SELECT * FROM content_plans WHERE id = ?').get(id);
+  const plan = db.prepare('SELECT * FROM content_plans WHERE id = ?').get(id) as { brand_id?: string } | undefined;
   if (!plan) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const denied = assertResourceBrand(req, plan.brand_id);
+  if (denied) return denied;
 
   const items = db.prepare(
     'SELECT * FROM plan_items WHERE plan_id = ? ORDER BY sort_order'
@@ -27,9 +30,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json({ plan, items, posts, stats });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
+
+  const plan = db.prepare('SELECT brand_id FROM content_plans WHERE id = ?').get(id) as { brand_id?: string } | undefined;
+  if (!plan) return NextResponse.json({ ok: true });
+  const denied = assertResourceBrand(req, plan.brand_id);
+  if (denied) return denied;
 
   // Delete plan items
   db.prepare('DELETE FROM plan_items WHERE plan_id = ?').run(id);

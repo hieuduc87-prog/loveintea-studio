@@ -1,11 +1,12 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
   const p = req.nextUrl.searchParams;
-  const brandId  = p.get('brand')   || 'loveintea';
+  const brandId  = getBrandId(req);
   const productId = p.get('product') || '';
   const status   = p.get('status')  || '';
   const source   = p.get('source')  || '';

@@ -2,12 +2,13 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generateCaption } from '@/lib/gemini';
+import { getBrandId } from '@/lib/brand-guard';
 
 // POST /api/learn — run learn engine: attribute performance, propose rules
 export async function POST(req: NextRequest) {
   try {
     const { brandId } = await req.json() as { brandId?: string };
-    const bid = brandId || 'loveintea';
+    const bid = getBrandId(req) || brandId || 'loveintea';
     const db = getDb();
 
     // Gather post performance data with lineage

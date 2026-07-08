@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
-  const brandId = req.nextUrl.searchParams.get('brand') || 'loveintea';
+  const brandId = getBrandId(req);
   const products = db.prepare(
     'SELECT * FROM products WHERE brand_id=? ORDER BY sort_order'
   ).all(brandId);

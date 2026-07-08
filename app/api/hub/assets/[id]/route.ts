@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
 
@@ -13,6 +14,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   `).get(id) as Record<string, unknown> | undefined;
 
   if (!asset) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const denied = assertResourceBrand(req, asset.brand_id as string | undefined);
+  if (denied) return denied;
 
   const tags = db.prepare(`
     SELECT t.* FROM tags t
@@ -26,6 +29,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
+
+  const own = db.prepare('SELECT brand_id FROM assets WHERE id = ?').get(id) as { brand_id?: string } | undefined;
+  if (!own) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const denied = assertResourceBrand(req, own.brand_id);
+  if (denied) return denied;
+
   const body = await req.json() as {
     status?: string;
     notes?: string;
@@ -60,9 +69,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getDb();
+  const own = db.prepare('SELECT brand_id FROM assets WHERE id = ?').get(id) as { brand_id?: string } | undefined;
+  if (!own) return NextResponse.json({ ok: true });
+  const denied = assertResourceBrand(req, own.brand_id);
+  if (denied) return denied;
   // Remove tag links first
   db.prepare('DELETE FROM asset_tags WHERE asset_id = ?').run(id);
   db.prepare('DELETE FROM assets WHERE id = ?').run(id);
