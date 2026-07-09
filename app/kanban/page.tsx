@@ -18,6 +18,7 @@ interface FixResult {
 
 interface KanbanCard {
   id: string;
+  brandId?: string;
   title: string;
   description: string;
   goal: string;
@@ -85,12 +86,27 @@ export default function KanbanPage() {
   const [features, setFeatures] = useState<FeatureTab[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Brand context: mỗi brand 1 board; admin có "🌐 Tất cả" (aggregate) ──
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [brand, setBrand] = useState<string>('');
+  const isAggregate = brand === '__all__';
+  const canAggregate = brands.length > 1; // admin / multi-brand
+
+  useEffect(() => {
+    fetch('/api/brands').then(r => r.json()).then((d: { brands?: { id: string; name: string }[] }) => {
+      const list = d.brands || [];
+      setBrands(list);
+      setBrand(prev => prev || list[0]?.id || 'loveintea');
+    }).catch(() => setBrand('loveintea'));
+  }, []);
+
   const load = useCallback(async () => {
+    if (!brand) return;
     try {
-      const res = await fetch('/api/kanban');
+      const res = await fetch(`/api/kanban?brand=${encodeURIComponent(brand)}`);
       if (res.ok) setCards(await res.json());
     } finally { setLoading(false); }
-  }, []);
+  }, [brand]);
 
   useEffect(() => { load(); const id = setInterval(load, 15000); return () => clearInterval(id); }, [load]);
   useEffect(() => { fetch('/api/kanban/features').then(r => r.ok ? r.json() : []).then(setFeatures).catch(() => {}); }, []);
@@ -178,7 +194,7 @@ export default function KanbanPage() {
   const quickAdd = async (status: Status) => {
     const title = addText.trim();
     if (!title) { setAddingCol(null); return; }
-    const res = await fetch('/api/kanban', {
+    const res = await fetch(`/api/kanban?brand=${encodeURIComponent(brand)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, status }),
     });
@@ -210,16 +226,25 @@ export default function KanbanPage() {
       <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-1)' }}>
         <div>
           <h1 className="text-lg font-bold" style={{ color: 'var(--text-1)' }}>Kanban Board</h1>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Kéo card vào 🤖 Auto Fix để Claude tự sửa</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
+            {isAggregate ? 'Tất cả dự án — mỗi card gắn nhãn brand' : `Board của ${brands.find(b => b.id === brand)?.name || brand} · kéo card vào 🤖 Auto Fix`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={fixAll} disabled={fixingAll}
+          {/* Brand selector — mỗi brand 1 board độc lập; admin có "Tất cả" */}
+          <select value={brand} onChange={e => { setBrand(e.target.value); setLoading(true); }}
+            className="text-xs px-2 py-1.5 rounded-md border"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-1)', backgroundColor: 'var(--bg-2)' }}>
+            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            {canAggregate && <option value="__all__">🌐 Tất cả dự án</option>}
+          </select>
+          <button onClick={fixAll} disabled={fixingAll || isAggregate}
             className="text-xs px-3 py-1.5 rounded-md font-semibold disabled:opacity-50"
             style={{ backgroundColor: '#8b5cf6', color: '#fff' }}
             title='Đẩy mọi card "Cần làm" + "Fix lỗi" sang Auto Fix'>
             {fixingAll ? '⏳ Đang đẩy…' : '⚡ Fix tất cả'}
           </button>
-          <a href="/api/kanban/claude-brief" target="_blank" rel="noreferrer"
+          <a href={`/api/kanban/claude-brief${isAggregate ? '' : `?brand=${encodeURIComponent(brand)}`}`} target="_blank" rel="noreferrer"
             className="text-xs px-3 py-1.5 rounded-md border"
             style={{ borderColor: 'var(--border)', color: 'var(--text-2)', backgroundColor: 'var(--bg-2)' }}>
             Claude Brief ↗
@@ -267,6 +292,11 @@ export default function KanbanPage() {
                           <div className="flex items-center gap-1.5 mb-1.5">
                             <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase" style={{ backgroundColor: TYPE_COLORS[card.type]+'22', color: TYPE_COLORS[card.type] }}>{card.type}</span>
                             <span className="text-[10px]">{PRIORITY_EMOJI[card.priority]}</span>
+                            {isAggregate && card.brandId && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold ml-auto" style={{ backgroundColor: 'var(--bg-1)', color: 'var(--text-2)', border: '1px solid var(--border)' }}>
+                                {brands.find(b => b.id === card.brandId)?.name || card.brandId}
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs font-medium leading-snug mb-1" style={{ color: 'var(--text-1)' }}>{card.title}</p>
                           {card.fileHint && <p className="text-[10px] font-mono truncate mb-1" style={{ color: 'var(--text-3)' }}>{card.fileHint}</p>}
