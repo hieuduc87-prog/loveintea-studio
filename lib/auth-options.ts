@@ -34,6 +34,16 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: { strategy: 'jwt' },
+  // Cross-subdomain session sharing (app.<domain> + admin.<domain>) when
+  // COOKIE_DOMAIN is set in prod (e.g. .easycreativehub.com). Default otherwise.
+  ...(process.env.COOKIE_DOMAIN ? {
+    cookies: {
+      sessionToken: {
+        name: '__Secure-next-auth.session-token',
+        options: { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: true, domain: process.env.COOKIE_DOMAIN },
+      },
+    },
+  } : {}),
   pages: {
     signIn: '/login',
     error: '/login',
