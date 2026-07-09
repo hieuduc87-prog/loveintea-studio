@@ -4,7 +4,7 @@
  * URL that describes the service. Bilingual EN/VI.
  */
 export const metadata = {
-  title: 'LoveinTea Studio — Social Media Marketing Platform for SMEs',
+  title: 'Easy Creative Hub — Social Media Marketing Platform for SMEs',
   description:
     'A closed-loop social media marketing platform: plan, create with AI, publish to Facebook & Instagram, measure results and learn — built for small & medium businesses in Vietnam.',
 };
@@ -39,7 +39,7 @@ export default function AboutPage() {
       <section className="max-w-4xl mx-auto px-6 pt-20 pb-14 text-center">
         <div className="inline-flex items-center gap-2 mb-6">
           <span className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-lg font-bold text-white">L</span>
-          <span className="text-lg font-bold tracking-tight">LoveinTea Studio</span>
+          <span className="text-lg font-bold tracking-tight">Easy Creative Hub</span>
         </div>
         <h1 className="text-3xl md:text-5xl font-bold leading-tight mb-5">
           Social media marketing,<br className="hidden md:block" /> on autopilot for SMEs
@@ -68,7 +68,7 @@ export default function AboutPage() {
         <div className="rounded-2xl border border-gray-800 bg-gray-900/60 p-6 md:p-8">
           <h2 className="text-lg font-bold mb-3">How the platform works with Facebook &amp; Instagram</h2>
           <p className="text-sm text-gray-400 leading-relaxed">
-            LoveinTea Studio connects to the Meta Graph API on behalf of each client business.
+            Easy Creative Hub connects to the Meta Graph API on behalf of each client business.
             Clients connect their own Facebook Page and Instagram Business account to the platform.
             The platform then publishes the content they approve, and reads post engagement metrics
             (reach, reactions, comments, saves) to compute a performance scoreboard that guides the
@@ -102,7 +102,7 @@ export default function AboutPage() {
             Contact: <a href="mailto:hieuduc87@gmail.com" className="text-emerald-400 hover:underline">hieuduc87@gmail.com</a>
             {' · '}Website: <a href="https://hoalangthang.com" className="text-emerald-400 hover:underline">hoalangthang.com</a>
           </p>
-          <p className="text-[11px] text-gray-600 pt-2">© 2026 LoveinTea Studio. All rights reserved.</p>
+          <p className="text-[11px] text-gray-600 pt-2">© 2026 Easy Creative Hub. All rights reserved.</p>
         </div>
       </footer>
     </main>

@@ -42,17 +42,13 @@ function LoginContent() {
 
         {/* Logo / Brand */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-brand-600 flex items-center justify-center shadow-lg">
-            {/* Leaf icon */}
-            <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M18 4C10.8 4 6 10 6 18C6 26 12 30 18 30C18 30 18 20 28 14C22 14 18 18 18 18C18 18 16 10 18 4Z"
-                fill="white" fillOpacity="0.9" />
-              <path d="M18 30C18 30 14 24 14 18" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg text-3xl"
+            style={{ background: 'linear-gradient(135deg, #8b5cf6, #22d3ee)', boxShadow: '0 0 32px rgba(139,92,246,0.45)' }}>
+            ⚡
           </div>
           <div className="text-center">
-            <h1 className="text-xl font-bold text-white tracking-tight">LoveinTea Studio</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Đăng nhập để tiếp tục</p>
+            <h1 className="text-xl font-bold text-white tracking-tight">Easy Creative Hub</h1>
+            <p className="text-sm text-gray-400 mt-0.5">Đăng nhập vào không gian thương hiệu của bạn</p>
           </div>
         </div>
 
@@ -117,7 +113,7 @@ function LoginContent() {
       </a>
 
       {/* Footer */}
-      <p className="mt-8 text-xs text-gray-700">loveintea.wealthpsy.com</p>
+      <p className="mt-8 text-xs text-gray-700">easycreativehub.com</p>
     </div>
   );
 }

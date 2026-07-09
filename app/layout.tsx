@@ -3,8 +3,8 @@ import './globals.css';
 import { SessionProviderWrapper } from '@/components/SessionProviderWrapper';
 
 export const metadata: Metadata = {
-  title: 'LoveinTea Studio — Content Management',
-  description: 'Content production, scheduling & publishing for LoveinTea',
+  title: 'Easy Creative Hub — Marketing OS',
+  description: 'AI content production, scheduling, publishing & learning loop for your brand',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

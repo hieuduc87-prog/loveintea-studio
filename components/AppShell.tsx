@@ -304,7 +304,9 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
   // Brand state
   const [brands, setBrands]           = useState<BrandSummary[]>([]);
   const [activeBrand, setActiveBrand] = useState<BrandSummary>({
-    id: 'loveintea', name: 'LoveinTea', slug: 'loveintea',
+    // Neutral placeholder — replaced by the user's own brand once /api/brands loads
+    // (a customer must never see another tenant's name flash).
+    id: 'loveintea', name: '…', slug: 'loveintea',
     logo_url: null, domain: null, product_count: 0,
   });
 

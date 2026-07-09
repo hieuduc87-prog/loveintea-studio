@@ -50,7 +50,7 @@ const CONDITION_COLORS: Record<Condition, string> = {
   approved: '#10b981', rejected: '#ef4444', trigger: '#f59e0b',
 };
 
-const TOOLS = ['—', 'Claude AI', 'GPT-image-2', 'DALL-E 3', 'Canva', 'n8n', 'Figma', 'LoveinTea Studio', 'Manual', 'Custom...'];
+const TOOLS = ['—', 'Claude AI', 'GPT-image-2', 'DALL-E 3', 'Canva', 'n8n', 'Figma', 'Easy Creative Hub', 'Manual', 'Custom...'];
 const CATEGORIES = ['image', 'content', 'blog', 'social', 'video', 'general'];
 const CATEGORY_COLORS: Record<string, string> = {
   image: '#a78bfa', content: '#60a5fa', blog: '#34d399',
