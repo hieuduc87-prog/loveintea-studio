@@ -16,14 +16,15 @@ const TYPE_LABEL: Record<string, string> = {
 /** Formatted block of the most recent expert knowledge for a brand (capped). */
 export function getExpertKnowledgeBlock(brandId: string, limit = 25): string {
   try {
+    // Merge PLATFORM-scope (nguyên tắc chung — áp mọi brand) + BRAND-scope (riêng brand này).
     const rows = getDb().prepare(
-      `SELECT type, title, content FROM knowledge_docs
-       WHERE brand_id = ? AND type IN ('expert_tip','real_case','rule','insight')
-       ORDER BY uploaded_at DESC LIMIT ?`
-    ).all(brandId, limit) as Array<{ type: string; title: string; content: string | null }>;
+      `SELECT type, title, content, scope FROM knowledge_docs
+       WHERE (brand_id = ? OR scope = 'platform') AND type IN ('expert_tip','real_case','rule','insight')
+       ORDER BY (scope = 'platform') DESC, uploaded_at DESC LIMIT ?`
+    ).all(brandId, limit) as Array<{ type: string; title: string; content: string | null; scope: string }>;
     if (!rows.length) return '';
-    const lines = rows.map(r => `- [${TYPE_LABEL[r.type] ?? r.type}] ${r.title}${r.content ? `: ${r.content.slice(0, 400)}` : ''}`);
-    return `\n\n═══ EXPERT KNOWLEDGE (tri thức người vận hành — tuân thủ) ═══\n${lines.join('\n')}\n═══ END EXPERT KNOWLEDGE ═══`;
+    const lines = rows.map(r => `- [${r.scope === 'platform' ? '🌐 CHUNG ' : ''}${TYPE_LABEL[r.type] ?? r.type}] ${r.title}${r.content ? `: ${r.content.slice(0, 400)}` : ''}`);
+    return `\n\n═══ EXPERT KNOWLEDGE (tri thức người vận hành — tuân thủ; [🌐 CHUNG] = nguyên tắc toàn hệ) ═══\n${lines.join('\n')}\n═══ END EXPERT KNOWLEDGE ═══`;
   } catch {
     return '';
   }

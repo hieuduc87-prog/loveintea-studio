@@ -111,7 +111,7 @@ function getActiveRules(brandId: string): { version: string; rules: string[] } {
     const db = getDb();
     const rows = db.prepare(
       `SELECT version, rule_text FROM content_rules
-       WHERE brand_id = ? AND status = 'active'
+       WHERE (brand_id = ? OR scope = 'platform') AND status = 'active'
        ORDER BY created_at ASC LIMIT 30`
     ).all(brandId) as { version: string; rule_text: string }[];
 

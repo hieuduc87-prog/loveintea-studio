@@ -751,6 +751,9 @@ function initSchema(db: Database.Database) {
   // ── Migrations ─────────────────────────────────────
   // Per-brand content language (vi|en). Default 'en' (existing brands sell US).
   try { db.exec(`ALTER TABLE brand_dna ADD COLUMN content_language TEXT DEFAULT 'en'`); } catch { /* already exists */ }
+  // Learning-loop scope: 'brand' (DNA riêng) | 'platform' (nguyên tắc chung — áp MỌI brand).
+  try { db.exec(`ALTER TABLE knowledge_docs ADD COLUMN scope TEXT DEFAULT 'brand'`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE content_rules ADD COLUMN scope TEXT DEFAULT 'brand'`); } catch { /* already exists */ }
   // Email+password auth for customers who don't use Google (admin-provisioned).
   try { db.exec(`ALTER TABLE auth_users ADD COLUMN password_hash TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE auth_users ADD COLUMN must_change_password INTEGER DEFAULT 0`); } catch { /* already exists */ }
@@ -773,6 +776,63 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN voiceover_url TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN vo_voice TEXT DEFAULT 'nova'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN reference_recipe_json TEXT`); } catch { /* already exists */ }
+  // ── Video content định kỳ + hệ thống nguồn học (inspiration) ──
+  // posts có thể mang video (Reels) thay vì ảnh; publish qua postVideoToFacebook/postReelToInstagram.
+  try { db.exec(`ALTER TABLE posts ADD COLUMN video_url TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN schedule_id TEXT`); } catch { /* already exists */ }
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS video_schedules (
+      id                TEXT PRIMARY KEY,
+      brand_id          TEXT NOT NULL,
+      name              TEXT,
+      product_strategy  TEXT DEFAULT 'rotate',   -- rotate | fixed
+      product_id        TEXT,                    -- khi fixed
+      last_product_id   TEXT,                    -- con trỏ xoay vòng
+      purpose           TEXT DEFAULT 'promo',
+      target_duration_s INTEGER DEFAULT 20,
+      use_voiceover     INTEGER DEFAULT 1,
+      language          TEXT,                    -- null → theo brand content_language
+      inspiration_item_id TEXT,                  -- khuôn recipe từ Nguồn học
+      cadence_days      INTEGER DEFAULT 3,
+      hour_local        INTEGER DEFAULT 9,       -- giờ VN (UTC+7)
+      auto_post         TEXT DEFAULT 'draft',    -- draft (review tay) | auto (đăng luôn khi render xong)
+      platforms         TEXT DEFAULT 'facebook',
+      enabled           INTEGER DEFAULT 1,
+      last_run_at       TEXT,
+      next_run_at       TEXT,
+      last_error        TEXT,
+      created_at        TEXT DEFAULT (datetime('now')),
+      updated_at        TEXT DEFAULT (datetime('now'))
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_video_schedules_brand ON video_schedules(brand_id)`);
+    db.exec(`CREATE TABLE IF NOT EXISTS inspiration_sources (
+      id         TEXT PRIMARY KEY,
+      brand_id   TEXT NOT NULL,
+      platform   TEXT DEFAULT 'instagram',       -- instagram | facebook | tiktok | youtube | other
+      name       TEXT,
+      url        TEXT,
+      notes      TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_insp_sources_brand ON inspiration_sources(brand_id)`);
+    db.exec(`CREATE TABLE IF NOT EXISTS inspiration_items (
+      id            TEXT PRIMARY KEY,
+      brand_id      TEXT NOT NULL,
+      source_id     TEXT,                        -- inspiration_sources.id (optional)
+      url           TEXT,                        -- link post/reel gốc
+      media_type    TEXT DEFAULT 'video',        -- video | text
+      filename      TEXT,                        -- file đã tải/upload trong IMAGES_DIR
+      caption       TEXT,                        -- caption gốc (dán tay)
+      status        TEXT DEFAULT 'new',          -- new | downloading | analyzing | analyzed | failed
+      analysis_json TEXT DEFAULT '{}',           -- ReferenceAnalysis đầy đủ
+      recipe_json   TEXT DEFAULT '{}',           -- VideoRecipe cho director
+      learnings     TEXT DEFAULT '',             -- tóm tắt bài học (vi)
+      error         TEXT,
+      created_at    TEXT DEFAULT (datetime('now')),
+      updated_at    TEXT DEFAULT (datetime('now'))
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_insp_items_brand ON inspiration_items(brand_id)`);
+  } catch { /* already exists */ }
   // ── Unified Job Queue — mọi nút "Tạo" (ảnh/content/carousel/plan/video) ghi 1 job để theo dõi ──
   try {
     db.exec(`CREATE TABLE IF NOT EXISTS jobs (

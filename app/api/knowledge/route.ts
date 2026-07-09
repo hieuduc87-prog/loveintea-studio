@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
-import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand, isAllBrands } from '@/lib/brand-guard';
 
 // Reading order: playbook → guideline → research → workflow → flowmap → everything else
 const TYPE_ORDER: Record<string, number> = {
@@ -32,9 +32,9 @@ export async function GET(req: NextRequest) {
     const db = getDb();
     const rows = db
       .prepare(
-        `SELECT id, brand_id, type, title, content, file_url, uploaded_at
+        `SELECT id, brand_id, type, title, content, file_url, uploaded_at, scope
          FROM knowledge_docs
-         WHERE brand_id = ?`
+         WHERE brand_id = ? OR scope = 'platform'`
       )
       .all(brandId) as Array<{
         id: string;
@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
         content: string | null;
         file_url: string | null;
         uploaded_at: string | null;
+        scope: string | null;
       }>;
 
     const docs = rows
@@ -61,6 +62,7 @@ export async function GET(req: NextRequest) {
         content: row.content ?? '',
         file_url: row.file_url,
         uploaded_at: row.uploaded_at,
+        scope: row.scope || 'brand',
         content_preview: row.content ? row.content.slice(0, 200) : '',
         content_size: row.content ? row.content.length : 0,
       }));
@@ -75,12 +77,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, title, content, fileUrl } = body as {
+    const { type, title, content, fileUrl, scope } = body as {
       type?: string;
       title?: string;
       content?: string;
       fileUrl?: string;
+      scope?: string;   // 'platform' (nguyên tắc chung — chỉ admin) | 'brand'
     };
+    // Chỉ super-admin mới được đặt scope='platform' (áp cho MỌI brand).
+    const finalScope = (scope === 'platform' && isAllBrands(req)) ? 'platform' : 'brand';
     // Brand from the trusted header — never body.brandId. Knowledge docs feed
     // every caption prompt, so a cross-tenant insert = stored prompt injection.
     const brandId = getBrandId(req);
@@ -98,9 +103,9 @@ export async function POST(req: NextRequest) {
     const db = getDb();
 
     db.prepare(
-      `INSERT INTO knowledge_docs (id, brand_id, type, title, content, file_url, uploaded_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-    ).run(id, brandId, type, title, content ?? null, fileUrl ?? null);
+      `INSERT INTO knowledge_docs (id, brand_id, type, title, content, file_url, scope, uploaded_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+    ).run(id, brandId, type, title, content ?? null, fileUrl ?? null, finalScope);
 
     // Audit log for the knowledge that feeds the production loop
     try {

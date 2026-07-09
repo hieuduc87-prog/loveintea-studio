@@ -57,7 +57,7 @@ export async function generateFromPlanItem(item: PlanItemRow, templateGuide?: { 
   const product = item.product_id
     ? db.prepare('SELECT * FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(item.product_id, brandId, item.product_id) as Record<string, string> | undefined
     : undefined;
-  const rules = (db.prepare(`SELECT rule_text FROM content_rules WHERE brand_id=? AND status='active' ORDER BY created_at DESC LIMIT 20`).all(brandId) as Array<{ rule_text: string }>).map(r => r.rule_text);
+  const rules = (db.prepare(`SELECT rule_text FROM content_rules WHERE (brand_id=? OR scope='platform') AND status='active' ORDER BY created_at DESC LIMIT 20`).all(brandId) as Array<{ rule_text: string }>).map(r => r.rule_text);
 
   // Ngôn ngữ caption/hashtags theo brand (content_language). Image_prompt luôn English.
   const langName = resolveLangName(dna?.content_language, brandId);

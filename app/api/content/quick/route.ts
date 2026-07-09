@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const product = body.productId
       ? db.prepare('SELECT * FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(body.productId, brandId, body.productId) as Record<string, string> | undefined
       : undefined;
-    const rules = (db.prepare(`SELECT rule_text FROM content_rules WHERE brand_id=? AND status='active' ORDER BY created_at DESC LIMIT 15`).all(brandId) as Array<{ rule_text: string }>).map(r => r.rule_text);
+    const rules = (db.prepare(`SELECT rule_text FROM content_rules WHERE (brand_id=? OR scope='platform') AND status='active' ORDER BY created_at DESC LIMIT 15`).all(brandId) as Array<{ rule_text: string }>).map(r => r.rule_text);
 
     // Picked template → follow its analysed structure/skeleton for THIS product
     let templateBlock = '';

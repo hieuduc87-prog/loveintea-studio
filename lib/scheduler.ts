@@ -11,14 +11,17 @@ import { v4 as uuid } from 'uuid';
 import { getDb } from './db';
 import {
   postToFacebook, postToInstagram, hasIgCreds,
+  postVideoToFacebook, postReelToInstagram,
   getFbPostMetrics, getIgMediaMetrics, FetchedMetrics,
   checkTokenHealth,
 } from './facebook';
+import { processVideoSchedules, onScheduledProjectDone } from './video/schedule';
 import { recomputeScoreboard } from './scoreboard-engine';
 
 const PUBLISH_INTERVAL_MS = 60_000;
 const METRICS_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const VIDEO_QUEUE_INTERVAL_MS = 30_000;
+const VIDEO_SCHEDULE_INTERVAL_MS = 5 * 60_000;
 
 let videoRendering = false;
 
@@ -45,6 +48,10 @@ export function startScheduler() {
     processVideoQueue().catch(e => console.error('[scheduler] video queue error:', e));
   }, VIDEO_QUEUE_INTERVAL_MS);
 
+  setInterval(() => {
+    processVideoSchedules().catch(e => console.error('[scheduler] video schedule error:', e));
+  }, VIDEO_SCHEDULE_INTERVAL_MS);
+
   // First metrics sync 2 min after boot (let the server settle)
   setTimeout(() => {
     syncMetrics().catch(e => console.error('[scheduler] initial metrics error:', e));
@@ -70,6 +77,8 @@ export async function processVideoQueue() {
     const { renderProject } = await import('./video/render');
     await renderProject(next.id);
     console.log(`[scheduler] video render done: ${next.id}`);
+    // Project thuộc lịch định kỳ → tạo bài đăng mang video (draft/scheduled)
+    try { onScheduledProjectDone(next.id); } catch (e) { console.error('[scheduler] schedule post error:', e); }
   } catch (e) {
     console.error(`[scheduler] video render failed: ${next.id}:`, e);
   } finally {
@@ -96,7 +105,7 @@ export async function refreshTokenHealth() {
 interface DuePost {
   id: string; caption: string | null; image_url: string | null; images_json: string | null;
   platforms: string | null; fb_post_id: string | null; ig_post_id: string | null;
-  brand_id: string | null;
+  brand_id: string | null; video_url: string | null;
 }
 
 export async function publishDuePosts() {
@@ -104,7 +113,7 @@ export async function publishDuePosts() {
   // Heartbeat — Dashboard reads this to confirm the scheduler is alive
   upsertSetting('scheduler_last_tick', new Date().toISOString());
   const due = db.prepare(`
-    SELECT id, caption, image_url, images_json, platforms, fb_post_id, ig_post_id, brand_id
+    SELECT id, caption, image_url, images_json, platforms, fb_post_id, ig_post_id, brand_id, video_url
     FROM posts
     WHERE status = 'scheduled'
       AND scheduled_at IS NOT NULL

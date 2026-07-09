@@ -169,6 +169,88 @@ export async function postToFacebook(opts: {
   }
 }
 
+/** Absolute URL cho video — KHÔNG gắn ?w=&q= (sharp resize chỉ dành cho ảnh). */
+function toAbsoluteVideoUrl(url: string): string {
+  return url.startsWith('http') ? url : `${SITE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+/** Đăng video lên FB Page (POST /{pageId}/videos với file_url — FB tự tải về). */
+export async function postVideoToFacebook(opts: {
+  caption: string; videoUrl: string; brandId?: string;
+}): Promise<PostResult> {
+  try {
+    const creds = getChannelCreds(opts.brandId);
+    if (!creds.pageToken || !creds.pageId) {
+      return { ok: false, error: creds.source === 'none'
+        ? 'Store chưa kết nối Facebook — vào Channels để nối Page trước khi đăng.'
+        : 'FB credentials not configured.' };
+    }
+    const r = await fetch(`${GRAPH}/${creds.pageId}/videos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_url: toAbsoluteVideoUrl(opts.videoUrl),
+        description: opts.caption,
+        access_token: creds.pageToken,
+      }),
+    });
+    const d = await r.json() as { id?: string; error?: { message: string } };
+    if (!d.id) return { ok: false, error: d.error?.message ?? 'Video post failed' };
+    return { ok: true, postId: d.id };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+/** Đăng Reels lên Instagram: tạo container REELS → poll status → publish.
+ *  IG cần video_url public (route /api/images/ đã public trong middleware). */
+export async function postReelToInstagram(opts: {
+  caption: string; videoUrl: string; brandId?: string;
+}): Promise<PostResult> {
+  try {
+    const creds = getChannelCreds(opts.brandId);
+    if (!creds.pageToken || !creds.igId) {
+      return { ok: false, error: 'IG credentials not configured. Go to Publisher → FB Setup.' };
+    }
+    const create = await fetch(`${GRAPH}/${creds.igId}/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        media_type: 'REELS',
+        video_url: toAbsoluteVideoUrl(opts.videoUrl),
+        caption: opts.caption,
+        share_to_feed: true,
+        access_token: creds.pageToken,
+      }),
+    });
+    const c = await create.json() as { id?: string; error?: { message: string } };
+    if (!c.id) return { ok: false, error: c.error?.message ?? 'Reels container failed' };
+
+    // IG xử lý video async — poll tối đa ~4 phút trước khi publish.
+    const deadline = Date.now() + 4 * 60_000;
+    let status = 'IN_PROGRESS';
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 10_000));
+      const s = await fetch(`${GRAPH}/${c.id}?fields=status_code&access_token=${encodeURIComponent(creds.pageToken)}`);
+      const sd = await s.json() as { status_code?: string };
+      status = sd.status_code ?? 'IN_PROGRESS';
+      if (status === 'FINISHED' || status === 'ERROR') break;
+    }
+    if (status !== 'FINISHED') return { ok: false, error: `Reels processing ${status} (timeout/failed)` };
+
+    const pub = await fetch(`${GRAPH}/${creds.igId}/media_publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creation_id: c.id, access_token: creds.pageToken }),
+    });
+    const p = await pub.json() as { id?: string; error?: { message: string } };
+    if (!p.id) return { ok: false, error: p.error?.message ?? 'Reels publish failed' };
+    return { ok: true, postId: p.id };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
 /** Post to Instagram Business Account */
 export async function postToInstagram(opts: {
   caption: string;

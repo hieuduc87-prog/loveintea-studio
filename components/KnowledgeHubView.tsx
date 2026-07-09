@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ interface KnowledgeDoc {
   content_size: number;
   file_url: string | null;
   uploaded_at: string;
+  scope?: string;
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -297,14 +299,19 @@ function DocCard({
   highlighted,
   onToggle,
   id,
+  isAdmin,
+  onPromote,
 }: {
   doc: KnowledgeDoc;
   expanded: boolean;
   highlighted: boolean;
   onToggle: () => void;
   id: string;
+  isAdmin?: boolean;
+  onPromote?: (id: string, to: 'platform' | 'brand') => void;
 }) {
   const cfg = getTypeConfig(doc.type);
+  const isPlatform = doc.scope === 'platform';
 
   return (
     <div
@@ -320,7 +327,10 @@ function DocCard({
       {/* Card header */}
       <div className="p-4">
         <div className="flex items-start justify-between gap-3 mb-2.5">
-          <TypeBadge type={doc.type} />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <TypeBadge type={doc.type} />
+            {isPlatform && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/50 text-emerald-300 border border-emerald-700/50">🌐 CHUNG</span>}
+          </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {doc.file_url && (
               <a
@@ -370,6 +380,13 @@ function DocCard({
           <span className="text-[11px] text-gray-600">
             {formatDate(doc.uploaded_at)}
           </span>
+          {isAdmin && onPromote && (
+            isPlatform ? (
+              <button onClick={() => onPromote(doc.id, 'brand')} className="text-[11px] text-gray-500 hover:text-gray-300" title="Hạ về riêng brand">↓ Hạ về brand</button>
+            ) : (
+              <button onClick={() => onPromote(doc.id, 'platform')} className="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium" title="Áp dụng cho MỌI brand">🌐 Promote toàn hệ</button>
+            )
+          )}
           <span className="text-[11px] text-gray-700 ml-auto font-mono">
             {doc.id.slice(0, 8)}
           </span>
@@ -500,6 +517,12 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
   const [qaContent, setQaContent] = useState('');
   const [qaSaving, setQaSaving]   = useState(false);
   const [qaMsg, setQaMsg]         = useState('');
+  // Learning-loop scope: platform (nguyên tắc chung) vs brand (riêng). AI gợi ý + admin duyệt.
+  const { data: session } = useSession();
+  const isAdmin = Boolean((session?.user as { allBrands?: boolean } | undefined)?.allBrands);
+  const [qaScope, setQaScope]     = useState<'brand' | 'platform'>('brand');
+  const [qaReason, setQaReason]   = useState('');
+  const [classifying, setClassifying] = useState(false);
 
   const QA_TYPES = [
     { v: 'expert_tip', label: '💡 Mẹo chuyên gia' },
@@ -558,18 +581,41 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
     setExpandedId(prev => prev === id ? null : id);
   }
 
+  async function suggestScope() {
+    if (!qaTitle.trim() && !qaContent.trim()) { setQaMsg('Nhập tiêu đề/nội dung trước'); return; }
+    setClassifying(true); setQaReason('');
+    try {
+      const r = await fetch('/api/knowledge/classify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: qaType, title: qaTitle.trim(), content: qaContent.trim() }),
+      });
+      const d = await r.json() as { scope?: string; reason?: string };
+      setQaScope(d.scope === 'platform' && isAdmin ? 'platform' : 'brand');
+      setQaReason(d.reason || '');
+    } catch { /* ignore */ }
+    setClassifying(false);
+  }
+
+  async function promote(id: string, to: 'platform' | 'brand') {
+    await fetch(`/api/knowledge/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope: to }),
+    });
+    await loadDocs();
+  }
+
   async function quickAdd() {
     if (!qaTitle.trim()) { setQaMsg('Cần tiêu đề'); return; }
     setQaSaving(true); setQaMsg('');
     try {
       const r = await fetch('/api/knowledge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, type: qaType, title: qaTitle.trim(), content: qaContent.trim() }),
+        body: JSON.stringify({ brandId, type: qaType, title: qaTitle.trim(), content: qaContent.trim(), scope: qaScope }),
       });
       const d = await r.json() as { ok?: boolean; error?: string };
       if (d.ok) {
-        setQaMsg('✓ Đã thêm vào tri thức — sẽ áp dụng ngay khi sinh content');
-        setQaTitle(''); setQaContent('');
+        setQaMsg(qaScope === 'platform' ? '✓ Đã thêm NGUYÊN TẮC CHUNG — áp cho mọi brand' : '✓ Đã thêm tri thức riêng brand — áp ngay khi sinh content');
+        setQaTitle(''); setQaContent(''); setQaScope('brand'); setQaReason('');
         await loadDocs();
       } else setQaMsg('✗ ' + (d.error ?? 'Lỗi'));
     } catch (e) { setQaMsg('✗ ' + String(e)); }
@@ -657,6 +703,27 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
           <textarea value={qaContent} onChange={e => setQaContent(e.target.value)}
             placeholder="Nội dung chi tiết: ví dụ thực tế, quy tắc, điều nên/không nên… (AI nhồi vào prompt)"
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white resize-none h-24" />
+
+          {/* Phân loại: nguyên tắc CHUNG (mọi brand) vs RIÊNG brand — chỉ admin */}
+          {isAdmin && (
+            <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-2.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] text-gray-400">Áp dụng cho:</span>
+                <div className="flex gap-1 bg-gray-800 rounded-md p-0.5">
+                  <button onClick={() => setQaScope('brand')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium ${qaScope === 'brand' ? 'bg-brand-600 text-white' : 'text-gray-400'}`}>🏷 Riêng brand này</button>
+                  <button onClick={() => setQaScope('platform')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium ${qaScope === 'platform' ? 'bg-emerald-600 text-white' : 'text-gray-400'}`}>🌐 Nguyên tắc chung (mọi brand)</button>
+                </div>
+                <button onClick={suggestScope} disabled={classifying}
+                  className="text-[11px] px-2.5 py-1 rounded border border-gray-600 text-gray-300 hover:text-white disabled:opacity-50">
+                  {classifying ? '⟳ AI đang phân loại…' : '✨ AI gợi ý'}
+                </button>
+              </div>
+              {qaReason && <p className="text-[11px] text-gray-500 mt-1.5">🤖 {qaReason}</p>}
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <button onClick={quickAdd} disabled={qaSaving || !qaTitle.trim()}
               className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-40 text-white text-xs font-bold">
@@ -805,6 +872,8 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
                   highlighted={highlightedId === doc.id}
                   onToggle={() => toggleExpand(doc.id)}
                   id={`doc-${doc.id}`}
+                  isAdmin={isAdmin}
+                  onPromote={promote}
                 />
               ))}
             </div>
@@ -818,6 +887,8 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
                   highlighted={highlightedId === doc.id}
                   onToggle={() => toggleExpand(doc.id)}
                   id={`doc-${doc.id}`}
+                  isAdmin={isAdmin}
+                  onPromote={promote}
                 />
               ))}
             </div>
