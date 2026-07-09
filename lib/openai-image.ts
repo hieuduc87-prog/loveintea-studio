@@ -4,8 +4,11 @@
  * RULE: All content images MUST use gpt-image-2 edit mode with the product
  * image as reference to keep the packaging/product shape 100% intact.
  *
- * Cost strategy: quality='low' (half-price) + Lanczos 4x upscale = same
- * visual result for posting, ~50% cheaper than quality='medium'/'high'.
+ * Quality: default quality='high' for photoreal ad output (skin/materials look
+ * real, not plastic). Every prompt is enriched with withPhotoreal() (real-camera
+ * direction + anti-"AI look" negatives). Video frames still pass quality='low'
+ * explicitly to stay cheap. High-quality source is already crisp → 2x upscale
+ * (not 4x) to avoid softening + file bloat.
  *
  * Only use generate (no reference) for backgrounds/scenes with no product.
  */
@@ -14,6 +17,7 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import { upscaleImage } from './upscale';
+import { withPhotoreal } from './photoreal';
 
 let _client: OpenAI | null = null;
 let _backupClient: OpenAI | null = null;
@@ -64,7 +68,8 @@ export async function editProductImage(opts: {
   size?: ImageSize;
   quality?: ImageQuality;
 }): Promise<string> {
-  const { productImagePath, prompt, size = '1024x1536', quality = 'low' } = opts;
+  const { productImagePath, prompt: rawPrompt, size = '1024x1536', quality = 'high' } = opts;
+  const prompt = withPhotoreal(rawPrompt);
 
   if (!fs.existsSync(productImagePath)) {
     throw new Error(`Product image not found: ${productImagePath}`);
@@ -109,7 +114,8 @@ export async function generateImage(opts: {
   size?: ImageSize;
   quality?: ImageQuality;
 }): Promise<string> {
-  const { prompt, size = '1024x1536', quality = 'low' } = opts;
+  const { prompt: rawPrompt, size = '1024x1536', quality = 'high' } = opts;
+  const prompt = withPhotoreal(rawPrompt);
 
   const response = await withQuotaFallback(client => client.images.generate({
     model: 'gpt-image-2',
@@ -163,9 +169,11 @@ export async function saveImageToFile(
   } catch { /* giữ ảnh gốc nếu crop lỗi */ }
   fs.writeFileSync(filePath, outBuf);
 
-  // Upscale 4x with Lanczos (1024×1536 → 4096×6144) — ~1-2s on Apple Silicon
+  // Upscale 2x with Lanczos — high-quality source is already crisp, 2x keeps it
+  // sharp for IG/FB without softening or huge files (the /api/images ?w= endpoint
+  // resizes down per platform).
   try {
-    const upscaledPath = await upscaleImage(filePath, 4);
+    const upscaledPath = await upscaleImage(filePath, 2);
     const upscaledFilename = path.basename(upscaledPath);
     return `/api/images/${upscaledFilename}`;
   } catch {

@@ -96,7 +96,14 @@ export default function KanbanPage() {
     fetch('/api/brands').then(r => r.json()).then((d: { brands?: { id: string; name: string }[] }) => {
       const list = d.brands || [];
       setBrands(list);
-      setBrand(prev => prev || list[0]?.id || 'loveintea');
+      // SAFETY: never default to the alphabetically-first brand — an admin would
+      // then create cards under a customer store (fixing the wrong project = fatal).
+      // Prefer the last chosen brand, then the internal 'loveintea', then first available.
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('kanban_brand') : null;
+      const def = (saved && list.some(b => b.id === saved) ? saved : '')
+        || list.find(b => b.id === 'loveintea')?.id
+        || list[0]?.id || 'loveintea';
+      setBrand(prev => prev || def);
     }).catch(() => setBrand('loveintea'));
   }, []);
 
@@ -232,7 +239,7 @@ export default function KanbanPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* Brand selector — mỗi brand 1 board độc lập; admin có "Tất cả" */}
-          <select value={brand} onChange={e => { setBrand(e.target.value); setLoading(true); }}
+          <select value={brand} onChange={e => { setBrand(e.target.value); try { localStorage.setItem('kanban_brand', e.target.value); } catch {} setLoading(true); }}
             className="text-xs px-2 py-1.5 rounded-md border"
             style={{ borderColor: 'var(--border)', color: 'var(--text-1)', backgroundColor: 'var(--bg-2)' }}>
             {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}

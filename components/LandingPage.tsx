@@ -5,9 +5,9 @@ import { useEffect, useRef } from 'react';
 const APP_URL = 'https://app.easycreativehub.com';
 
 const CHIPS = [
-  '🤖 GPT-Image-2', '✨ Gemini 2.5', '📘 Facebook Pages', '📸 Instagram', '🎬 Video Studio',
-  '🗓 Auto Scheduler', '📊 Analytics', '🏆 Scoreboard', '🧠 Brand DNA', '🎯 Content Templates',
-  '📦 Multi-brand', '🔁 Learning Loop',
+  '🤖 AI tạo ảnh', '✍️ AI viết content', '📘 Facebook', '📸 Instagram', '🎬 Video',
+  '🗓 Đăng tự động', '📊 Đo lường', '🏆 Tối ưu hiệu quả', '🧠 Brand DNA', '🎯 Template',
+  '📦 Đa thương hiệu', '🔁 Tự học',
 ];
 
 const FEATURES = [
@@ -333,8 +333,8 @@ export function LandingPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/landing/hero-visual.jpg" alt="Easy Creative Hub — AI visual" loading="lazy" />
             <div className="ech-band-overlay">
-              <h3>Visual thương hiệu, sinh bởi AI — chuẩn bố cục template thắng</h3>
-              <p>gpt-image-2 + Gemini + kho template hiệu quả nhất của bạn, phối hợp trong một pipeline.</p>
+              <h3>Visual thương hiệu chuẩn chất lượng quảng cáo</h3>
+              <p>AI học từ bộ nhận diện và những mẫu hiệu quả nhất của bạn để tạo hình ảnh đúng chất thương hiệu.</p>
             </div>
           </div>
         </section>
