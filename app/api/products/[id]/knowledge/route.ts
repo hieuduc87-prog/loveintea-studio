@@ -6,8 +6,18 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { DEFAULT_KNOWLEDGE_FIELDS, getShotRequirements } from '@/lib/product-knowledge';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+/** 403 unless the caller is a member of the product's brand. */
+function guardProduct(req: NextRequest, productId: string): NextResponse | null {
+  const row = getDb().prepare('SELECT brand_id FROM products WHERE id=?').get(productId) as { brand_id: string } | undefined;
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  return assertResourceBrand(req, row.brand_id);
+}
+
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const denied = guardProduct(req, params.id);
+  if (denied) return denied;
   const db = getDb();
   const p = db.prepare('SELECT knowledge_json, shot_req_json FROM products WHERE id=?').get(params.id) as { knowledge_json: string; shot_req_json: string } | undefined;
   if (!p) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -27,6 +37,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  const denied = guardProduct(req, params.id);
+  if (denied) return denied;
   const body = await req.json() as { knowledge?: Record<string, string>; shotReqs?: unknown[] };
   const db = getDb();
   const sets: string[] = []; const vals: unknown[] = [];

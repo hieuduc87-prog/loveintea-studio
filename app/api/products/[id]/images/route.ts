@@ -4,9 +4,19 @@ import { v4 as uuid } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import { getDb } from '@/lib/db';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+/** Load the product's brand and 403 if the caller isn't a member of it. */
+function guardProduct(req: NextRequest, productId: string): NextResponse | null {
+  const row = getDb().prepare('SELECT brand_id FROM products WHERE id=?').get(productId) as { brand_id: string } | undefined;
+  if (!row) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+  return assertResourceBrand(req, row.brand_id);
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const denied = guardProduct(req, id);
+  if (denied) return denied;
   const db = getDb();
   const images = db.prepare(
     'SELECT * FROM product_images WHERE product_id=? ORDER BY is_hero DESC, sort_order'
@@ -16,6 +26,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: productId } = await params;
+  const denied = guardProduct(req, productId);
+  if (denied) return denied;
   try {
     const db = getDb();
 
@@ -69,6 +81,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 // PATCH — set an image's shot type (for shot-list coverage) or hero flag.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: productId } = await params;
+  const denied = guardProduct(req, productId);
+  if (denied) return denied;
   const db = getDb();
   const { imageId, type, isHero } = await req.json() as { imageId?: string; type?: string; isHero?: boolean };
   if (!imageId) return NextResponse.json({ error: 'imageId required' }, { status: 400 });
@@ -83,6 +97,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE — remove an image (?imageId=)
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: productId } = await params;
+  const denied = guardProduct(req, productId);
+  if (denied) return denied;
   const db = getDb();
   const imageId = req.nextUrl.searchParams.get('imageId');
   if (!imageId) return NextResponse.json({ error: 'imageId required' }, { status: 400 });

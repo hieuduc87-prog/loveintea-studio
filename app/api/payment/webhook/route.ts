@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractOrderId, fulfillOrder } from '@/lib/payment';
 import { getDb } from '@/lib/db';
+import { safeEqual } from '@/lib/crypto';
 
 const CASSO_TOKEN = process.env.CASSO_SECURE_TOKEN || '';
 
@@ -22,7 +23,7 @@ function verifyToken(req: NextRequest): boolean {
     req.headers.get('webhook-secret');
   if (!token) return false;
   if (token.startsWith('Bearer ')) token = token.slice(7);
-  return token.trim() === CASSO_TOKEN;
+  return safeEqual(token.trim(), CASSO_TOKEN);
 }
 
 interface NormalizedTx {

@@ -10,12 +10,17 @@ import fs from 'fs';
 import { getDb } from '@/lib/db';
 import { resolveProductImagePath } from '@/lib/plan-generate';
 import { classifyProductImage } from '@/lib/product-image-classify';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
-    const { all } = await req.json().catch(() => ({})) as { all?: boolean };
     const db = getDb();
+    const product = db.prepare('SELECT brand_id FROM products WHERE id=?').get(id) as { brand_id: string } | undefined;
+    if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    const denied = assertResourceBrand(req, product.brand_id);
+    if (denied) return denied;
+    const { all } = await req.json().catch(() => ({})) as { all?: boolean };
     const rows = db.prepare('SELECT id, image_url, ref_role FROM product_images WHERE product_id=? ORDER BY sort_order').all(id) as Array<{ id: string; image_url: string; ref_role: string | null }>;
     const todo = all ? rows : rows.filter(r => !r.ref_role);
     if (!todo.length) return NextResponse.json({ ok: true, classified: 0, message: 'Không có ảnh cần phân loại' });

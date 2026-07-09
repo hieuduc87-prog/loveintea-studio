@@ -125,7 +125,9 @@ async function renderOverlayFrames(project: OverlayProject, framesDir: string, t
   const { default: puppeteer } = await import('puppeteer-core');
   const browser = await puppeteer.launch({
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--hide-scrollbars', '--force-color-profile=srgb', '--allow-file-access-from-files', '--font-render-hinting=none'],
+    // NOTE: no --allow-file-access-from-files — the overlay never needs file://
+    // access, and enabling it turns any overlay XSS into local-file exfiltration.
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--hide-scrollbars', '--force-color-profile=srgb', '--font-render-hinting=none'],
   });
   try {
     const page = await browser.newPage();

@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getDb } from '@/lib/db';
 import { encrypt } from '@/lib/crypto';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +23,12 @@ export async function POST(req: NextRequest) {
     if (!pageId || !pageAccessToken) {
       return NextResponse.json({ error: 'pageId and pageAccessToken required' }, { status: 400 });
     }
-    const bid = brandId || 'loveintea';
+    // NEVER trust body.brandId as the tenant key — a caller could write another
+    // store's publishing credentials. Fall back to the trusted x-brand-id header,
+    // then verify the caller is actually a member of that brand.
+    const bid = brandId || getBrandId(req) || 'loveintea';
+    const denied = assertResourceBrand(req, bid);
+    if (denied) return denied;
 
     // 1. Verify the token actually works for this page BEFORE saving
     const vr = await fetch(

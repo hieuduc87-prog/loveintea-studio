@@ -2,9 +2,12 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
+import { canAccessBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: brandId } = await params;
+  // Existence check alone let any tenant inject products into another brand.
+  if (!canAccessBrand(req, brandId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const db = getDb();
 
   const brand = db.prepare('SELECT 1 FROM brands WHERE id = ?').get(brandId);

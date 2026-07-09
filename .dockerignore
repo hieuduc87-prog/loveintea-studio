@@ -1,0 +1,34 @@
+# Secrets & local env — MUST NOT be baked into image layers (Docker ignores .gitignore)
+.env
+.env.*
+!.env.example
+._*
+.DS_Store
+
+# VCS & CI
+.git
+.gitignore
+.github
+
+# Build output & deps (rebuilt inside the image)
+node_modules
+.next
+out
+dist
+build
+
+# Runtime data & reports (mounted as a volume in prod)
+data
+vbsec-reports
+.vbsec-tmp
+*.log
+*.db
+*.db-shm
+*.db-wal
+
+# Editor/tooling
+.vscode
+.idea
+.claude
+tsconfig.tsbuildinfo
+next-env.d.ts

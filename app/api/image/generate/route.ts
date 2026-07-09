@@ -11,8 +11,11 @@ import { getDb } from '@/lib/db';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
 import { resolveProductImagePath } from '@/lib/plan-generate';
 import { createJob, logJob, finishJob, failJob } from '@/lib/jobs';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, { scope: 'ai:image', limit: 20, windowMs: 60_000 });
+  if (limited) return limited;
   let jobId = '';
   try {
     const { prompt, productId, brandId, refImageUrl, templateId } = await req.json() as {

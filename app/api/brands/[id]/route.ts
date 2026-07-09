@@ -1,9 +1,13 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { canAccessBrand, isAllBrands } from '@/lib/brand-guard';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // The path [id] IS the brand id — middleware only checks the query param, so
+  // guard membership here or any tenant can read another store's brand + DNA.
+  if (!canAccessBrand(req, id)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const db = getDb();
   const brand = db.prepare('SELECT * FROM brands WHERE id = ?').get(id);
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -17,6 +21,7 @@ const DNA_COLUMNS = ['tagline', 'archetype', 'through_line', 'voice_traits', 'co
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!canAccessBrand(req, id)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const db = getDb();
   const body = await req.json() as Record<string, unknown> & { dna?: Record<string, unknown> };
 
@@ -49,8 +54,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Deleting a whole tenant is a platform action — super-admin only.
+  if (!isAllBrands(req)) return NextResponse.json({ error: 'Forbidden — chỉ super-admin được xóa store.' }, { status: 403 });
   if (id === 'loveintea') return NextResponse.json({ error: 'Cannot delete default brand' }, { status: 400 });
   const db = getDb();
   db.prepare('DELETE FROM brands WHERE id = ?').run(id);

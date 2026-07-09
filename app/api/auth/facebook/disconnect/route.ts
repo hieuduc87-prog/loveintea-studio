@@ -7,10 +7,15 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { decrypt } from '@/lib/crypto';
 import { revokePermissions } from '@/lib/facebook';
+import { requireAdminSession } from '@/lib/api-auth';
 
 const OWNER_USER_ID = 'owner';
 
 export async function POST() {
+  // Lives under /api/auth (excluded from the middleware matcher so NextAuth's
+  // own endpoints stay public) → MUST authenticate in-handler.
+  const auth = await requireAdminSession();
+  if ('error' in auth) return auth.error;
   try {
     const db = getDb();
 

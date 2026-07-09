@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SQLiteAdapter } from './auth-adapter';
 import { getDb } from './db';
 import { verifyPassword } from './password';
+import { rateLimit } from './rate-limit';
 
 export const authOptions: NextAuthOptions = {
   adapter: SQLiteAdapter(),
@@ -18,10 +19,17 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: 'Email',
       credentials: { email: { label: 'Email', type: 'text' }, password: { label: 'Mật khẩu', type: 'password' } },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const email = (credentials?.email || '').trim().toLowerCase();
         const password = credentials?.password || '';
         if (!email || !password) return null;
+        // Brute-force throttle (no limiter existed): 5 attempts / 15 min per
+        // email, 20 / 15 min per IP. In-memory, single-container — see rate-limit.ts.
+        const h = (req?.headers ?? {}) as Record<string, string | undefined>;
+        const ip = h['cf-connecting-ip'] || h['x-real-ip'] ||
+          (h['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+        if (!rateLimit(`login:email:${email}`, 5, 15 * 60_000).ok) return null;
+        if (!rateLimit(`login:ip:${ip}`, 20, 15 * 60_000).ok) return null;
         const db = getDb();
         const u = db.prepare('SELECT id, name, email, role, is_approved, password_hash FROM auth_users WHERE email = ?')
           .get(email) as { id: string; name: string; email: string; role: string; is_approved: number; password_hash: string | null } | undefined;

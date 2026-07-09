@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { SKUS } from '@/lib/brand-dna';
+import { sanitizeBlogHtml } from '@/lib/sanitize-html';
 
 interface BlogPost {
   id: string;
@@ -140,7 +141,7 @@ export function BlogFactoryView({ brandId }: { brandId?: string } = {}) {
               <div className="prose prose-invert prose-sm max-w-none overflow-auto max-h-[70vh]">
                 <div
                   className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: selected.content }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeBlogHtml(selected.content) }}
                 />
               </div>
             </div>

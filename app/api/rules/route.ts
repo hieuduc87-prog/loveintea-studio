@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
-import { getBrandId } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 // GET /api/rules?brandId=X — list active rules
 export async function GET(req: NextRequest) {
@@ -35,8 +35,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { brandId, action } = body as { brandId?: string; action?: string };
-    const bid = brandId || 'loveintea';
+    const { action } = body as { action?: string };
+    // Brand comes from the trusted header, never body.brandId (rules feed every
+    // LLM prompt — cross-tenant writes = content poisoning).
+    const bid = getBrandId(req);
+    const denied = assertResourceBrand(req, bid);
+    if (denied) return denied;
     const db = getDb();
 
     if (action === 'add') {
@@ -59,8 +63,8 @@ export async function POST(req: NextRequest) {
       // Retire old rule if replacing
       if (replacesRuleId) {
         db.prepare(
-          `UPDATE content_rules SET status = 'retired', retired_at = datetime('now') WHERE id = ?`
-        ).run(replacesRuleId);
+          `UPDATE content_rules SET status = 'retired', retired_at = datetime('now') WHERE id = ? AND brand_id = ?`
+        ).run(replacesRuleId, bid);
       }
 
       // Compute version
@@ -84,8 +88,8 @@ export async function POST(req: NextRequest) {
     if (action === 'retire') {
       const { ruleId, reason } = body as { ruleId: string; reason?: string };
       db.prepare(
-        `UPDATE content_rules SET status = 'retired', retired_at = datetime('now'), evidence = COALESCE(evidence, '') || ? WHERE id = ?`
-      ).run(reason ? `\n[Retired: ${reason}]` : '', ruleId);
+        `UPDATE content_rules SET status = 'retired', retired_at = datetime('now'), evidence = COALESCE(evidence, '') || ? WHERE id = ? AND brand_id = ?`
+      ).run(reason ? `\n[Retired: ${reason}]` : '', ruleId, bid);
       return NextResponse.json({ ok: true });
     }
 

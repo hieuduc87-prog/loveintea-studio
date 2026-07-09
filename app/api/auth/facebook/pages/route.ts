@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { decrypt } from '@/lib/crypto';
+import { requireAdminSession } from '@/lib/api-auth';
 
 const OWNER_USER_ID = 'owner';
 
@@ -28,6 +29,9 @@ function upsertSetting(db: ReturnType<typeof getDb>, key: string, value: string)
 }
 
 export async function GET() {
+  // Under /api/auth (middleware-excluded) → authenticate in-handler.
+  const auth = await requireAdminSession();
+  if ('error' in auth) return auth.error;
   try {
     const db = getDb();
     const pages = db.prepare(`
@@ -56,6 +60,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Under /api/auth (middleware-excluded) → authenticate in-handler.
+  const auth = await requireAdminSession();
+  if ('error' in auth) return auth.error;
   try {
     const { pageId } = await req.json() as { pageId?: string };
     if (!pageId) return NextResponse.json({ error: 'pageId required' }, { status: 400 });

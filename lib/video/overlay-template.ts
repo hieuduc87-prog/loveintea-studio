@@ -13,7 +13,20 @@ export interface OverlayProject {
   segments: Array<{ startMs: number; endMs: number; text?: string; anim?: string }>;
 }
 
+/** HTML-escape untrusted text. hook/ctaText/brandName come from LLM output +
+ *  user-editable script_json + prompt-injectable notes; interpolating them raw
+ *  into markup rendered by Puppeteer is server-side XSS (and, with file access,
+ *  local-file exfiltration). Always escape before embedding in the overlay. */
+function esc(s: string): string {
+  return String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+}
+
 export function overlayHtml(p: OverlayProject): string {
+  const hook = esc(p.hook);
+  const ctaText = esc(p.ctaText);
+  const brandName = esc(p.brandName);
+  const brandInitial = esc((p.brandName || 'B')[0] ?? 'B');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:540px; height:960px; background:transparent; overflow:hidden;
@@ -39,10 +52,10 @@ export function overlayHtml(p: OverlayProject): string {
   #bar { position:absolute; top:0; left:0; height:5px; background:${p.colors.accent}; width:0; border-radius:0 3px 3px 0; }
   </style></head><body>
   <div id="bar"></div>
-  <div id="badge"><div class="dot">${p.brandName[0] ?? 'B'}</div><div class="n">${p.brandName}</div></div>
-  <div id="hook">${p.hook}</div>
+  <div id="badge"><div class="dot">${brandInitial}</div><div class="n">${brandName}</div></div>
+  <div id="hook">${hook}</div>
   <div id="caption"><span></span></div>
-  <div id="cta"><div class="t">${p.ctaText}</div><div class="b">${p.brandName}</div></div>
+  <div id="cta"><div class="t">${ctaText}</div><div class="b">${brandName}</div></div>
   <script>
   const P = ${JSON.stringify({ durationMs: p.durationMs, segments: p.segments })};
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));

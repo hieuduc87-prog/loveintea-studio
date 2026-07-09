@@ -1,6 +1,7 @@
 // MoMo Payment Gateway API wrapper
 // https://developers.momo.vn/v3/docs/payment/api/wallet/onetime
 import crypto from 'crypto';
+import { safeEqual } from './crypto';
 
 function getMomoCfg() {
   return {
@@ -81,5 +82,5 @@ export function verifyMoMoSignature(params: Record<string, string>): boolean {
   const c = getMomoCfg();
   const rawSig = `accessKey=${c.accessKey}&amount=${params.amount}&extraData=${params.extraData}&message=${params.message}&orderId=${params.orderId}&orderInfo=${params.orderInfo}&orderType=${params.orderType}&partnerCode=${params.partnerCode}&payType=${params.payType}&requestId=${params.requestId}&responseTime=${params.responseTime}&resultCode=${params.resultCode}&transId=${params.transId}`;
   const sig = crypto.createHmac('sha256', c.secretKey).update(rawSig).digest('hex');
-  return sig === params.signature;
+  return safeEqual(sig, params.signature);
 }

@@ -3,6 +3,7 @@ export const maxDuration = 120;
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { analyzeTemplateLayout, analyzeTemplateCollection } from '@/lib/gemini';
+import { assertResourceBrand } from '@/lib/brand-guard';
 import fs from 'fs';
 import path from 'path';
 
@@ -18,12 +19,15 @@ function readImg(url: string): { data: Buffer; mimeType: string } | null {
 }
 
 // POST /api/content-templates/[id]/analyze — Gemini analysis of the WHOLE template
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
     const db = getDb();
-    const tpl = db.prepare('SELECT image_url, slides_json FROM content_templates WHERE id = ?').get(id) as { image_url?: string; slides_json?: string } | undefined;
-    if (!tpl?.image_url) return NextResponse.json({ error: 'Template chưa có ảnh để phân tích' }, { status: 400 });
+    const tpl = db.prepare('SELECT brand_id, image_url, slides_json FROM content_templates WHERE id = ?').get(id) as { brand_id: string; image_url?: string; slides_json?: string } | undefined;
+    if (!tpl) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const denied = assertResourceBrand(req, tpl.brand_id);
+    if (denied) return denied;
+    if (!tpl.image_url) return NextResponse.json({ error: 'Template chưa có ảnh để phân tích' }, { status: 400 });
 
     let slides: Array<{ url: string }> = [];
     try { slides = JSON.parse(tpl.slides_json || '[]'); } catch { /* */ }

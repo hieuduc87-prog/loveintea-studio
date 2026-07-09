@@ -10,8 +10,16 @@ import { v4 as uuid } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
 const IMAGES_DIR = path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'images');
+
+/** 403 unless the caller is a member of the template's brand. */
+function guardTemplate(req: NextRequest, id: string): NextResponse | null {
+  const row = getDb().prepare('SELECT brand_id FROM content_templates WHERE id=?').get(id) as { brand_id: string } | undefined;
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  return assertResourceBrand(req, row.brand_id);
+}
 
 interface Slide { url: string; order: number }
 
@@ -39,6 +47,8 @@ function persist(db: ReturnType<typeof getDb>, id: string, slides: Slide[], thum
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const denied = guardTemplate(req, params.id);
+    if (denied) return denied;
     const db = getDb();
     const tpl = db.prepare('SELECT slides_json, thumbnail_url FROM content_templates WHERE id=?').get(params.id) as { slides_json: string; thumbnail_url: string } | undefined;
     if (!tpl) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -98,6 +108,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const denied = guardTemplate(req, params.id);
+    if (denied) return denied;
     const db = getDb();
     const { slides } = await req.json() as { slides?: Slide[] };
     if (!Array.isArray(slides)) return NextResponse.json({ error: 'slides[] required' }, { status: 400 });

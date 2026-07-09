@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generateCaption } from '@/lib/gemini';
 import { BRAND, SKUS } from '@/lib/brand-dna';
+import { sanitizeBlogHtml } from '@/lib/sanitize-html';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { v4 as uuid } from 'uuid';
 
 export async function GET() {
@@ -51,7 +53,7 @@ Return as JSON:
     const id = uuid();
     db.prepare(
       'INSERT INTO blog_posts (id, sku_id, topic, title, slug, excerpt, content, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, skuId ?? null, topic, parsed.title, parsed.slug, parsed.excerpt, parsed.content, 'draft');
+    ).run(id, skuId ?? null, topic, parsed.title, parsed.slug, parsed.excerpt, sanitizeBlogHtml(parsed.content), 'draft');
 
     return NextResponse.json({ id, title: parsed.title, ok: true });
   } catch (e) {

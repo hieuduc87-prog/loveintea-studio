@@ -44,7 +44,11 @@ export interface CostReport {
   pnl: { revenue_vnd: number; cost_vnd: number; profit_vnd: number; margin: number };
 }
 
-export function buildCostReport(brandId: string): CostReport {
+// `includeRevenue` gates the P&L revenue figures. The payment tables
+// (bank_transfers/momo_payments) are platform-wide with NO brand_id, so a
+// per-brand cost report must NOT surface them — that leaks whole-platform gross
+// revenue to every tenant. Only a super-admin (all-brands) sees revenue.
+export function buildCostReport(brandId: string, includeRevenue = false): CostReport {
   const db = getDb();
   const unit = getUnitCosts();
   const n = (sql: string, ...p: unknown[]) => (db.prepare(sql).get(...p) as { n: number } | undefined)?.n ?? 0;
@@ -66,10 +70,12 @@ export function buildCostReport(brandId: string): CostReport {
   cost.total_usd = cost.captions + cost.images + cost.videos + cost.templates;
   cost.total_vnd = Math.round(cost.total_usd * unit.usd_to_vnd);
 
-  // P&L — revenue from paid bank transfers + momo
-  const revenueVnd =
-    n(`SELECT COALESCE(SUM(amount),0) n FROM bank_transfers WHERE status='paid'`)
-    + n(`SELECT COALESCE(SUM(amount),0) n FROM momo_payments WHERE status='paid'`).valueOf();
+  // P&L — revenue from paid bank transfers + momo. Platform-wide (no brand_id),
+  // so only expose it to super-admins; a per-brand report shows cost only.
+  const revenueVnd = includeRevenue
+    ? n(`SELECT COALESCE(SUM(amount),0) n FROM bank_transfers WHERE status='paid'`)
+      + n(`SELECT COALESCE(SUM(amount),0) n FROM momo_payments WHERE status='paid'`).valueOf()
+    : 0;
 
   const profit = revenueVnd - cost.total_vnd;
   return {

@@ -3,11 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { buildImageEditPrompt } from '@/lib/o3-engine';
 import { SKUS } from '@/lib/brand-dna';
 import { getDb } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, { scope: 'ai:image', limit: 20, windowMs: 60_000 });
+  if (limited) return limited;
   const db = getDb();
   const { skuId, uspId, contextId, customPrompt, useEdit = true } = await req.json();
 

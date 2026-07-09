@@ -12,8 +12,11 @@ import { generateJSON } from '@/lib/gemini';
 import { getExpertKnowledgeBlock } from '@/lib/brand-knowledge';
 import { createJob, finishJob, failJob } from '@/lib/jobs';
 import { getBrandId } from '@/lib/brand-guard';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, { scope: 'ai:text', limit: 30, windowMs: 60_000 });
+  if (limited) return limited;
   let jobId = '';
   try {
     const body = await req.json() as { brandId?: string; productId?: string; message?: string; tone?: string; segment?: string; platform?: string; n?: number; templateId?: string; language?: string; length?: string };

@@ -1,9 +1,11 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getChannelCreds } from '@/lib/facebook';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
-  const brandId = req.nextUrl.searchParams.get('brandId') || undefined;
+  // Read the trusted brand from the middleware-injected header, not the raw query.
+  const brandId = getBrandId(req) || undefined;
   const creds = getChannelCreds(brandId);
 
   const connected = Boolean(creds.pageId && creds.pageToken);

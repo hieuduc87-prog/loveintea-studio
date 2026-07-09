@@ -17,10 +17,15 @@ export async function GET(
   _req: Request,
   { params }: { params: { id: string; filename: string } }
 ) {
+  // Strip any path components — the URL segment must not traverse out of the dir.
+  const safeName = path.basename(params.filename);
+  if (safeName !== params.filename) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   try {
-    const filePath = path.join(IMAGES_DIR, params.filename);
+    const filePath = path.join(IMAGES_DIR, safeName);
     const data = await fs.readFile(filePath);
-    const ext = params.filename.split('.').pop()?.toLowerCase() || 'png';
+    const ext = safeName.split('.').pop()?.toLowerCase() || 'png';
     const contentType = MIME_MAP[ext] || 'application/octet-stream';
     return new NextResponse(data, {
       headers: { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=86400' },

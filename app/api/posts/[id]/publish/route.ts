@@ -3,11 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
 import { postToFacebook, postToInstagram, hasIgCreds, PostResult } from '@/lib/facebook';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const db = getDb();
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(params.id) as Record<string, string> | undefined;
   if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+  const denied = assertResourceBrand(req, post.brand_id);
+  if (denied) return denied;
 
   const caption   = post.caption ?? '';
   // Carousel: dùng images_json (nhiều ảnh) nếu có, fallback ảnh đơn.

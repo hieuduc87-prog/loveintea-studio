@@ -19,6 +19,7 @@ import { generateTemplateImages } from '@/lib/template-generate';
 import { pickProductRefUrl } from '@/lib/product-ref';
 import { autoTagPost, PostTag } from '@/lib/post-tags';
 import { createJob, logJob, progressJob, finishJob, failJob } from '@/lib/jobs';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
 function surfaceToFormat(surface: string): string | undefined {
   const s = (surface || '').toLowerCase();
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const useTemplate = Boolean(body.useTemplate);
 
     const plan = db.prepare('SELECT brand_id FROM content_plans WHERE id=?').get(planId) as { brand_id: string } | undefined;
+    if (plan) { const denied = assertResourceBrand(req, plan.brand_id); if (denied) return denied; }
     if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
 
     let items: PlanItemRow[];

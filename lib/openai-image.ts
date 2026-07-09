@@ -7,8 +7,8 @@
  * Quality: default quality='high' for photoreal ad output (skin/materials look
  * real, not plastic). Every prompt is enriched with withPhotoreal() (real-camera
  * direction + anti-"AI look" negatives). Video frames still pass quality='low'
- * explicitly to stay cheap. High-quality source is already crisp → 2x upscale
- * (not 4x) to avoid softening + file bloat.
+ * explicitly to stay cheap. High-quality source is already crisp → NO upscale
+ * (upscaling only softens + bloats; /api/images ?w= resizes per platform).
  *
  * Only use generate (no reference) for backgrounds/scenes with no product.
  */
@@ -16,7 +16,6 @@
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
-import { upscaleImage } from './upscale';
 import { withPhotoreal } from './photoreal';
 
 let _client: OpenAI | null = null;
@@ -169,15 +168,7 @@ export async function saveImageToFile(
   } catch { /* giữ ảnh gốc nếu crop lỗi */ }
   fs.writeFileSync(filePath, outBuf);
 
-  // Upscale 2x with Lanczos — high-quality source is already crisp, 2x keeps it
-  // sharp for IG/FB without softening or huge files (the /api/images ?w= endpoint
-  // resizes down per platform).
-  try {
-    const upscaledPath = await upscaleImage(filePath, 2);
-    const upscaledFilename = path.basename(upscaledPath);
-    return `/api/images/${upscaledFilename}`;
-  } catch {
-    // Fallback to original if upscale fails
-    return `/api/images/${filename}`;
-  }
+  // NO upscale: quality='high' output is already crisp at native res — upscaling
+  // only softens + bloats the file. The /api/images ?w= endpoint resizes per platform.
+  return `/api/images/${filename}`;
 }

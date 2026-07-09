@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { getBrandId } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 // GET /api/scoreboard?brandId=X — get scoreboard with verdicts
 export async function GET(req: NextRequest) {
@@ -44,8 +44,10 @@ export async function GET(req: NextRequest) {
 // POST /api/scoreboard — manually update or recompute scoreboard
 export async function POST(req: NextRequest) {
   try {
-    const { brandId, action } = await req.json() as { brandId?: string; action?: string };
-    const bid = brandId || 'loveintea';
+    const { action } = await req.json() as { action?: string };
+    const bid = getBrandId(req);
+    const denied = assertResourceBrand(req, bid);
+    if (denied) return denied;
 
     if (action === 'recompute') {
       const { recomputeScoreboard } = await import('@/lib/scoreboard-engine');

@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getDb } from '@/lib/db';
+import { safeEqual } from '@/lib/crypto';
 
 function parseSignedRequest(signed: string): { user_id: string } {
   const [sig, payload] = signed.split('.');
@@ -21,7 +22,7 @@ function parseSignedRequest(signed: string): { user_id: string } {
     .update(payload)
     .digest('base64url');
 
-  if (sig !== expected) throw new Error('Invalid signed_request signature');
+  if (!safeEqual(sig, expected)) throw new Error('Invalid signed_request signature');
 
   return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
 }

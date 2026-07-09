@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { reviewContent } from '@/lib/o3-engine';
-import { getBrandId } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 // POST /api/review — run 3-gate review on a post
 export async function POST(req: NextRequest) {
@@ -12,14 +12,16 @@ export async function POST(req: NextRequest) {
     };
 
     let captionText = caption || '';
-    const bid = getBrandId(req) || brandId || 'loveintea';
+    const bid = getBrandId(req);
 
-    // If postId provided, fetch caption from DB
-    if (postId && !captionText) {
+    // If postId provided, load it, verify ownership, and use its caption.
+    if (postId) {
       const db = getDb();
-      const post = db.prepare('SELECT caption FROM posts WHERE id = ?').get(postId) as { caption: string } | undefined;
+      const post = db.prepare('SELECT caption, brand_id FROM posts WHERE id = ?').get(postId) as { caption: string; brand_id: string } | undefined;
       if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-      captionText = post.caption;
+      const denied = assertResourceBrand(req, post.brand_id);
+      if (denied) return denied;
+      if (!captionText) captionText = post.caption;
     }
 
     if (!captionText) {

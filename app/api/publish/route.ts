@@ -1,16 +1,21 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { postToFacebook, postToInstagram } from '@/lib/facebook';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   try {
-    const { caption, imageUrls, platforms, scheduledAt, brandId } = await req.json() as {
+    const { caption, imageUrls, platforms, scheduledAt } = await req.json() as {
       caption: string;
       imageUrls: string[];
       platforms: string[];
       scheduledAt?: string;
-      brandId?: string;
     };
+    // Brand from the trusted header — never body.brandId (would let a tenant
+    // publish to another store's / the built-in Loveintea Page).
+    const brandId = getBrandId(req);
+    const denied = assertResourceBrand(req, brandId);
+    if (denied) return denied;
 
     const result: Record<string, unknown> = {};
     const schedDate = scheduledAt ? new Date(scheduledAt) : undefined;

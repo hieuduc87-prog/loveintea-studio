@@ -9,12 +9,15 @@ export const maxDuration = 120;
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { fileToText, extractKnowledge, summarizeKnowledge } from '@/lib/product-knowledge';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const db = getDb();
     const product = db.prepare('SELECT name, brand_id FROM products WHERE id=?').get(params.id) as { name: string; brand_id: string } | undefined;
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    const denied = assertResourceBrand(req, product.brand_id);
+    if (denied) return denied;
 
     const ct = req.headers.get('content-type') || '';
 

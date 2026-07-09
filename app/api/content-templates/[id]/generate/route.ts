@@ -12,14 +12,18 @@ import { getDb } from '@/lib/db';
 import { recordTemplateUse } from '@/lib/template-picker';
 import { generateTemplateImages } from '@/lib/template-generate';
 import { createJob, logJob, progressJob, finishJob, failJob } from '@/lib/jobs';
+import { assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const { id } = params;
-  const { productId, brandId, customPrompt } = await req.json().catch(() => ({})) as { productId?: string; brandId?: string; customPrompt?: string };
-  const bid = brandId || 'loveintea';
+  const { productId, customPrompt } = await req.json().catch(() => ({})) as { productId?: string; customPrompt?: string };
   const db = getDb();
-  const tpl = db.prepare('SELECT name FROM content_templates WHERE id=?').get(id) as { name?: string } | undefined;
+  // The brand is the TEMPLATE's brand — never body.brandId. Verify membership.
+  const tpl = db.prepare('SELECT name, brand_id FROM content_templates WHERE id=?').get(id) as { name?: string; brand_id: string } | undefined;
   if (!tpl) return NextResponse.json({ error: 'Template không tồn tại' }, { status: 404 });
+  const denied = assertResourceBrand(req, tpl.brand_id);
+  if (denied) return denied;
+  const bid = tpl.brand_id;
 
   const jobId = createJob({ brandId: bid, kind: 'carousel', source: 'Template', title: `Tạo ảnh từ template: ${tpl.name ?? id}`, meta: { templateId: id, productId } });
 

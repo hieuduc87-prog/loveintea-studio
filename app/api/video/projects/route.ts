@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
 import { buildStoryboard, VideoRecipe } from '@/lib/video/director';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { analyzeReferenceVideo, analysisToRecipe } from '@/lib/video/analyze-reference';
 import { detectBeats, IMAGES_DIR } from '@/lib/video/ffmpeg';
 import { getBrandId } from '@/lib/brand-guard';
@@ -23,6 +24,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, { scope: 'ai:video', limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
   try {
     const body = await req.json() as {
       brandId?: string; title?: string; purpose?: string; productId?: string;
