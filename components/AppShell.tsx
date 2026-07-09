@@ -16,7 +16,7 @@ import { AnalyticsView }      from './AnalyticsView';
 import { PlanCalendarView }   from './PlanCalendarView';
 import { UserGuideView }      from './UserGuideView';
 import { HelpDrawer }         from './HelpDrawer';
-import { UserManagementView } from './UserManagementView';
+import { BrandMembersView } from './BrandMembersView';
 import { AssetDamView }       from './AssetDamView';
 import { ContentLogView }     from './ContentLogView';
 import { PaymentView }        from './PaymentView';
@@ -483,7 +483,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'payment'          && <PaymentView />}
                 {id === 'inbox'            && <InboxView />}
                 {id === 'guide'            && <UserGuideView />}
-                {id === 'team'             && <UserManagementView />}
+                {id === 'team'             && <BrandMembersView brandId={bid} brandName={activeBrand.name} />}
               </div>
             );
           })}

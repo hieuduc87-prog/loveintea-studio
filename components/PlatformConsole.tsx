@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
+import { UserManagementView } from './UserManagementView';
 
 interface Store {
   id: string; name: string; slug: string; logo_url: string | null;
@@ -22,6 +23,7 @@ export function PlatformConsole() {
   const role = (session?.user as { role?: string } | undefined)?.role;
   const isAdmin = role === 'admin' || role === 'root_admin';
 
+  const [section, setSection] = useState<'stores' | 'users'>('stores');
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
@@ -139,6 +141,17 @@ export function PlatformConsole() {
         ))}
       </div>
 
+      {/* Section toggle */}
+      <div className="px-6 pt-5 flex gap-2">
+        {([['stores', '🏪 Stores'], ['users', '👥 Tất cả người dùng']] as const).map(([id, label]) => (
+          <button key={id} onClick={() => setSection(id)}
+            className={`text-sm px-3 py-1.5 rounded-lg border ${section === id ? 'bg-brand-600/20 border-brand-500 text-white' : 'border-gray-800 text-gray-400 hover:text-white'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'stores' && (
       <div className="px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-6">
         {/* Stores list */}
         <section>
@@ -261,6 +274,13 @@ export function PlatformConsole() {
           )}
         </section>
       </div>
+      )}
+
+      {section === 'users' && (
+        <div className="px-2 md:px-6 py-4">
+          <UserManagementView />
+        </div>
+      )}
     </div>
   );
 }
