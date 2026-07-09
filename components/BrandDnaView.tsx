@@ -11,6 +11,7 @@ interface BrandDna {
   colors_json: string; voice_traits: string;
   compliance_json: string; hashtags: string;
   target_audience?: string; insight?: string; behavior?: string; brand_rules?: string;
+  content_language?: string;
 }
 interface ProductRow {
   id: string; name: string; display_name: string; theme: string;
@@ -120,6 +121,14 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
       else setIngestMsg('✗ ' + (d.error ?? 'Lỗi'));
     } catch (e) { setIngestMsg('✗ ' + String(e)); }
     setIngesting(false);
+  }
+
+  async function saveLang(lang: 'vi' | 'en') {
+    await fetch(`/api/brands/${bid}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dna: { content_language: lang } }),
+    });
+    await reload();
   }
 
   async function extractFromDocs() {
@@ -250,6 +259,26 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
           )}
         </div>
       </div>
+
+      {/* Ngôn ngữ nội dung — brand VN dùng Tiếng Việt, brand US dùng English */}
+      <Section title="Ngôn ngữ nội dung">
+        <Card>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <p className="text-xs text-gray-400 max-w-md">Caption, hashtag, chữ trên video sẽ được viết bằng ngôn ngữ này. (Prompt tạo ảnh luôn dùng tiếng Anh để ảnh đẹp nhất.)</p>
+            <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
+              {([['vi', '🇻🇳 Tiếng Việt'], ['en', '🇬🇧 English']] as const).map(([v, label]) => {
+                const active = ((dna?.content_language || 'en').toLowerCase().startsWith('vi') ? 'vi' : 'en') === v;
+                return (
+                  <button key={v} onClick={() => saveLang(v)}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${active ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      </Section>
 
       {/* Voice Traits */}
       {voiceTraits.length > 0 && (

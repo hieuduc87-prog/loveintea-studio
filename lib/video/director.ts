@@ -6,6 +6,7 @@
 import { getDb } from '../db';
 import { generateJSON } from '../gemini';
 import { getExpertKnowledgeBlock } from '../brand-knowledge';
+import { resolveLangName } from '../brand-lang';
 
 export interface Segment {
   dur_s: number;
@@ -40,7 +41,8 @@ export async function buildStoryboard(opts: {
   const db = getDb();
   const { brandId, purpose, productId, targetDurationS, bpm, notes, recipe } = opts;
   // Ngôn ngữ cho toàn bộ text/hook/CTA/voiceover. Mặc định English (brand bán US).
-  const langName = (opts.language ?? 'en').toLowerCase().startsWith('vi') ? 'Vietnamese' : 'English';
+  // Ngôn ngữ: request override → mặc định theo brand (content_language).
+  const langName = resolveLangName(opts.language, brandId);
 
   const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;
   const product = productId

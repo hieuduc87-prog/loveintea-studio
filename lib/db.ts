@@ -749,6 +749,8 @@ function initSchema(db: Database.Database) {
   `);
 
   // ── Migrations ─────────────────────────────────────
+  // Per-brand content language (vi|en). Default 'en' (existing brands sell US).
+  try { db.exec(`ALTER TABLE brand_dna ADD COLUMN content_language TEXT DEFAULT 'en'`); } catch { /* already exists */ }
   // Email+password auth for customers who don't use Google (admin-provisioned).
   try { db.exec(`ALTER TABLE auth_users ADD COLUMN password_hash TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE auth_users ADD COLUMN must_change_password INTEGER DEFAULT 0`); } catch { /* already exists */ }

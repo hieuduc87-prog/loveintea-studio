@@ -12,6 +12,7 @@ import { generateJSON } from '@/lib/gemini';
 import { getExpertKnowledgeBlock } from '@/lib/brand-knowledge';
 import { createJob, finishJob, failJob } from '@/lib/jobs';
 import { getBrandId } from '@/lib/brand-guard';
+import { resolveLangName } from '@/lib/brand-lang';
 import { enforceRateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
@@ -25,7 +26,8 @@ export async function POST(req: NextRequest) {
     if (!message) return NextResponse.json({ error: 'message required' }, { status: 400 });
     const n = Math.min(5, Math.max(1, body.n || 1));
     // Brand bán US → mặc định caption Tiếng Anh. Đổi 'vi' nếu cần.
-    const langName = (body.language ?? 'en').toLowerCase().startsWith('vi') ? 'Vietnamese' : 'English';
+    // Ngôn ngữ: request override (nếu có) → mặc định theo brand (content_language).
+    const langName = resolveLangName(body.language, brandId);
     const isLong = (body.length ?? 'short').toLowerCase().startsWith('l');
     const lengthRule = isLong
       ? 'Length: LONG-FORM — 3-5 short paragraphs, storytelling, build desire then CTA.'
@@ -67,7 +69,7 @@ ${getExpertKnowledgeBlock(brandId)}
 ${templateBlock}
 
 OUTPUT REQUIREMENTS:
-- Write the caption AND hashtags in ${langName}. Do NOT mix languages. (Brand bán thị trường US → mặc định English.)
+- Write the caption AND hashtags in ${langName}. Do NOT mix languages.
 - Start every caption with a STRONG scroll-stopping hook (first line): a bold claim, a pain point, a question, or a surprising fact. The hook must earn the next line.
 - ${lengthRule}
 - Hashtags: 5-10 relevant ${langName} hashtags.
