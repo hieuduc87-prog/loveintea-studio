@@ -91,6 +91,36 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
   const [section, setSection] = useState<'dna' | 'knowledge' | 'rules' | 'mindmap'>('dna');
   const [extracting, setExtracting] = useState(false);
   const dnaFileRef = useRef<HTMLInputElement>(null);
+  // ── Kéo-thả tài liệu → tự tạo FULL DNA (multi-file / folder) ──
+  const [ingesting, setIngesting] = useState(false);
+  const [ingestMsg, setIngestMsg] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+  const multiRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
+
+  async function reload() {
+    const bd = await fetch(`/api/brands/${bid}`).then(r => r.json());
+    setBrand(bd.brand || null); setDna(bd.dna || null); setProducts(bd.products || []);
+    setStrategy({
+      target_audience: bd.dna?.target_audience || '', insight: bd.dna?.insight || '',
+      behavior: bd.dna?.behavior || '', brand_rules: bd.dna?.brand_rules || '',
+    });
+    setStratDirty(false);
+  }
+
+  async function ingestFiles(list: FileList | File[]) {
+    const files = Array.from(list).filter(f => /\.(xlsx|xls|docx|txt|csv|md|json)$/i.test(f.name));
+    if (!files.length) { setIngestMsg('✗ Không có file hợp lệ. Hỗ trợ: .xlsx .docx .txt .csv .md .json'); return; }
+    setIngesting(true); setIngestMsg(`⏳ Đang đọc ${files.length} tài liệu và tự tạo Brand DNA…`);
+    try {
+      const fd = new FormData(); files.forEach(f => fd.append('files', f));
+      const r = await fetch(`/api/brands/${bid}/dna/extract?save=1`, { method: 'POST', body: fd });
+      const d = await r.json() as { ok?: boolean; sources?: string[]; error?: string };
+      if (d.ok) { setIngestMsg(`✅ Đã tạo & lưu Brand DNA từ ${d.sources?.length ?? files.length} tài liệu. Xem bên dưới, chỉnh thêm nếu cần.`); await reload(); }
+      else setIngestMsg('✗ ' + (d.error ?? 'Lỗi'));
+    } catch (e) { setIngestMsg('✗ ' + String(e)); }
+    setIngesting(false);
+  }
 
   async function extractFromDocs() {
     setExtracting(true); setStratMsg('');
@@ -160,6 +190,39 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
       {section === 'rules' && <RulesEngineView brandId={bid} />}
       {section === 'mindmap' && <KnowledgeMindmapView brandId={bid} />}
       {section !== 'dna' ? null : (<>
+      {/* ── KÉO-THẢ TÀI LIỆU → TỰ TẠO DNA (khu onboarding nổi bật) ── */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); if (!ingesting && e.dataTransfer.files.length) ingestFiles(e.dataTransfer.files); }}
+        className={`mb-6 rounded-2xl border-2 border-dashed transition-colors ${dragOver ? 'border-brand-400 bg-brand-600/15' : 'border-gray-700 bg-gray-900/40'} ${ingesting ? 'opacity-70 pointer-events-none' : ''}`}
+      >
+        <div className="p-6 text-center">
+          <div className="text-4xl mb-2">{ingesting ? '⟳' : '📂'}</div>
+          <h2 className="text-base font-bold text-white">Kéo-thả tài liệu thương hiệu vào đây → tự tạo Brand DNA</h2>
+          <p className="text-xs text-gray-400 mt-1 max-w-lg mx-auto">
+            Thả playbook, guideline, brief, thông tin sản phẩm… (nhiều file hoặc cả folder). AI tự đọc và điền DNA:
+            giọng nói, đối tượng, insight, luật thương hiệu. Hỗ trợ .xlsx .docx .txt .csv .md .json
+          </p>
+          <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+            <button onClick={() => multiRef.current?.click()} disabled={ingesting}
+              className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm font-bold">
+              {ingesting ? '⟳ Đang tạo DNA…' : '📄 Chọn file'}
+            </button>
+            <button onClick={() => folderRef.current?.click()} disabled={ingesting}
+              className="px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-500 text-gray-200 text-sm font-medium">
+              📁 Chọn cả folder
+            </button>
+          </div>
+          {ingestMsg && <p className={`text-xs mt-3 ${ingestMsg.startsWith('✅') ? 'text-green-400' : ingestMsg.startsWith('⏳') ? 'text-brand-300' : 'text-red-400'}`}>{ingestMsg}</p>}
+          <input ref={multiRef} type="file" multiple accept=".xlsx,.xls,.docx,.txt,.csv,.md,.json" className="hidden"
+            onChange={e => { if (e.target.files?.length) ingestFiles(e.target.files); e.target.value = ''; }} />
+          {/* @ts-expect-error webkitdirectory là thuộc tính non-standard nhưng trình duyệt hỗ trợ */}
+          <input ref={folderRef} type="file" webkitdirectory="" directory="" multiple className="hidden"
+            onChange={e => { if (e.target.files?.length) ingestFiles(e.target.files); e.target.value = ''; }} />
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center gap-4 mb-8 p-5 bg-gradient-to-r from-brand-600/20 to-transparent border border-brand-600/30 rounded-xl">
         <div className="w-14 h-14 rounded-xl bg-brand-600/30 flex items-center justify-center overflow-hidden flex-shrink-0">

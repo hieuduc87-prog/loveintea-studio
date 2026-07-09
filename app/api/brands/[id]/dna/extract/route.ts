@@ -23,21 +23,61 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Customer file upload → extract DNA strategy fields directly from it
     if ((req.headers.get('content-type') || '').includes('multipart/form-data')) {
       const fd = await req.formData();
-      const file = fd.get('file') as File | null;
-      if (!file) return NextResponse.json({ error: 'file required' }, { status: 400 });
-      const text = fileToText(Buffer.from(await file.arrayBuffer()), file.name);
-      if (!text.trim()) return NextResponse.json({ error: 'Không đọc được nội dung file' }, { status: 400 });
-      const dna = db.prepare('SELECT tagline, archetype, voice_traits, compliance_json FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;
-      const filePrompt = `Từ tài liệu brand khách gửi dưới đây, trích 4 trường chiến lược tiếng Việt. CHỈ dùng thông tin trong tài liệu, không bịa.
-BRAND: ${brandId} | TAGLINE: ${dna?.tagline ?? ''} | VOICE: ${dna?.voice_traits ?? '[]'}
+      // Nhận NHIỀU file (kéo-thả cả folder) — 'files' mảng + backward-compat 'file' đơn.
+      const files = [...fd.getAll('files'), fd.get('file')].filter((f): f is File => f instanceof File && f.size > 0);
+      if (!files.length) return NextResponse.json({ error: 'Chưa có file nào' }, { status: 400 });
+      const parts: string[] = []; const names: string[] = [];
+      for (const f of files) {
+        try {
+          const t = fileToText(Buffer.from(await f.arrayBuffer()), f.name);
+          if (t.trim()) { parts.push(`### ${f.name}\n${t.slice(0, 12000)}`); names.push(f.name); }
+        } catch { /* bỏ qua file không đọc được */ }
+      }
+      const text = parts.join('\n\n').slice(0, 42000);
+      if (!text.trim()) return NextResponse.json({ error: 'Không đọc được nội dung file nào (hỗ trợ .xlsx/.docx/.txt/.csv/.md/.json)' }, { status: 400 });
+
+      // Trích XUẤT FULL DNA trong 1 lần (không chỉ 4 trường chiến lược).
+      const fullPrompt = `Bạn là brand strategist. Từ (các) tài liệu thương hiệu khách gửi dưới đây, trích xuất bộ Brand DNA đầy đủ bằng tiếng Việt. CHỈ dùng thông tin CÓ trong tài liệu; thiếu thì để "" hoặc []. Không bịa.
+
 TÀI LIỆU:
 """${text}"""
-Trả ONLY JSON: {"target_audience":"...","insight":"...","behavior":"...","brand_rules":"..."}`;
-      const o = await generateJSON<Record<string, string>>(filePrompt);
-      return NextResponse.json({ ok: true, fields: {
-        target_audience: String(o.target_audience ?? '').trim(), insight: String(o.insight ?? '').trim(),
-        behavior: String(o.behavior ?? '').trim(), brand_rules: String(o.brand_rules ?? '').trim(),
-      } });
+
+Trả ONLY JSON:
+{
+ "tagline": "khẩu hiệu ngắn (nếu có)",
+ "archetype": "hình mẫu thương hiệu (vd: The Caregiver, The Sage)",
+ "through_line": "1 câu định vị xuyên suốt",
+ "voice_traits": ["3-5 nét tính cách giọng nói, mỗi cái 1 cụm ngắn"],
+ "hashtags": ["#hashtag brand nếu có"],
+ "compliance": {"neverSay": ["điều KHÔNG được nói"], "alwaysSay": ["điều NÊN nói"]},
+ "target_audience": "khách hàng mục tiêu (tuổi, nhu cầu, ai nên dùng)",
+ "insight": "insight cốt lõi / nỗi đau / mong muốn sâu",
+ "behavior": "hành vi: giờ lướt mạng, kênh, cách mua",
+ "brand_rules": "luật riêng khi làm content (giọng, nên/không nên, cấu trúc bài)"
+}`;
+      const o = await generateJSON<Record<string, unknown>>(fullPrompt);
+      const arr = (v: unknown) => JSON.stringify(Array.isArray(v) ? v.filter(x => typeof x === 'string') : []);
+      const fields: Record<string, string> = {
+        tagline: String(o.tagline ?? '').trim(),
+        archetype: String(o.archetype ?? '').trim(),
+        through_line: String(o.through_line ?? '').trim(),
+        voice_traits: arr(o.voice_traits),
+        hashtags: arr(o.hashtags),
+        compliance_json: JSON.stringify((o.compliance && typeof o.compliance === 'object') ? o.compliance : {}),
+        target_audience: String(o.target_audience ?? '').trim(),
+        insight: String(o.insight ?? '').trim(),
+        behavior: String(o.behavior ?? '').trim(),
+        brand_rules: String(o.brand_rules ?? '').trim(),
+      };
+      // Auto-save (?save=1): upsert brand_dna, chỉ ghi trường có nội dung (không xoá dữ liệu cũ).
+      if (req.nextUrl.searchParams.get('save') === '1') {
+        const cols = Object.entries(fields).filter(([, v]) => v && v !== '[]' && v !== '{}');
+        if (!db.prepare('SELECT id FROM brand_dna WHERE brand_id=?').get(brandId)) {
+          db.prepare('INSERT INTO brand_dna (id, brand_id) VALUES (?, ?)').run(crypto.randomUUID(), brandId);
+        }
+        if (cols.length) db.prepare(`UPDATE brand_dna SET ${cols.map(([k]) => `${k}=?`).join(', ')} WHERE brand_id=?`).run(...cols.map(([, v]) => v), brandId);
+      }
+      return NextResponse.json({ ok: true, fields, sources: names, saved: req.nextUrl.searchParams.get('save') === '1' });
     }
     const body = await req.json().catch(() => ({})) as { text?: string };
 
