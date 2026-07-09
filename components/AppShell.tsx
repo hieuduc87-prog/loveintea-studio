@@ -51,6 +51,8 @@ type TabId =
 // Navigation restructured to match Closed-Loop Content Engine:
 // Brain → Plan → Create → Review → Publish → Engage → Learn → (loop)
 const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
+  // BẮT ĐẦU — hướng dẫn nổi bật ngay đầu sidebar, thấy ngay sau khi đăng nhập
+  { id: 'guide',            label: 'Hướng dẫn sử dụng', icon: '📖', group: 'Bắt đầu' },
   // HOME — Dashboard tổng quan + system health
   { id: 'dashboard',        label: 'Dashboard',        icon: '🏠', group: 'Home' },
   // BRAIN — Brand identity + knowledge + rules (Fixed Core)
@@ -79,14 +81,14 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'job_queue',        label: 'Job Queue',        icon: '⏳', group: 'Library' },
   // SYSTEM — Billing, guide, team
   { id: 'payment',          label: 'Billing',          icon: '💳', group: 'System' },
-  { id: 'guide',            label: 'Guide',            icon: '📖', group: 'System' },
   { id: 'team',             label: 'Team & Access',    icon: '👥', group: 'System' },
   // Hidden
   { id: 'brands',           label: 'Manage Brands',    icon: '🏷️', group: '_hidden' },
 ];
 
 // Closed-loop pipeline order
-const NAV_GROUPS = ['Home', 'Brain', 'Plan', 'Create', 'Publish', 'Engage', 'Learn', 'Library', 'System'];
+const NAV_GROUPS = ['Bắt đầu', 'Home', 'Brain', 'Plan', 'Create', 'Publish', 'Engage', 'Learn', 'Library', 'System'];
+const PIPELINE_GROUPS = ['Brain', 'Plan', 'Create', 'Publish', 'Engage', 'Learn'];
 
 const TAB_LABELS: Record<TabId, string> = Object.fromEntries(TABS.map(t => [t.id, t.label])) as Record<TabId, string>;
 
@@ -196,10 +198,10 @@ function SidebarContent({
       {/* Header */}
       <div className="px-3 pt-3 pb-1 flex-shrink-0">
         <div className="flex items-center gap-2 px-1 mb-2">
-          <div className="w-5 h-5 rounded bg-brand-600 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-[10px] font-bold">M</span>
+          <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg,#8b5cf6,#22d3ee)' }}>
+            <span className="text-white text-[10px] font-bold">⚡</span>
           </div>
-          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Marketing Hub</span>
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Easy Creative Hub</span>
         </div>
         <BrandDropdown
           brands={brands}
@@ -236,12 +238,13 @@ function SidebarContent({
           </Link>
         </div>
 
-        {NAV_GROUPS.map((group, gi) => {
+        {NAV_GROUPS.map((group) => {
           const items = TABS.filter(t => t.group === group);
           if (!items.length) return null;
-          // Pipeline groups (Brain → Learn, indices 1-6) get step numbers + flow line
-          const isPipeline = gi >= 1 && gi <= 6;
-          const stepNum = isPipeline ? gi : 0;
+          // Pipeline groups (Brain → Learn) get step numbers by NAME (không lệch khi thêm group đầu)
+          const pipeIdx = PIPELINE_GROUPS.indexOf(group);
+          const isPipeline = pipeIdx >= 0;
+          const stepNum = pipeIdx + 1;
           const groupHasActive = items.some(t => t.id === tab);
           return (
             <div key={group} className={isPipeline ? 'relative' : ''}>
