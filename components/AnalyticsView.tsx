@@ -58,8 +58,8 @@ export function AnalyticsView({ brandId }: { brandId?: string } = {}) {
     async function loadBase() {
       setLoading(true);
       const [stats, ig] = await Promise.allSettled([
-        fetch('/api/analytics/stats').then(r => r.json()),
-        fetch('/api/analytics/ig').then(r => r.json()),
+        fetch(`/api/analytics/stats?brand=${brandId}`).then(r => r.json()),
+        fetch(`/api/analytics/ig?brand=${brandId}`).then(r => r.json()),
       ]);
       if (stats.status === 'fulfilled') setPostStats(stats.value);
       if (ig.status === 'fulfilled') {
@@ -69,12 +69,12 @@ export function AnalyticsView({ brandId }: { brandId?: string } = {}) {
       setLoading(false);
     }
     loadBase();
-  }, []);
+  }, [brandId]);
 
   useEffect(() => {
     if (tab !== 'per-post') return;
     setFbLoading(true); setFbError('');
-    fetch(`/api/analytics/fb-insights?days=${days}`)
+    fetch(`/api/analytics/fb-insights?days=${days}&brand=${brandId}`)
       .then(r => r.json())
       .then(d => {
         if (d.error) setFbError(d.error);
@@ -82,7 +82,7 @@ export function AnalyticsView({ brandId }: { brandId?: string } = {}) {
       })
       .catch(e => setFbError(String(e)))
       .finally(() => setFbLoading(false));
-  }, [tab, days]);
+  }, [tab, days, brandId]);
 
   if (loading) return <div className="text-center text-gray-500 py-20">Loading…</div>;
 

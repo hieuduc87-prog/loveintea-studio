@@ -1,14 +1,10 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
+import { getChannelCreds } from '@/lib/facebook';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
-
-function token() {
-  const db = getDb();
-  return process.env.FB_PAGE_ACCESS_TOKEN ||
-    (db.prepare('SELECT value FROM settings WHERE key=?').get('FB_PAGE_ACCESS_TOKEN') as { value: string } | undefined)?.value || '';
-}
 
 interface FbPost {
   id: string;
@@ -67,15 +63,16 @@ async function fetchPostInsights(postId: string, tok: string): Promise<Partial<P
 
 export async function GET(req: NextRequest) {
   const days = parseInt(req.nextUrl.searchParams.get('days') ?? '30');
-  const tok = token();
-  if (!tok) return NextResponse.json({ error: 'FB token not configured' }, { status: 400 });
+  const brand = getBrandId(req) || 'loveintea';
+  const tok = getChannelCreds(brand).pageToken;
+  if (!tok) return NextResponse.json({ posts: [], rolling: [], error: 'Store chưa kết nối Facebook' });
 
   const db = getDb();
   const since = new Date(Date.now() - days * 86400000).toISOString();
   const posts = db.prepare(
-    `SELECT * FROM posts WHERE status='published' AND fb_post_id IS NOT NULL AND fb_post_id != ''
+    `SELECT * FROM posts WHERE brand_id=? AND status='published' AND fb_post_id IS NOT NULL AND fb_post_id != ''
      AND published_at >= ? ORDER BY published_at DESC LIMIT 50`
-  ).all(since) as FbPost[];
+  ).all(brand, since) as FbPost[];
 
   // Fetch insights for each post (parallel, max 10 at a time)
   const results: PostInsight[] = [];

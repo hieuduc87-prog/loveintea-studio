@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { isAllBrands, userBrands } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,12 +19,16 @@ export async function POST(req: NextRequest) {
     if (!ids?.length || !action) return NextResponse.json({ error: 'ids and action required' }, { status: 400 });
     const db = getDb();
 
-    const rows = db.prepare(`SELECT id, status FROM posts WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as Array<{ id: string; status: string }>;
+    // TENANT ISOLATION: only touch posts the caller may access (by brand).
+    const allBrands = isAllBrands(req);
+    const allowed = new Set(userBrands(req));
+    const rows = db.prepare(`SELECT id, status, brand_id FROM posts WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as Array<{ id: string; status: string; brand_id: string }>;
     const locked: string[] = [];
     let changed = 0;
 
     const tx = db.transaction(() => {
       for (const r of rows) {
+        if (!allBrands && !allowed.has(r.brand_id)) continue; // skip cross-tenant posts
         const isPublished = r.status === 'published';
         switch (action) {
           case 'approve':

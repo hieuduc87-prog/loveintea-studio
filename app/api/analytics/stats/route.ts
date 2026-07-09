@@ -1,14 +1,17 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const db = getDb();
+  const brand = getBrandId(req) || 'loveintea';
   const rows = db.prepare(`
     SELECT status, COUNT(*) as count
     FROM posts
+    WHERE brand_id = ?
     GROUP BY status
-  `).all() as { status: string; count: number }[];
+  `).all(brand) as { status: string; count: number }[];
 
   const stats = {
     total:     0,

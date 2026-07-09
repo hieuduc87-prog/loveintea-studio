@@ -1,23 +1,26 @@
 export const dynamic = 'force-dynamic';
 /**
- * GET /api/health — system status for the Dashboard.
+ * GET /api/health — system status for the Dashboard, SCOPED to the active brand.
  * ?live=1 forces a fresh FB token check instead of the 6h cached one.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { checkTokenHealth, TokenHealth } from '@/lib/facebook';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
   const getSetting = (k: string) =>
     (db.prepare('SELECT value, updated_at FROM settings WHERE key=?').get(k) as { value: string; updated_at: string } | undefined);
 
+  // Trusted brand (middleware-validated header). All per-brand stats below scope to it.
+  const brand = getBrandId(req) || 'loveintea';
+
   // ── Facebook token health (cached by scheduler every 6h, or live) ──
-  const brandId = req.nextUrl.searchParams.get('brandId') || undefined;
   let fbToken: TokenHealth | null = null;
-  if (brandId && brandId !== 'loveintea') {
+  if (brand && brand !== 'loveintea') {
     // Non-default brands: always live-check their own channel creds
-    fbToken = await checkTokenHealth(brandId);
+    fbToken = await checkTokenHealth(brand);
   } else if (req.nextUrl.searchParams.get('live') === '1') {
     fbToken = await checkTokenHealth();
     db.prepare(`INSERT INTO settings (key, value, updated_at) VALUES ('fb_token_health', ?, datetime('now'))
@@ -34,11 +37,11 @@ export async function GET(req: NextRequest) {
     getSetting('IG_BUSINESS_ACCOUNT_ID')?.value
   );
 
-  // ── Scheduler heartbeat ──
+  // ── Scheduler heartbeat (global) ──
   const tick = getSetting('scheduler_last_tick')?.value ?? null;
   const schedulerAlive = tick ? (Date.now() - new Date(tick).getTime()) < 3 * 60_000 : false;
 
-  // ── AI providers ──
+  // ── AI providers (global) ──
   const aiFallbackAt = getSetting('ai_text_fallback_at')?.value ?? null;
   const ai = {
     gemini: Boolean(process.env.GEMINI_API_KEY),
@@ -49,39 +52,40 @@ export async function GET(req: NextRequest) {
     textFallbackAt: aiFallbackAt,
   };
 
-  // ── Content funnel ──
+  // ── Content funnel (per-brand) ──
   const counts: Record<string, number> = { draft: 0, scheduled: 0, published: 0, failed: 0 };
-  for (const r of db.prepare(`SELECT status, COUNT(*) n FROM posts GROUP BY status`).all() as Array<{ status: string; n: number }>) {
+  for (const r of db.prepare(`SELECT status, COUNT(*) n FROM posts WHERE brand_id=? GROUP BY status`).all(brand) as Array<{ status: string; n: number }>) {
     if (r.status in counts) counts[r.status] = r.n;
   }
   const publishedLast7d = (db.prepare(
-    `SELECT COUNT(*) n FROM posts WHERE status='published' AND published_at > datetime('now','-7 days')`
-  ).get() as { n: number }).n;
+    `SELECT COUNT(*) n FROM posts WHERE brand_id=? AND status='published' AND published_at > datetime('now','-7 days')`
+  ).get(brand) as { n: number }).n;
 
-  // ── Upcoming scheduled posts ──
+  // ── Upcoming scheduled posts (per-brand) ──
   const upcoming = db.prepare(`
     SELECT id, caption, platforms, scheduled_at, image_url
-    FROM posts WHERE status='scheduled' AND scheduled_at IS NOT NULL
+    FROM posts WHERE brand_id=? AND status='scheduled' AND scheduled_at IS NOT NULL
     ORDER BY datetime(scheduled_at) ASC LIMIT 5
-  `).all();
+  `).all(brand);
 
-  // ── Recent publish failures (7d) ──
+  // ── Recent publish failures (7d, per-brand) ──
   const failures = db.prepare(`
     SELECT pl.post_id, pl.platform, pl.error, pl.created_at, p.caption
-    FROM publish_log pl LEFT JOIN posts p ON p.id = pl.post_id
-    WHERE pl.status='failed' AND pl.created_at > datetime('now','-7 days')
+    FROM publish_log pl JOIN posts p ON p.id = pl.post_id
+    WHERE pl.status='failed' AND pl.created_at > datetime('now','-7 days') AND p.brand_id=?
     ORDER BY pl.created_at DESC LIMIT 5
-  `).all();
+  `).all(brand);
 
-  // ── Intelligence loop ──
-  const metricsRows = (db.prepare(`SELECT COUNT(*) n FROM post_metrics`).get() as { n: number }).n;
-  const lastMetricsSync = (db.prepare(`SELECT MAX(fetched_at) t FROM post_metrics`).get() as { t: string | null }).t;
-  const scoreboardAngles = (db.prepare(`SELECT COUNT(*) n FROM scoreboard`).get() as { n: number }).n;
-  const activeRules = (db.prepare(`SELECT COUNT(*) n FROM content_rules WHERE status='active'`).get() as { n: number }).n;
+  // ── Intelligence loop (per-brand) ──
+  const metricsRows = (db.prepare(`SELECT COUNT(*) n FROM post_metrics WHERE brand_id=?`).get(brand) as { n: number }).n;
+  const lastMetricsSync = (db.prepare(`SELECT MAX(fetched_at) t FROM post_metrics WHERE brand_id=?`).get(brand) as { t: string | null }).t;
+  const scoreboardAngles = (db.prepare(`SELECT COUNT(*) n FROM scoreboard WHERE brand_id=?`).get(brand) as { n: number }).n;
+  const activeRules = (db.prepare(`SELECT COUNT(*) n FROM content_rules WHERE status='active' AND brand_id=?`).get(brand) as { n: number }).n;
 
   return NextResponse.json({
     ok: true,
     checkedAt: new Date().toISOString(),
+    brand,
     facebook: { token: fbToken, igConfigured },
     scheduler: { alive: schedulerAlive, lastTick: tick },
     ai,

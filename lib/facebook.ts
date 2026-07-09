@@ -236,9 +236,11 @@ export async function postToInstagram(opts: {
   }
 }
 
-export async function getPagePosts(limit = 20) {
+export async function getPagePosts(limit = 20, brandId?: string) {
+  const creds = getChannelCreds(brandId);
+  if (!creds.pageId || !creds.pageToken) return { data: [] };
   const r = await fetch(
-    `${GRAPH}/${pageId()}/feed?fields=id,message,created_time,full_picture,insights.metric(post_impressions,post_engaged_users)&limit=${limit}&access_token=${token()}`
+    `${GRAPH}/${creds.pageId}/feed?fields=id,message,created_time,full_picture,insights.metric(post_impressions,post_engaged_users)&limit=${limit}&access_token=${creds.pageToken}`
   );
   return r.json();
 }
@@ -250,16 +252,20 @@ export async function getPageInbox(limit = 50) {
   return r.json();
 }
 
-export async function getIgMedia(limit = 20) {
+export async function getIgMedia(limit = 20, brandId?: string) {
+  const creds = getChannelCreds(brandId);
+  if (!creds.igId || !creds.pageToken) return { data: [] };
   const r = await fetch(
-    `${GRAPH}/${igAccountId()}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count&limit=${limit}&access_token=${token()}`
+    `${GRAPH}/${creds.igId}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count&limit=${limit}&access_token=${creds.pageToken}`
   );
   return r.json();
 }
 
-export async function getIgInsights() {
+export async function getIgInsights(brandId?: string) {
+  const creds = getChannelCreds(brandId);
+  if (!creds.igId || !creds.pageToken) return { data: [] };
   const r = await fetch(
-    `${GRAPH}/${igAccountId()}/insights?metric=impressions,reach,follower_count&period=day&access_token=${token()}`
+    `${GRAPH}/${creds.igId}/insights?metric=impressions,reach,follower_count&period=day&access_token=${creds.pageToken}`
   );
   return r.json();
 }

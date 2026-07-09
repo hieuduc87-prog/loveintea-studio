@@ -1,10 +1,12 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getIgInsights, getIgMedia } from '@/lib/facebook';
+import { getBrandId } from '@/lib/brand-guard';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const [insights, media] = await Promise.allSettled([getIgInsights(), getIgMedia(12)]);
+    const brand = getBrandId(req) || 'loveintea';
+    const [insights, media] = await Promise.allSettled([getIgInsights(brand), getIgMedia(12, brand)]);
     return NextResponse.json({
       insights: insights.status === 'fulfilled' ? insights.value?.data : [],
       media:    media.status    === 'fulfilled' ? media.value    : { data: [] },
