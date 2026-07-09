@@ -21,6 +21,36 @@ import { ingestProductMedia, extractAudioFromVideo } from '@/lib/video/ingest';
 const CHUNK_DIR = path.join(TMP_DIR, 'chunks');
 const MAX_TOTAL = 210 * 1024 * 1024; // 210MB hard cap
 
+const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp4', '.mov', '.m4v', '.webm', '.avi']);
+
+/** Sniff the leading bytes of the assembled file to confirm it really is an
+ *  image/video — don't trust the client-supplied extension/MIME. Returns
+ *  'image' | 'video' | null. */
+function sniffMedia(fp: string): 'image' | 'video' | null {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(fp, 'r');
+    const b = Buffer.alloc(16);
+    fs.readSync(fd, b, 0, 16, 0);
+    // Images
+    if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image';            // JPEG
+    if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image'; // PNG
+    if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image';            // GIF
+    if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+        b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image'; // WEBP (RIFF..WEBP)
+    // Videos
+    if (b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) return 'video'; // MP4/MOV (ftyp)
+    if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'video'; // WEBM/MKV (EBML)
+    if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+        b[8] === 0x41 && b[9] === 0x56 && b[10] === 0x49) return 'video';           // AVI (RIFF..AVI)
+    return null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch { /* */ }
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const fd = await req.formData();
@@ -52,8 +82,18 @@ export async function POST(req: NextRequest) {
 
     // ── Final chunk: assemble + dispatch ──
     const ext = path.extname(name).toLowerCase() || '.bin';
+    if (!ALLOWED_EXT.has(ext)) {
+      try { fs.unlinkSync(part); } catch { /* */ }
+      return NextResponse.json({ error: 'Chỉ nhận file ảnh/video' }, { status: 415 });
+    }
     const assembled = path.join(CHUNK_DIR, `${uploadId}${ext}`);
     fs.renameSync(part, assembled);
+
+    // Verify real media by magic bytes — don't trust the extension/MIME.
+    if (!sniffMedia(assembled)) {
+      try { fs.unlinkSync(assembled); } catch { /* */ }
+      return NextResponse.json({ error: 'File không phải ảnh/video hợp lệ' }, { status: 415 });
+    }
 
     try {
       if (purpose === 'product_media') {

@@ -1,9 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
+import { getBrandId, canAccessBrand } from '@/lib/brand-guard';
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'flows');
+// Legacy flows created before tenant scoping have no brandId — treat as the
+// default store so they stay visible to it (and to super-admins).
+const flowBrand = (w: { brandId?: string }) => w.brandId || 'loveintea';
 
 async function ensureDir() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -168,15 +172,17 @@ Size: 1024x1024, quality: standard`,
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   await ensureDir();
+  const brandId = getBrandId(req);
   try {
     const entries = await fs.readdir(DATA_DIR);
     const jsonFiles = entries.filter(e => e.endsWith('.json'));
 
     if (jsonFiles.length === 0) {
-      // Seed demo flow
+      // Seed demo flow for the caller's brand
       const demo = makeDemoFlow() as any;
+      demo.brandId = brandId || 'loveintea';
       await fs.writeFile(
         path.join(DATA_DIR, `${demo.id}.json`),
         JSON.stringify(demo, null, 2)
@@ -195,6 +201,8 @@ export async function GET() {
       try {
         const raw = await fs.readFile(path.join(DATA_DIR, file), 'utf8');
         const w = JSON.parse(raw);
+        // Only surface flows the caller may access.
+        if (!canAccessBrand(req, flowBrand(w))) continue;
         workflows.push({
           id: w.id,
           name: w.name,
@@ -211,13 +219,14 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   await ensureDir();
   const body = await req.json();
   const id = uuid();
   const now = new Date().toISOString();
   const workflow = {
     id,
+    brandId: getBrandId(req) || 'loveintea',
     name: body.name || 'Untitled Workflow',
     description: body.description || '',
     category: body.category || 'general',
