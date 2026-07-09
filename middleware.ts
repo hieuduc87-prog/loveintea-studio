@@ -30,6 +30,13 @@ export default withAuth(
 
     // ---- Host-based function routing (BigAI MKT) ----
     const host = (req.headers.get('host') || '').toLowerCase();
+    // Bare/root marketing domain → public landing page (no auth).
+    if (host === 'easycreativehub.com' || host === 'www.easycreativehub.com') {
+      if (!pathname.startsWith('/landing') && !pathname.startsWith('/_next') && !isApi && !pathname.startsWith('/login')) {
+        return NextResponse.rewrite(new URL('/landing', req.url));
+      }
+      return NextResponse.next();
+    }
     const crmHost = host.startsWith('crm.') || host.startsWith('admin.');
     const appHost = host.startsWith('app.') || host.startsWith('autocontent.');
     const baseDomain = host.replace(/^[^.]+\./, '');
@@ -97,7 +104,18 @@ export default withAuth(
 
     return NextResponse.next({ request: { headers } });
   },
-  { callbacks: { authorized: ({ token }) => Boolean(token) } }
+  {
+    callbacks: {
+      authorized: ({ req, token }) => {
+        // Public marketing surfaces: the bare domain and the /landing route
+        // render without a session; everything else requires sign-in.
+        const host = (req.headers.get('host') || '').toLowerCase();
+        if (host === 'easycreativehub.com' || host === 'www.easycreativehub.com') return true;
+        if (req.nextUrl.pathname.startsWith('/landing')) return true;
+        return Boolean(token);
+      },
+    },
+  }
 );
 
 export const config = {
