@@ -74,7 +74,9 @@ export async function POST(req: NextRequest) {
     const msg = String(e);
     db.prepare(`UPDATE image_jobs SET status='failed', error=?, completed_at=datetime('now') WHERE id=?`)
       .run(msg, jobId);
-    let userError = msg;
+    // Don't leak raw SDK internals to the client — only surface the actionable
+    // billing case; everything else is a generic message.
+    let userError = 'Có lỗi hệ thống';
     if (msg.includes('Billing hard limit') || msg.includes('billing') || msg.includes('quota')) {
       userError = 'OpenAI billing limit reached — please top up credit at platform.openai.com → Settings → Billing';
     }

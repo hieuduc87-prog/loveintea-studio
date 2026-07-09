@@ -23,10 +23,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const { ids, folder } = await req.json() as { ids?: string[]; folder?: string };
   if (!ids?.length) return NextResponse.json({ error: 'ids required' }, { status: 400 });
+  const brandId = getBrandId(req);
   const db = getDb();
   const f = (folder ?? '').slice(0, 80);
-  const stmt = db.prepare("UPDATE assets SET folder = ?, updated_at = datetime('now') WHERE id = ?");
-  const tx = db.transaction(() => { for (const id of ids) stmt.run(f, id); });
+  // Scope the update to the caller's brand — no reassigning another store's assets.
+  const stmt = db.prepare("UPDATE assets SET folder = ?, updated_at = datetime('now') WHERE id = ? AND brand_id = ?");
+  let moved = 0;
+  const tx = db.transaction(() => { for (const id of ids) moved += stmt.run(f, id, brandId).changes; });
   tx();
-  return NextResponse.json({ ok: true, moved: ids.length, folder: f });
+  return NextResponse.json({ ok: true, moved, folder: f });
 }

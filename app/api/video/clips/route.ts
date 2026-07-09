@@ -67,9 +67,12 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+  const brandId = getBrandId(req);
   const db = getDb();
-  const row = db.prepare('SELECT filename FROM video_clips WHERE id=?').get(id) as { filename: string } | undefined;
-  if (row) { try { fs.unlinkSync(path.join(IMAGES_DIR, row.filename)); } catch { /* gone */ } }
-  db.prepare('DELETE FROM video_clips WHERE id=?').run(id);
+  // Scope by brand so a tenant can't delete another store's clip + file by id.
+  const row = db.prepare('SELECT filename FROM video_clips WHERE id=? AND brand_id=?').get(id, brandId) as { filename: string } | undefined;
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  try { fs.unlinkSync(path.join(IMAGES_DIR, row.filename)); } catch { /* gone */ }
+  db.prepare('DELETE FROM video_clips WHERE id=? AND brand_id=?').run(id, brandId);
   return NextResponse.json({ ok: true });
 }

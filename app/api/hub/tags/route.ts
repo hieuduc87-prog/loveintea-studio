@@ -35,9 +35,13 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const db = getDb();
+  const brandId = getBrandId(req);
   const id = req.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+  // Only delete a tag that belongs to the caller's brand.
+  const tag = db.prepare('SELECT id FROM tags WHERE id = ? AND brand_id = ?').get(id, brandId);
+  if (!tag) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   db.prepare('DELETE FROM asset_tags WHERE tag_id = ?').run(id);
-  db.prepare('DELETE FROM tags WHERE id = ?').run(id);
+  db.prepare('DELETE FROM tags WHERE id = ? AND brand_id = ?').run(id, brandId);
   return NextResponse.json({ ok: true });
 }

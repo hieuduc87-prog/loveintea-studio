@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { v4 as uuid } from 'uuid';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 // Reading order: playbook → guideline → research → workflow → flowmap → everything else
 const TYPE_ORDER: Record<string, number> = {
@@ -74,17 +75,21 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { brandId, type, title, content, fileUrl } = body as {
-      brandId?: string;
+    const { type, title, content, fileUrl } = body as {
       type?: string;
       title?: string;
       content?: string;
       fileUrl?: string;
     };
+    // Brand from the trusted header — never body.brandId. Knowledge docs feed
+    // every caption prompt, so a cross-tenant insert = stored prompt injection.
+    const brandId = getBrandId(req);
+    const denied = assertResourceBrand(req, brandId);
+    if (denied) return denied;
 
-    if (!brandId || !type || !title) {
+    if (!type || !title) {
       return NextResponse.json(
-        { error: 'brandId, type, and title are required' },
+        { error: 'type and title are required' },
         { status: 400 }
       );
     }
@@ -125,12 +130,14 @@ export async function DELETE(req: NextRequest) {
 
     const db = getDb();
     const existing = db
-      .prepare('SELECT id FROM knowledge_docs WHERE id = ?')
-      .get(id);
+      .prepare('SELECT brand_id FROM knowledge_docs WHERE id = ?')
+      .get(id) as { brand_id: string } | undefined;
 
     if (!existing) {
       return NextResponse.json({ error: 'Doc not found' }, { status: 404 });
     }
+    const denied = assertResourceBrand(req, existing.brand_id);
+    if (denied) return denied;
 
     db.prepare('DELETE FROM knowledge_docs WHERE id = ?').run(id);
 

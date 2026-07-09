@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 // ── SKU name → sku_id ──────────────────────────────────────────────
 function mapSku(raw: string): string {
@@ -161,11 +162,14 @@ export async function POST(req: NextRequest) {
     const minDate = dates.length ? dates.sort()[0] : null;
     const maxDate = dates.length ? dates.sort()[dates.length - 1] : null;
 
+    const brandId = getBrandId(req) || 'loveintea';
+
     db.prepare(`
       INSERT INTO content_plans (id, brand_id, title, stories_json, summary_json, source_file, cadence, created_at)
-      VALUES (?, 'loveintea', ?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `).run(
       planId,
+      brandId,
       planTitle,
       JSON.stringify(storiesData),
       JSON.stringify({ rows: summaryRows, dateRange: { from: minDate, to: maxDate } }),
@@ -176,7 +180,7 @@ export async function POST(req: NextRequest) {
     // ── Insert plan items + posts ────────────────────────────────
     const insertItem = db.prepare(`
       INSERT INTO plan_items (id, plan_id, brand_id, date, day_of_week, wave, surface, purpose, pillar, audience_code, rtb_code, usp_code, product_id, context, hook, copy_direction, visual_direction, hashtags, repurpose, tree_id, win_band, sort_order)
-      VALUES (?, ?, 'loveintea', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insertPost = db.prepare(`
@@ -218,7 +222,7 @@ export async function POST(req: NextRequest) {
       // Plan item (raw plan data)
       const itemId = uuid();
       insertItem.run(
-        itemId, planId, scheduledAt ?? dateRaw, dayOfWeek, wave, surface, purpose, pillar,
+        itemId, planId, brandId, scheduledAt ?? dateRaw, dayOfWeek, wave, surface, purpose, pillar,
         segment, rtb, usp, skuId, context, hook, copyDir, visualDir, hashtags, repurpose, treeId, winBand, idx,
       );
 

@@ -14,6 +14,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit(req, { scope: 'ai:blog', limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
   try {
     const { topic, skuId } = await req.json();
     const sku = skuId ? SKUS.find(s => s.id === skuId) : null;
