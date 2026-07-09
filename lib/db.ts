@@ -749,6 +749,9 @@ function initSchema(db: Database.Database) {
   `);
 
   // ── Migrations ─────────────────────────────────────
+  // Email+password auth for customers who don't use Google (admin-provisioned).
+  try { db.exec(`ALTER TABLE auth_users ADD COLUMN password_hash TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE auth_users ADD COLUMN must_change_password INTEGER DEFAULT 0`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN plan_id TEXT REFERENCES content_plans(id)`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN brand_id TEXT DEFAULT 'loveintea'`); } catch { /* already exists */ }
   // Lineage columns for closed-loop attribution

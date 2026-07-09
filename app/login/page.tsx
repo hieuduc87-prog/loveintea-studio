@@ -2,13 +2,14 @@
 
 import { signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 
 const ERROR_MESSAGES: Record<string, string> = {
   not_invited: 'Tài khoản chưa được mời. Liên hệ admin để được cấp quyền.',
   pending:     'Tài khoản đang chờ duyệt. Vui lòng liên hệ admin.',
   blocked:     'Tài khoản đã bị khóa. Liên hệ admin để biết thêm.',
   OAuthAccountNotLinked: 'Email này đã được đăng ký bằng phương thức khác.',
+  CredentialsSignin: 'Email hoặc mật khẩu không đúng.',
   default:     'Đã có lỗi xảy ra. Vui lòng thử lại.',
 };
 
@@ -18,6 +19,21 @@ function LoginContent() {
   const errorMsg = errorKey
     ? (ERROR_MESSAGES[errorKey] ?? ERROR_MESSAGES.default)
     : null;
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [pwError, setPwError] = useState('');
+
+  async function loginWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setBusy(true); setPwError('');
+    const res = await signIn('credentials', { email: email.trim(), password, redirect: false });
+    setBusy(false);
+    if (res?.error) setPwError('Email hoặc mật khẩu không đúng.');
+    else window.location.href = '/';
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4">
@@ -61,6 +77,28 @@ function LoginContent() {
           </svg>
           Continue with Google
         </button>
+
+        {/* Divider */}
+        <div className="w-full flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-800" />
+          <span className="text-xs text-gray-600">hoặc email + mật khẩu</span>
+          <div className="flex-1 h-px bg-gray-800" />
+        </div>
+
+        {/* Email + password (admin-provisioned customers) */}
+        <form onSubmit={loginWithPassword} className="w-full flex flex-col gap-2.5">
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email"
+            autoComplete="username"
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500" />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mật khẩu"
+            autoComplete="current-password"
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500" />
+          {pwError && <p className="text-xs text-red-400">{pwError}</p>}
+          <button type="submit" disabled={busy || !email.trim() || !password}
+            className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-semibold text-sm rounded-xl px-5 py-3 transition-colors">
+            {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
+          </button>
+        </form>
 
         {/* Divider info */}
         <p className="text-xs text-gray-600 text-center">

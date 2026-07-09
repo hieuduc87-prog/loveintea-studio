@@ -1,8 +1,10 @@
 import type { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
+import CredentialsProvider from 'next-auth/providers/credentials';
 import { v4 as uuidv4 } from 'uuid';
 import { SQLiteAdapter } from './auth-adapter';
 import { getDb } from './db';
+import { verifyPassword } from './password';
 
 export const authOptions: NextAuthOptions = {
   adapter: SQLiteAdapter(),
@@ -11,6 +13,24 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
+    }),
+    // Email + password for admin-provisioned customers (no Google needed).
+    CredentialsProvider({
+      name: 'Email',
+      credentials: { email: { label: 'Email', type: 'text' }, password: { label: 'Mật khẩu', type: 'password' } },
+      async authorize(credentials) {
+        const email = (credentials?.email || '').trim().toLowerCase();
+        const password = credentials?.password || '';
+        if (!email || !password) return null;
+        const db = getDb();
+        const u = db.prepare('SELECT id, name, email, role, is_approved, password_hash FROM auth_users WHERE email = ?')
+          .get(email) as { id: string; name: string; email: string; role: string; is_approved: number; password_hash: string | null } | undefined;
+        if (!u || !u.password_hash) return null;
+        if (u.is_approved !== 1) return null;
+        if (!verifyPassword(password, u.password_hash)) return null;
+        db.prepare('UPDATE auth_users SET last_login = ? WHERE id = ?').run(new Date().toISOString(), u.id);
+        return { id: u.id, email: u.email, name: u.name, role: u.role, is_approved: u.is_approved };
+      },
     }),
   ],
   session: { strategy: 'jwt' },

@@ -7,6 +7,7 @@
  */
 import { getDb } from './db';
 import { v4 as uuid } from 'uuid';
+import { hashPassword, genPassword } from './password';
 
 export interface StoreStats {
   id: string;
@@ -100,7 +101,7 @@ export function getStoreMembers(brandId: string): StoreMember[] {
  * in with Google immediately) with a store-scoped writing role ('editor'), and
  * adds the brand_members row. Never downgrades an existing admin.
  */
-export function inviteToStore(input: { email: string; brandId: string; role?: string; memberRole?: string }): { userId: string; created: boolean } {
+export function inviteToStore(input: { email: string; brandId: string; role?: string; memberRole?: string }): { userId: string; created: boolean; tempPassword?: string } {
   const db = getDb();
   const email = input.email.trim().toLowerCase();
   if (!email) throw new Error('email required');
@@ -110,10 +111,11 @@ export function inviteToStore(input: { email: string; brandId: string; role?: st
   const role = input.role || 'editor'; // customer default: writes, scoped to brand
   const memberRole = input.memberRole || 'member';
 
-  const existing = db.prepare('SELECT id, role FROM auth_users WHERE email=?').get(email) as { id: string; role: string } | undefined;
+  const existing = db.prepare('SELECT id, role, password_hash FROM auth_users WHERE email=?').get(email) as { id: string; role: string; password_hash: string | null } | undefined;
 
   let userId: string;
   let created = false;
+  let tempPassword: string | undefined;
   const tx = db.transaction(() => {
     if (existing) {
       userId = existing.id;
@@ -121,18 +123,35 @@ export function inviteToStore(input: { email: string; brandId: string; role?: st
       if (existing.role === 'viewer') {
         db.prepare('UPDATE auth_users SET role=?, is_approved=1 WHERE id=?').run(role, userId);
       }
+      // If the user has no password yet (e.g. Google-only or never provisioned),
+      // give them one so they can also sign in with email+password.
+      if (!existing.password_hash) {
+        tempPassword = genPassword();
+        db.prepare('UPDATE auth_users SET password_hash=?, must_change_password=1 WHERE id=?').run(hashPassword(tempPassword), userId);
+      }
     } else {
       userId = uuid();
       created = true;
-      db.prepare(`INSERT INTO auth_users (id, name, email, role, is_approved, created_at) VALUES (?,?,?,?,1,datetime('now'))`)
-        .run(userId, email, email, role);
+      tempPassword = genPassword();
+      db.prepare(`INSERT INTO auth_users (id, name, email, role, is_approved, password_hash, must_change_password, created_at) VALUES (?,?,?,?,1,?,1,datetime('now'))`)
+        .run(userId, email, email, role, hashPassword(tempPassword));
     }
     db.prepare(`INSERT OR IGNORE INTO brand_members (user_id, brand_id, role, created_at) VALUES (?,?,?,datetime('now'))`)
       .run(userId, input.brandId, memberRole);
   });
   tx();
   // @ts-expect-error assigned in tx
-  return { userId, created };
+  return { userId, created, tempPassword };
+}
+
+/** Admin regenerates a temporary password for a member. Returns the plaintext once. */
+export function resetMemberPassword(userId: string): string {
+  const db = getDb();
+  const u = db.prepare('SELECT id FROM auth_users WHERE id=?').get(userId);
+  if (!u) throw new Error('User not found');
+  const pw = genPassword();
+  db.prepare('UPDATE auth_users SET password_hash=?, must_change_password=1 WHERE id=?').run(hashPassword(pw), userId);
+  return pw;
 }
 
 export function removeMember(userId: string, brandId: string): void {

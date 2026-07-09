@@ -23,6 +23,7 @@ export function BrandMembersView({ brandId, brandName }: { brandId: string; bran
   const [role, setRole] = useState('editor');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [cred, setCred] = useState<{ email: string; password: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!brandId) return;
@@ -38,7 +39,7 @@ export function BrandMembersView({ brandId, brandName }: { brandId: string; bran
 
   async function invite() {
     if (!email.trim()) return;
-    setBusy(true); setMsg('');
+    setBusy(true); setMsg(''); setCred(null);
     try {
       const r = await fetch(`/api/admin/stores/${brandId}/members`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -46,10 +47,21 @@ export function BrandMembersView({ brandId, brandName }: { brandId: string; bran
       });
       const d = await r.json();
       if (!r.ok) { setMsg('❌ ' + (d.error || 'Lỗi')); return; }
-      setMsg(d.created ? '✅ Đã tạo & thêm người dùng mới vào store' : '✅ Đã thêm vào store');
+      setMsg(d.created ? '✅ Đã tạo tài khoản & thêm vào store' : '✅ Đã thêm vào store');
+      if (d.tempPassword) setCred({ email: email.trim().toLowerCase(), password: d.tempPassword });
       setEmail('');
       await load();
     } finally { setBusy(false); }
+  }
+
+  async function resetPw(userId: string, memberEmail: string) {
+    if (!confirm(`Cấp lại mật khẩu mới cho ${memberEmail}?`)) return;
+    const r = await fetch(`/api/admin/stores/${brandId}/members`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset', userId }),
+    });
+    const d = await r.json();
+    if (r.ok && d.tempPassword) setCred({ email: memberEmail, password: d.tempPassword });
   }
 
   async function remove(userId: string, memberEmail: string) {
@@ -85,7 +97,24 @@ export function BrandMembersView({ brandId, brandName }: { brandId: string; bran
           </button>
         </div>
         {msg && <p className="text-xs mt-2 text-gray-400">{msg}</p>}
-        <p className="text-[11px] text-gray-600 mt-2">Người dùng đăng nhập Google đúng email này sẽ vào thẳng store, chỉ thấy dữ liệu store này.</p>
+
+        {/* Credentials to hand to the customer */}
+        {cred && (
+          <div className="mt-3 bg-brand-600/10 border border-brand-700/40 rounded-lg p-3">
+            <div className="text-xs font-semibold text-brand-300 mb-1.5">🔑 Gửi thông tin đăng nhập này cho khách (chỉ hiện 1 lần):</div>
+            <div className="font-mono text-sm text-white space-y-0.5">
+              <div>Link: <span className="text-gray-300">{typeof window !== 'undefined' ? window.location.origin : ''}/login</span></div>
+              <div>Email: <span className="text-gray-300">{cred.email}</span></div>
+              <div>Mật khẩu: <span className="text-gray-300">{cred.password}</span></div>
+            </div>
+            <button
+              onClick={() => navigator.clipboard?.writeText(`Đăng nhập: ${typeof window !== 'undefined' ? window.location.origin : ''}/login\nEmail: ${cred.email}\nMật khẩu: ${cred.password}`)}
+              className="mt-2 text-xs bg-brand-600 hover:bg-brand-500 text-white px-3 py-1 rounded">
+              📋 Copy
+            </button>
+          </div>
+        )}
+        <p className="text-[11px] text-gray-600 mt-2">Khách đăng nhập bằng <b>email + mật khẩu</b> ở trên (không cần Google). Hoặc nếu email này là Google, họ có thể "Continue with Google".</p>
       </div>
 
       {/* Members */}
@@ -104,7 +133,10 @@ export function BrandMembersView({ brandId, brandName }: { brandId: string; bran
                   </div>
                 </div>
                 {m.role !== 'root_admin' && m.role !== 'admin' && (
-                  <button onClick={() => remove(m.id, m.email)} className="text-xs text-red-400 hover:text-red-300 shrink-0">Gỡ</button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => resetPw(m.id, m.email)} className="text-xs text-gray-400 hover:text-white">Đổi MK</button>
+                    <button onClick={() => remove(m.id, m.email)} className="text-xs text-red-400 hover:text-red-300">Gỡ</button>
+                  </div>
                 )}
               </div>
             ))}

@@ -30,7 +30,7 @@ export default withAuth(
 
     // ---- Host-based function routing (BigAI MKT) ----
     const host = (req.headers.get('host') || '').toLowerCase();
-    const crmHost = host.startsWith('crm.');
+    const crmHost = host.startsWith('crm.') || host.startsWith('admin.');
     const appHost = host.startsWith('app.') || host.startsWith('autocontent.');
     const baseDomain = host.replace(/^[^.]+\./, '');
     const proto = req.nextUrl.protocol;
