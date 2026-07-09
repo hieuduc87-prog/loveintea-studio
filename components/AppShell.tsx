@@ -7,6 +7,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { BrandDnaView }       from './BrandDnaView';
 import { ProductsView }       from './ProductsView';
 import { CreateStudioView }   from './CreateStudioView';
+import { TextOverlayView }    from './TextOverlayView';
 import { JobQueueView }       from './JobQueueView';
 import { ContentQueueView }   from './ContentQueueView';
 import { PublisherView }      from './PublisherView';
@@ -38,7 +39,7 @@ type TabId =
   | 'dashboard'
   | 'brands' | 'brand_dna' | 'products' | 'scoreboard'
   | 'plan_calendar'
-  | 'create_studio' | 'video_studio' | 'blog_factory' | 'cost'
+  | 'create_studio' | 'text_overlay' | 'video_studio' | 'blog_factory' | 'cost'
   | 'content_queue' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
@@ -60,6 +61,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'plan_calendar',    label: 'Plan & Lịch',      icon: '🗓️', group: 'Plan' },
   // CREATE — Copy track + Visual track + Blog
   { id: 'create_studio',    label: 'Tạo Content',      icon: '✨', group: 'Create' },
+  { id: 'text_overlay',     label: 'Chữ lên ảnh',      icon: '🔤', group: 'Create' },
   { id: 'video_studio',     label: 'Video Studio',     icon: '🎬', group: 'Create' },
   { id: 'blog_factory',     label: 'Blog Factory',     icon: '📝', group: 'Create' },
   // REVIEW & PUBLISH — Queue (review desk), Schedule, Channels
@@ -473,6 +475,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'products'         && <ProductsView brandId={bid} />}
                 {id === 'plan_calendar'    && <PlanCalendarView brandId={bid} />}
                 {id === 'create_studio'    && <CreateStudioView brandId={bid} />}
+                {id === 'text_overlay'     && <TextOverlayView brandId={bid} brandName={activeBrand.name} />}
                 {id === 'cost'             && <CostView brandId={bid} />}
                 {id === 'video_studio'     && <VideoStudioView brandId={bid} />}
                 {id === 'blog_factory'     && <BlogFactoryView brandId={bid} />}
