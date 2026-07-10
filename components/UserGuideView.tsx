@@ -83,6 +83,30 @@ const SECTIONS: Section[] = [
     tip: 'Kiểu "Liệt kê lợi ích": gõ các lợi ích ngăn nhau bằng dấu | (vd: Ngủ ngon | Thư giãn | 0 calo).',
   },
   {
+    id: 'video_studio', icon: '🎬', kicker: 'Video AI', title: 'Video Studio — video ngắn + Lịch tự động',
+    intro: 'Từ ảnh sản phẩm + clip quay sẵn, AI dựng video Reels 9:16 hoàn chỉnh: kịch bản, cắt cảnh theo beat nhạc, chữ trên video, lồng tiếng. Đặt Lịch định kỳ một lần — hệ thống tự sản xuất video đều đặn.',
+    steps: [
+      'Upload clip quay sản phẩm/quán vào Kho clip (AI tự gắn tag cảnh/mood). Không có clip cũng được — AI dùng ảnh sản phẩm + ảnh AI.',
+      'Chọn mục đích, sản phẩm, thời lượng, nhạc nền (mp3 hoặc video — tự bóc nhạc), bật 🎙️ Lồng tiếng → "🧠 Tạo storyboard" → "▶ Render" (~3-8 phút).',
+      '⏰ LỊCH ĐỊNH KỲ: bấm "+ Lịch mới" → chọn xoay vòng sản phẩm, chu kỳ (vd mỗi 3 ngày lúc 9h), kênh FB/IG → hệ thống TỰ dựng + render + tạo bài theo chu kỳ.',
+      'Chế độ ra bài: "📝 Tạo bài nháp" (bạn duyệt ở Review & Queue rồi mới đăng — khuyên dùng) hoặc "⚡ Tự đăng ngay khi render xong".',
+      'Muốn video đúc theo công thức viral: gắn Khuôn từ tab 🕵️ Nguồn học vào lịch.',
+    ],
+    tip: 'Video đầu tiên của lịch chạy trong ≤5 phút sau khi tạo — vào Video projects xem tiến độ, xong sẽ thấy bài mới trong Review & Queue.',
+  },
+  {
+    id: 'inspiration', icon: '🕵️', kicker: 'Video AI', title: 'Nguồn học — học công thức viral của đối thủ',
+    intro: 'Thấy video đối thủ viral? Dán link vào đây — AI xem toàn bộ video, bóc từng cảnh (nhịp cắt, góc máy, hook, cảm xúc) thành "khuôn" + bài học, rồi dựng video của BẠN theo đúng công thức thắng đó.',
+    steps: [
+      'Thêm "Trang đang theo dõi" (page/kênh đối thủ) để nhóm bài — tùy chọn.',
+      'Dán link video công khai (IG Reels / FB / TikTok / YouTube) vào ô "Nạp bài để học" → hệ thống tự tải + AI phân tích vài phút. Dán kèm caption gốc để học cả công thức caption.',
+      'Link private hoặc tải lỗi → dùng nút "📁 Upload file" (screen record cũng được).',
+      'Xem "📖 bài học" (vì sao viral: hook, pacing, CTA) trong Thư viện đã học.',
+      'Bấm "🎬 Tạo video theo khuôn này" — AI giữ cấu trúc thắng (số cảnh, nhịp, góc máy), thay toàn bộ nội dung bằng sản phẩm/brand của bạn. Hoặc gắn khuôn vào Lịch định kỳ.',
+    ],
+    tip: 'Khuôn chỉ học CẤU TRÚC, không sao chép chữ/hình của đối thủ — an toàn bản quyền. Chọn video 15-40s có cấu trúc rõ để khuôn đẹp nhất.',
+  },
+  {
     id: 'plan', icon: '🗓️', kicker: 'Bước 5', title: 'Plan & Lịch — lên kế hoạch & duyệt',
     intro: 'Nơi lập kế hoạch nội dung cả tháng, sinh bài hàng loạt, kéo-thả lên lịch và duyệt.',
     mock: 'calendar',
@@ -135,6 +159,9 @@ const FAQ: { q: string; a: string }[] = [
   { q: 'Ảnh AI trông chưa thật?', a: 'Hệ thống đã bật chế độ ảnh chất lượng cao + chỉ đạo nhiếp ảnh chân thật. Nếu vẫn muốn khác, dùng "Chữ lên ảnh" hoặc chọn ảnh nền khác.' },
   { q: 'Tôi thấy dữ liệu của thương hiệu khác?', a: 'Không thể — mỗi thương hiệu cách ly tuyệt đối. Nếu bạn là admin và thấy nhiều store, dùng nút chọn thương hiệu ở đầu sidebar để chuyển.' },
   { q: 'Chi phí tạo ảnh?', a: 'Ảnh chất lượng cao khoảng 4.500đ/ảnh. Admin có thể xem chi tiết ở tab Cost & P&L.' },
+  { q: 'Video định kỳ tạo xong nằm ở đâu?', a: 'Ở 2 chỗ: tab Video Studio → Video projects (file video, preview/tải về) và Review & Queue (bài đăng kèm video, chờ bạn duyệt — trừ khi lịch đặt chế độ ⚡ tự đăng).' },
+  { q: 'Dán link video đối thủ báo lỗi tải?', a: 'Link private, bị chặn vùng, hoặc nền tảng chặn tải. Cách chắc chắn nhất: screen record video đó rồi dùng nút "📁 Upload file" trong tab Nguồn học — AI phân tích y hệt.' },
+  { q: 'Video có tự đăng lên Instagram được không?', a: 'Có — hệ thống đăng dạng Reels (cần store đã nối IG ở Channels). Facebook đăng dạng video Page. Chọn kênh ngay khi tạo Lịch định kỳ.' },
 ];
 
 function Mock({ kind }: { kind: NonNullable<Section['mock']> }) {

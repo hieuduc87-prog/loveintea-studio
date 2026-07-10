@@ -86,14 +86,34 @@ export const GUIDES: Guide[] = [
   },
   {
     id: 'video_studio', icon: '🎬', title: 'Video Studio', group: 'Create',
-    intro: 'Tạo video ngắn 9:16 hybrid: clip kho + ảnh AI + voiceover, beat-sync nhạc.',
+    intro: 'Tạo video ngắn 9:16 hybrid: clip kho + ảnh AI + voiceover, beat-sync nhạc. Có Lịch định kỳ để hệ thống TỰ sản xuất video theo chu kỳ.',
     steps: [
       'Chọn sản phẩm → dropdown load clip của sản phẩm đó. Upload clip mới nếu cần (AI tự tag cảnh/mood).',
       'Chọn mục đích + thời lượng + nhạc nền (mp3 HOẶC video — tự bóc nhạc). Bật "🎙️ Lồng tiếng" + chọn giọng.',
       'Bấm "🧠 Tạo storyboard" → AI dựng kịch bản (trộn clip + ảnh sản phẩm + ảnh AI) → "▶ Render".',
       'Render xong xem preview / tải về (1080×1920, mix voiceover + nhạc ducking).',
+      '⏰ LỊCH ĐỊNH KỲ: bấm "+ Lịch mới" → chọn xoay vòng sản phẩm (hoặc 1 SP cố định), mỗi N ngày lúc mấy giờ VN, kênh đăng → hệ thống tự dựng + render + tạo bài nháp (hoặc ⚡ tự đăng) theo chu kỳ. Video đầu tiên chạy trong ≤5 phút sau khi tạo lịch.',
+      'Muốn video đúc theo công thức viral: gắn "Khuôn" từ tab 🕵️ Nguồn học vào lịch, hoặc chọn video mẫu ở dropdown "🎯 Học công thức".',
     ],
-    tips: ['Server render tuần tự ~3-8 phút/video. Output lưu data/images, đăng FB/IG fetch được.'],
+    tips: [
+      'Server render tuần tự ~3-8 phút/video. Output lưu data/images, đăng FB/IG fetch được.',
+      'Chế độ "📝 Tạo bài nháp" an toàn hơn ⚡ tự đăng — bài chờ ở Review & Queue để bạn duyệt trước.',
+    ],
+  },
+  {
+    id: 'inspiration', icon: '🕵️', title: 'Nguồn học', group: 'Create',
+    intro: 'Học công thức thắng của đối thủ: dán link video viral → AI bóc cấu trúc cảnh, nhịp cắt, hook, caption → thành "khuôn" để dựng video của bạn.',
+    steps: [
+      'Thêm nguồn theo dõi (page FB / IG / TikTok / YouTube của đối thủ hoặc kênh bạn ngưỡng mộ) — chỉ để nhóm bài, không bắt buộc.',
+      'Dán link video công khai vào ô "Nạp bài để học" (kèm caption gốc nếu muốn học cả công thức caption) → hệ thống tự tải + AI phân tích (vài phút).',
+      'Link private / tải lỗi → dùng nút "📁 Upload file" (screen record hoặc video tải tay).',
+      'Xem kết quả ở "Thư viện đã học": 📖 bài học (vì sao viral) + số cảnh/cấu trúc của khuôn.',
+      'Dùng khuôn: bấm "🎬 Tạo video theo khuôn này" (AI giữ cấu trúc thắng, thay nội dung brand bạn) hoặc gắn khuôn vào ⏰ Lịch định kỳ ở Video Studio.',
+    ],
+    tips: [
+      'Khuôn KHÔNG sao chép nội dung đối thủ — chỉ học cấu trúc: số cảnh, nhịp cắt, góc máy, cung cảm xúc. Chữ và hình là của brand bạn.',
+      'Chọn video 15-40s, rõ cấu trúc (hook → build → payoff → CTA) để khuôn chất lượng nhất.',
+    ],
   },
   {
     id: 'blog_factory', icon: '📝', title: 'Blog Factory', group: 'Create',
