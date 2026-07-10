@@ -84,6 +84,18 @@ function initSchema(db: Database.Database) {
       created_at   TEXT DEFAULT (datetime('now'))
     );
 
+    -- Ảnh mẫu / reference cho tính năng "Chữ lên ảnh": mỗi layout của mỗi brand
+    -- có kho ảnh post đẹp để nhân viên tham chiếu phong cách khi phủ chữ.
+    CREATE TABLE IF NOT EXISTS overlay_references (
+      id          TEXT PRIMARY KEY,
+      brand_id    TEXT NOT NULL DEFAULT 'loveintea',
+      layout      TEXT NOT NULL,               -- bottom-headline | top-banner | center-quote | benefit-list | promo-badge
+      image_url   TEXT NOT NULL,
+      note        TEXT DEFAULT '',
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_overlay_ref_brand_layout ON overlay_references(brand_id, layout);
+
     -- ─────────────────────────────────────────────
     -- POSTS — content queue (caption + image pairs)
     -- ─────────────────────────────────────────────

@@ -44,6 +44,34 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
   }, [brandId]);
   useEffect(() => { loadGallery(); }, [loadGallery]);
 
+  // Kho ảnh mẫu / reference cho ĐÚNG layout đang chọn (card #2).
+  const [refs, setRefs] = useState<{ id: string; image_url: string; layout: string }[]>([]);
+  const [refUploading, setRefUploading] = useState(false);
+  const loadRefs = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/content/text-overlay/references?brand=${brandId}&layout=${layout}`);
+      const d = await r.json();
+      setRefs(d.references || []);
+    } catch { setRefs([]); }
+  }, [brandId, layout]);
+  useEffect(() => { loadRefs(); }, [loadRefs]);
+
+  async function uploadRef(file: File) {
+    setRefUploading(true); setErr('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file); fd.append('layout', layout);
+      const r = await fetch(`/api/content/text-overlay/references?brand=${brandId}`, { method: 'POST', body: fd });
+      const d = await r.json();
+      if (r.ok && d.reference) setRefs(prev => [d.reference, ...prev]);
+      else setErr(d.error || 'Lỗi upload ảnh mẫu');
+    } finally { setRefUploading(false); }
+  }
+  async function deleteRef(id: string) {
+    setRefs(prev => prev.filter(x => x.id !== id));
+    await fetch(`/api/content/text-overlay/references?brand=${brandId}&id=${id}`, { method: 'DELETE' });
+  }
+
   async function suggest() {
     setSuggesting(true); setErr('');
     try {
@@ -81,11 +109,6 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
         <p className="text-sm text-gray-400 mt-1">Phủ tiêu đề/khẩu hiệu lên ảnh sản phẩm — chữ nét, đúng dấu tiếng Việt (render bằng bố cục, không để AI vẽ chữ méo).</p>
       </div>
 
-      {/* Reference / ảnh mẫu — CẦN BỔ SUNG kho reference thật */}
-      <div className="mb-5 bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-3 text-xs text-yellow-200/90">
-        📌 <b>Ảnh mẫu / Reference:</b> hiện mỗi kiểu dưới đây là preview do hệ thống tự dựng. <b>Cần bổ sung kho ảnh mẫu thật</b> (upload post đẹp của các brand) để nhân viên chọn "muốn kiểu như này" và tinh chỉnh bố cục theo — tính năng upload reference sẽ thêm sau.
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] gap-6">
         {/* LEFT: controls */}
         <div className="space-y-4">
@@ -101,6 +124,33 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Kho ảnh mẫu / reference cho ĐÚNG kiểu đang chọn */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-semibold text-white">Ảnh mẫu cho kiểu «{cur.name}»</div>
+              <label className={`text-xs px-3 py-1.5 rounded-lg cursor-pointer font-medium ${refUploading ? 'bg-gray-700 text-gray-400' : 'bg-brand-600/20 border border-brand-600/40 text-brand-200 hover:bg-brand-600/30'}`}>
+                {refUploading ? '⟳ Đang tải…' : '⬆ Upload ảnh mẫu'}
+                <input type="file" accept="image/*" className="hidden" disabled={refUploading}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadRef(f); e.currentTarget.value = ''; }} />
+              </label>
+            </div>
+            <p className="text-[11px] text-gray-500 mb-2">Tải post đẹp thật lên làm mẫu — nhân viên xem để chọn phong cách &amp; căn chỉnh bố cục cho kiểu này.</p>
+            {refs.length ? (
+              <div className="grid grid-cols-4 gap-1.5">
+                {refs.map(r => (
+                  <div key={r.id} className="relative group aspect-[4/5] rounded-lg overflow-hidden border border-gray-800">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <a href={r.image_url} target="_blank" rel="noreferrer"><img src={`${r.image_url}?w=200`} alt="mẫu" className="w-full h-full object-cover" /></a>
+                    <button onClick={() => deleteRef(r.id)} title="Xoá"
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-gray-600 border border-dashed border-gray-800 rounded-lg py-4 text-center">Chưa có ảnh mẫu cho kiểu này — bấm «Upload ảnh mẫu» để thêm.</div>
+            )}
           </div>
 
           {/* base image */}
