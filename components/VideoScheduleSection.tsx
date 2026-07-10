@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 interface Schedule {
   id: string; name: string | null; product_strategy: string; product_id: string | null;
   purpose: string; target_duration_s: number; cadence_days: number; hour_local: number;
-  auto_post: string; platforms: string; enabled: number; language: string | null;
+  auto_post: string; platforms: string; enabled: number; language: string | null; bgm_mode: string | null;
   inspiration_item_id: string | null; last_run_at: string | null; next_run_at: string | null;
   last_error: string | null; video_count: number; pending_count: number;
 }
@@ -46,6 +46,7 @@ export function VideoScheduleSection({ brandId, products }: {
   const [pfFb, setPfFb] = useState(true);
   const [pfIg, setPfIg] = useState(false);
   const [inspirationId, setInspirationId] = useState('');
+  const [bgmMode, setBgmMode] = useState('auto');
 
   const load = useCallback(async () => {
     try {
@@ -71,6 +72,7 @@ export function VideoScheduleSection({ brandId, products }: {
         product_id: strategy === 'fixed' ? productId || null : null,
         purpose, target_duration_s: duration, cadence_days: cadence, hour_local: hour,
         auto_post: autoPost, platforms, inspiration_item_id: inspirationId || null,
+        bgm_mode: bgmMode,
       }),
     });
     const d = await r.json() as { ok?: boolean; error?: string };
@@ -163,6 +165,11 @@ export function VideoScheduleSection({ brandId, products }: {
             <option value="draft">📝 Tạo bài nháp — người duyệt rồi mới đăng (an toàn)</option>
             <option value="auto">⚡ Tự đăng ngay khi render xong</option>
           </select>
+          <select value={bgmMode} onChange={e => setBgmMode(e.target.value)}
+            className="md:col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
+            <option value="auto">🎵 Tự chọn nhạc từ Kho nhạc nền (xoay vòng đều, cắt cảnh theo beat)</option>
+            <option value="none">🔇 Không nhạc nền (chỉ lồng tiếng)</option>
+          </select>
           <button onClick={create}
             className="md:col-span-2 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold">
             ⏰ Tạo lịch định kỳ
@@ -184,7 +191,7 @@ export function VideoScheduleSection({ brandId, products }: {
                 <p className="text-xs font-semibold text-white truncate">
                   {s.name ?? 'Video định kỳ'}
                   <span className="ml-2 text-[10px] text-gray-500 font-normal">
-                    {PURPOSES[s.purpose] ?? s.purpose} · {s.product_strategy === 'rotate' ? 'xoay vòng SP' : (products.find(p => p.id === s.product_id)?.name ?? 'SP cố định')} · mỗi {s.cadence_days} ngày {s.hour_local}h VN · {s.platforms} · {s.auto_post === 'auto' ? '⚡ tự đăng' : '📝 nháp'}
+                    {PURPOSES[s.purpose] ?? s.purpose} · {s.product_strategy === 'rotate' ? 'xoay vòng SP' : (products.find(p => p.id === s.product_id)?.name ?? 'SP cố định')} · mỗi {s.cadence_days} ngày {s.hour_local}h VN · {s.platforms} · {s.auto_post === 'auto' ? '⚡ tự đăng' : '📝 nháp'} · {(s.bgm_mode ?? 'auto') === 'none' ? '🔇' : '🎵 kho nhạc'}
                   </span>
                 </p>
                 <p className="text-[10px] text-gray-500 mt-0.5">

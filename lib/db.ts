@@ -833,6 +833,26 @@ function initSchema(db: Database.Database) {
     )`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_insp_items_brand ON inspiration_items(brand_id)`);
   } catch { /* already exists */ }
+  // ── Kho nhạc nền (BGM library) — upload / bóc từ video / dán link, auto-pick cho lịch ──
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS bgm_tracks (
+      id         TEXT PRIMARY KEY,
+      brand_id   TEXT NOT NULL,
+      name       TEXT,
+      url        TEXT NOT NULL,            -- /api/images/bgm_*.mp3
+      filename   TEXT NOT NULL,
+      duration_s REAL DEFAULT 0,
+      bpm        REAL,                     -- detect sẵn để beat-sync không tốn lượt detect khi render
+      source     TEXT DEFAULT 'upload',    -- upload | video_extract | link
+      source_url TEXT,                     -- link gốc khi source=link
+      use_count  INTEGER DEFAULT 0,        -- auto-pick xoay vòng ít-dùng-nhất
+      status     TEXT DEFAULT 'ready',     -- ready | processing | failed
+      error      TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_bgm_tracks_brand ON bgm_tracks(brand_id)`);
+  } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_schedules ADD COLUMN bgm_mode TEXT DEFAULT 'auto'`); } catch { /* already exists */ }
   // ── Unified Job Queue — mọi nút "Tạo" (ảnh/content/carousel/plan/video) ghi 1 job để theo dõi ──
   try {
     db.exec(`CREATE TABLE IF NOT EXISTS jobs (

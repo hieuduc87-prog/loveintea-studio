@@ -22,6 +22,41 @@ export function isAllowedSourceUrl(raw: string): boolean {
   } catch { return false; }
 }
 
+/** Tải CHỈ AUDIO từ link video/reel (kho nhạc nền) → trả filename mp3 trong IMAGES_DIR. */
+export async function downloadSourceAudio(url: string, id: string): Promise<string> {
+  if (!isAllowedSourceUrl(url)) {
+    throw new Error('URL không hợp lệ — chỉ nhận link công khai Instagram / Facebook / TikTok / YouTube (https).');
+  }
+  fs.mkdirSync(IMAGES_DIR, { recursive: true });
+  const filename = `bgm_${id}.mp3`;
+  const out = path.join(IMAGES_DIR, filename);
+
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn('yt-dlp', [
+      '--no-playlist', '--max-filesize', '100m', '--socket-timeout', '30',
+      '-x', '--audio-format', 'mp3', '--audio-quality', '192K',
+      '-o', out,
+      url,
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+    let stderr = '';
+    proc.stderr.on('data', d => { stderr += String(d); });
+    const timer = setTimeout(() => { proc.kill('SIGKILL'); reject(new Error('Tải nhạc quá 3 phút — thử lại hoặc upload file mp3.')); }, 180_000);
+    proc.on('error', (e: NodeJS.ErrnoException) => {
+      clearTimeout(timer);
+      reject(e.code === 'ENOENT'
+        ? new Error('Server chưa cài yt-dlp — hãy upload file nhạc trực tiếp.')
+        : e);
+    });
+    proc.on('close', code => {
+      clearTimeout(timer);
+      if (code === 0 && fs.existsSync(out)) resolve();
+      else reject(new Error(`Không tải được nhạc (yt-dlp exit ${code}). Link có thể private/bị chặn — thử upload file. ${stderr.slice(-300)}`));
+    });
+  });
+  return filename;
+}
+
 /** Tải video → trả filename trong IMAGES_DIR. Throw với message tiếng Việt khi fail. */
 export async function downloadSourceVideo(url: string, id: string): Promise<string> {
   if (!isAllowedSourceUrl(url)) {

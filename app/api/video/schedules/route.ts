@@ -15,6 +15,7 @@ import { computeNextRun } from '@/lib/video/schedule';
 const EDITABLE = new Set([
   'name', 'product_strategy', 'product_id', 'purpose', 'target_duration_s', 'use_voiceover',
   'language', 'inspiration_item_id', 'cadence_days', 'hour_local', 'auto_post', 'platforms', 'enabled',
+  'bgm_mode',
 ]);
 
 export async function GET(req: NextRequest) {
@@ -38,8 +39,8 @@ export async function POST(req: NextRequest) {
     const hour = Math.min(23, Math.max(0, Number.isFinite(hourNum) ? hourNum : 9));
     getDb().prepare(`INSERT INTO video_schedules
       (id, brand_id, name, product_strategy, product_id, purpose, target_duration_s, use_voiceover,
-       language, inspiration_item_id, cadence_days, hour_local, auto_post, platforms, enabled, next_run_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,NULL)`)
+       language, inspiration_item_id, cadence_days, hour_local, auto_post, platforms, bgm_mode, enabled, next_run_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,NULL)`)
       .run(id, brandId,
         String(b.name || 'Video định kỳ'),
         b.product_strategy === 'fixed' ? 'fixed' : 'rotate',
@@ -51,7 +52,8 @@ export async function POST(req: NextRequest) {
         (b.inspiration_item_id as string) || null,
         cadence, hour,
         b.auto_post === 'auto' ? 'auto' : 'draft',
-        String(b.platforms || 'facebook'));
+        String(b.platforms || 'facebook'),
+        b.bgm_mode === 'none' ? 'none' : 'auto');
     // next_run_at NULL → video đầu tiên được tạo ngay lần tick tới (≤5 phút)
     return NextResponse.json({ ok: true, id });
   } catch (e) {

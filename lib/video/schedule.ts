@@ -18,6 +18,7 @@ export interface VideoSchedule {
   language: string | null; inspiration_item_id: string | null;
   cadence_days: number; hour_local: number; auto_post: string; platforms: string;
   enabled: number; last_run_at: string | null; next_run_at: string | null;
+  bgm_mode?: string; // 'auto' (pick từ kho nhạc, least-used) | 'none'
 }
 
 /** Lần chạy kế tiếp: from + cadence ngày, tại hour_local giờ VN (lưu ISO UTC). */
@@ -39,6 +40,18 @@ function pickProduct(s: VideoSchedule): string | null {
   if (!products.length) return null;
   const idx = products.findIndex(p => p.id === s.last_product_id);
   return products[(idx + 1) % products.length].id;
+}
+
+/** Auto-pick nhạc nền từ kho: ít-dùng-nhất trước (xoay vòng đều), tăng use_count. */
+function pickBgm(brandId: string): { url: string; bpm: number | null } | null {
+  const db = getDb();
+  const track = db.prepare(
+    `SELECT id, url, bpm FROM bgm_tracks WHERE brand_id=? AND status='ready'
+     ORDER BY use_count ASC, RANDOM() LIMIT 1`
+  ).get(brandId) as { id: string; url: string; bpm: number | null } | undefined;
+  if (!track) return null;
+  db.prepare('UPDATE bgm_tracks SET use_count = use_count + 1 WHERE id=?').run(track.id);
+  return { url: track.url, bpm: track.bpm };
 }
 
 /** Chạy các lịch đến hạn. Gọi từ scheduler — nuốt lỗi per-schedule để không chặn lịch khác. */
@@ -70,18 +83,23 @@ export async function processVideoSchedules(): Promise<void> {
         } catch { /* recipe hỏng → dựng tự do */ }
       }
 
+      // Nhạc nền: auto-pick từ kho (kèm BPM đã detect sẵn → director cắt cảnh theo beat)
+      const bgm = (s.bgm_mode ?? 'auto') !== 'none' ? pickBgm(s.brand_id) : null;
+
       const board = await buildStoryboard({
         brandId: s.brand_id, purpose: s.purpose, productId: productId ?? undefined,
-        targetDurationS: s.target_duration_s, notes: s.name ? `Video định kỳ: ${s.name}` : undefined,
+        targetDurationS: s.target_duration_s, bpm: bgm?.bpm ?? null,
+        notes: s.name ? `Video định kỳ: ${s.name}` : undefined,
         language: s.language ?? undefined, recipe,
       });
 
       const projectId = uuid();
       db.prepare(`INSERT INTO video_projects
-        (id, brand_id, title, purpose, product_id, target_duration_s, script_json, status,
+        (id, brand_id, title, purpose, product_id, target_duration_s, bgm_url, bpm, script_json, status,
          use_voiceover, vo_script, vo_voice, reference_recipe_json, schedule_id)
-        VALUES (?,?,?,?,?,?,?, 'queued', ?,?,?,?,?)`)
+        VALUES (?,?,?,?,?,?,?,?,?, 'queued', ?,?,?,?,?)`)
         .run(projectId, s.brand_id, board.title, s.purpose, productId, s.target_duration_s,
+          bgm?.url ?? null, bgm?.bpm ?? null,
           JSON.stringify(board), s.use_voiceover ? 1 : 0, board.voiceover ?? '', 'nova',
           recipe ? JSON.stringify(recipe) : null, s.id);
 

@@ -92,7 +92,8 @@ export const GUIDES: Guide[] = [
       'Chọn mục đích + thời lượng + nhạc nền (mp3 HOẶC video — tự bóc nhạc). Bật "🎙️ Lồng tiếng" + chọn giọng.',
       'Bấm "🧠 Tạo storyboard" → AI dựng kịch bản (trộn clip + ảnh sản phẩm + ảnh AI) → "▶ Render".',
       'Render xong xem preview / tải về (1080×1920, mix voiceover + nhạc ducking).',
-      '⏰ LỊCH ĐỊNH KỲ: bấm "+ Lịch mới" → chọn xoay vòng sản phẩm (hoặc 1 SP cố định), mỗi N ngày lúc mấy giờ VN, kênh đăng → hệ thống tự dựng + render + tạo bài nháp (hoặc ⚡ tự đăng) theo chu kỳ. Video đầu tiên chạy trong ≤5 phút sau khi tạo lịch.',
+      '🎵 KHO NHẠC NỀN: bấm "Quản lý kho" → upload mp3, upload video (tự bóc nhạc), hoặc dán link reel/video có nhạc hay (chỉ lấy phần audio). BPM detect sẵn để cắt cảnh theo beat. Khi tạo video, chọn nhạc từ kho ở dropdown.',
+      '⏰ LỊCH ĐỊNH KỲ: bấm "+ Lịch mới" → chọn xoay vòng sản phẩm (hoặc 1 SP cố định), mỗi N ngày lúc mấy giờ VN, kênh đăng → hệ thống tự dựng + render + tạo bài nháp (hoặc ⚡ tự đăng) theo chu kỳ. Nhạc mặc định tự chọn từ kho (xoay vòng đều). Video đầu tiên chạy trong ≤5 phút sau khi tạo lịch.',
       'Muốn video đúc theo công thức viral: gắn "Khuôn" từ tab 🕵️ Nguồn học vào lịch, hoặc chọn video mẫu ở dropdown "🎯 Học công thức".',
     ],
     tips: [

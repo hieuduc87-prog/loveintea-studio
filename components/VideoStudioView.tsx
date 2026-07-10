@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { chunkedUpload } from '@/lib/chunk-upload';
 import { VideoScheduleSection } from './VideoScheduleSection';
+import { BgmLibrarySection, BgmTrack } from './BgmLibrarySection';
 
 interface Clip {
   id: string; url: string; duration_s: number; width: number; height: number;
@@ -47,6 +48,7 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
   const [useVoiceover, setUseVoiceover] = useState(true);
   const [voVoice, setVoVoice] = useState('nova');
   const [referenceClipId, setReferenceClipId] = useState('');
+  const [bgmTracks, setBgmTracks] = useState<BgmTrack[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -178,8 +180,25 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
             <input type="range" min={12} max={45} value={duration} onChange={e => setDuration(Number(e.target.value))} className="flex-1 accent-brand-500" />
             <span className="text-xs text-white w-8">{duration}s</span>
           </div>
+          {bgmTracks.length > 0 && (
+            <label className="block">
+              <span className="text-[11px] text-gray-400">🎵 Nhạc nền từ kho ({bgmTracks.length} bài)</span>
+              <select value={bgmUrl} onChange={e => {
+                setBgmUrl(e.target.value);
+                setBgmName(bgmTracks.find(t => t.url === e.target.value)?.name ?? '');
+              }}
+                className="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
+                <option value="">— Không nhạc / tự upload bên dưới —</option>
+                {bgmTracks.map(t => (
+                  <option key={t.id} value={t.url}>
+                    ♪ {t.name || t.id.slice(0, 8)} · {Math.round(t.duration_s)}s{t.bpm ? ` · ${Math.round(t.bpm)} BPM` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block">
-            <span className="text-[11px] text-gray-400">Nhạc nền — mp3 hoặc <b>video</b> (tự bóc nhạc), cắt cảnh theo beat</span>
+            <span className="text-[11px] text-gray-400">{bgmTracks.length > 0 ? 'Hoặc nhạc riêng cho video này' : 'Nhạc nền'} — mp3 hoặc <b>video</b> (tự bóc nhạc), cắt cảnh theo beat</span>
             <input type="file" accept="audio/*,video/*" disabled={uploading}
               onChange={e => e.target.files?.[0] && uploadBgm(e.target.files[0])}
               className="mt-1 block w-full text-[11px] text-gray-400 file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-200 file:text-xs" />
@@ -252,6 +271,9 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
           )}
         </div>
       </div>
+
+      {/* ── Kho nhạc nền ── */}
+      <BgmLibrarySection brandId={brandId} onTracks={setBgmTracks} />
 
       {/* ── Lịch video định kỳ ── */}
       <VideoScheduleSection brandId={brandId} products={products} />
