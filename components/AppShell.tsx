@@ -310,6 +310,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
 
   // Brand state
   const [brands, setBrands]           = useState<BrandSummary[]>([]);
+  const [brandsLoaded, setBrandsLoaded] = useState(false);
   const [activeBrand, setActiveBrand] = useState<BrandSummary>({
     // Neutral placeholder — replaced by the user's own brand once /api/brands loads
     // (a customer must never see another tenant's name flash).
@@ -333,6 +334,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
         });
       }
     } catch { /* ignore */ }
+    finally { setBrandsLoaded(true); }
   }, []);
 
   useEffect(() => { loadBrands(); }, [loadBrands]);
@@ -467,7 +469,14 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
 
         {/* Keep visited tabs mounted (hidden when not active) so state is preserved */}
         <main className="flex-1 overflow-hidden relative">
-          {TABS.map(({ id }) => {
+          {/* Gate: đợi /api/brands trả về brand thật của user trước khi mount tab con —
+              nếu không, con sẽ fetch data brand mặc định (loveintea) → 403 với user
+              scope brand khác → crash "client-side exception". */}
+          {!brandsLoaded ? (
+            <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">
+              Đang tải không gian thương hiệu…
+            </div>
+          ) : TABS.map(({ id }) => {
             if (!visitedTabs.has(id)) return null;
             const isActive = tab === id;
             return (
