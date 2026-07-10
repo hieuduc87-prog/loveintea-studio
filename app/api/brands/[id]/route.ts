@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 const DNA_COLUMNS = ['tagline', 'archetype', 'through_line', 'voice_traits', 'compliance_json',
   'hashtags', 'colors_json', 'typography_json', 'target_audience', 'insight', 'behavior', 'brand_rules',
-  'content_language'];
+  'content_language', 'model_look'];
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

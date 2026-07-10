@@ -21,11 +21,18 @@ PHOTOREALISM — this must look like a REAL PHOTOGRAPH, not an AI render:
 - Natural colour grading: restrained, muted, earthy palette, cinematic colour balance. NOT over-saturated.
 - Candid, un-staged editorial moment; believable composition (rule of thirds); very subtle film grain.
 HUMAN REALISM (if any person/hand appears): real skin with visible pores, natural micro-texture, subtle fine lines, uneven skin tone and natural tonal variation, light natural shine / subsurface scattering, tiny natural imperfections; anatomically correct, natural hands and fingers.
-AVOID (these cause the fake AI look): plastic / waxy / airbrushed / over-smoothed poreless skin, beauty-filter, doll face, 3D render, CGI, illustration, over-sharpened "8K hyperrealistic" look, HDR, neon / fantasy / magical lighting, over-saturated or rainbow colours.`.trim();
+FACE — the #1 tell of AI: eyebrows must be REAL — individual visible brow hairs, natural irregular shape and density, slightly asymmetric, un-retouched (NEVER drawn-on, stenciled, painted, over-plucked or perfectly-shaped). Eyes: realistic natural catchlights, slight asymmetry between the eyes, natural lashes (not mascara-perfect), soft real eyelids — not glassy doll eyes.
+AVOID (these cause the fake AI look): plastic / waxy / airbrushed / over-smoothed poreless skin, beauty-filter, doll face, stenciled or painted-on eyebrows, perfectly-symmetric glassy eyes, 3D render, CGI, illustration, over-sharpened "8K hyperrealistic" look, HDR, neon / fantasy / magical lighting, over-saturated or rainbow colours.`.trim();
 
-/** Append the photoreal direction to an image prompt (idempotent-ish). */
-export function withPhotoreal(prompt: string): string {
-  if (!prompt) return PHOTOREAL_BLOCK;
+/**
+ * Append the photoreal direction to an image prompt (idempotent-ish).
+ * `modelLook` (optional) locks the on-camera person per brand — e.g. a US brand →
+ * a Western/Caucasian model. Only surfaces when a person appears in the scene.
+ */
+export function withPhotoreal(prompt: string, modelLook?: string): string {
+  const model = (modelLook || '').trim();
+  const modelLine = model ? `\nMODEL / PERSON (if a person appears in the scene): ${model}.` : '';
+  if (!prompt) return PHOTOREAL_BLOCK + modelLine;
   if (prompt.includes('PHOTOREALISM —')) return prompt; // already enhanced
-  return `${prompt.trim()}\n\n${PHOTOREAL_BLOCK}`;
+  return `${prompt.trim()}\n\n${PHOTOREAL_BLOCK}${modelLine}`;
 }

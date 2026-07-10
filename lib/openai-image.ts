@@ -17,6 +17,7 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import { withPhotoreal } from './photoreal';
+import { getModelLook } from './brand-lang';
 
 let _client: OpenAI | null = null;
 let _backupClient: OpenAI | null = null;
@@ -66,9 +67,10 @@ export async function editProductImage(opts: {
   prompt: string;
   size?: ImageSize;
   quality?: ImageQuality;
+  brandId?: string;
 }): Promise<string> {
-  const { productImagePath, prompt: rawPrompt, size = '1024x1536', quality = 'high' } = opts;
-  const prompt = withPhotoreal(rawPrompt);
+  const { productImagePath, prompt: rawPrompt, size = '1024x1536', quality = 'high', brandId } = opts;
+  const prompt = withPhotoreal(rawPrompt, getModelLook(brandId));
 
   if (!fs.existsSync(productImagePath)) {
     throw new Error(`Product image not found: ${productImagePath}`);
@@ -112,9 +114,10 @@ export async function generateImage(opts: {
   prompt: string;
   size?: ImageSize;
   quality?: ImageQuality;
+  brandId?: string;
 }): Promise<string> {
-  const { prompt: rawPrompt, size = '1024x1536', quality = 'high' } = opts;
-  const prompt = withPhotoreal(rawPrompt);
+  const { prompt: rawPrompt, size = '1024x1536', quality = 'high', brandId } = opts;
+  const prompt = withPhotoreal(rawPrompt, getModelLook(brandId));
 
   const response = await withQuotaFallback(client => client.images.generate({
     model: 'gpt-image-2',

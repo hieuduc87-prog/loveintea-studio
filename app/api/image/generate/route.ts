@@ -73,8 +73,8 @@ export async function POST(req: NextRequest) {
 
     logJob(jobId, basePath ? `Edit từ ảnh gốc${templateId ? ' + template' : ''}…` : 'Generate ảnh mới…');
     const raw = basePath
-      ? await editProductImage({ productImagePath: basePath, prompt: finalPrompt, size: '1024x1536' })
-      : await generateImage({ prompt: finalPrompt, size: '1024x1536' });
+      ? await editProductImage({ productImagePath: basePath, prompt: finalPrompt, size: '1024x1536', brandId })
+      : await generateImage({ prompt: finalPrompt, size: '1024x1536', brandId });
     const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
     finishJob(jobId, { url });
     return NextResponse.json({ ok: true, url });

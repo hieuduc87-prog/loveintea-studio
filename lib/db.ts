@@ -751,6 +751,8 @@ function initSchema(db: Database.Database) {
   // ── Migrations ─────────────────────────────────────
   // Per-brand content language (vi|en). Default 'en' (existing brands sell US).
   try { db.exec(`ALTER TABLE brand_dna ADD COLUMN content_language TEXT DEFAULT 'en'`); } catch { /* already exists */ }
+  // Per-brand model look for AI people images (auto|vietnamese|western). auto → theo ngôn ngữ.
+  try { db.exec(`ALTER TABLE brand_dna ADD COLUMN model_look TEXT DEFAULT 'auto'`); } catch { /* already exists */ }
   // Learning-loop scope: 'brand' (DNA riêng) | 'platform' (nguyên tắc chung — áp MỌI brand).
   try { db.exec(`ALTER TABLE knowledge_docs ADD COLUMN scope TEXT DEFAULT 'brand'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE content_rules ADD COLUMN scope TEXT DEFAULT 'brand'`); } catch { /* already exists */ }

@@ -145,8 +145,8 @@ export async function generateTemplateImages(opts: {
 
     try {
       const raw = base
-        ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536' })
-        : await generateImage({ prompt, size: '1024x1536' });
+        ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536', brandId: opts.brandId })
+        : await generateImage({ prompt, size: '1024x1536', brandId: opts.brandId });
       const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
       if (url) images.push(url);
       onLog?.(`slide ${i + 1}/${slideUrls.length} ✓`);

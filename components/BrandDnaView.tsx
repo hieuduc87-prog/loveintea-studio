@@ -11,7 +11,7 @@ interface BrandDna {
   colors_json: string; voice_traits: string;
   compliance_json: string; hashtags: string;
   target_audience?: string; insight?: string; behavior?: string; brand_rules?: string;
-  content_language?: string;
+  content_language?: string; model_look?: string;
 }
 interface ProductRow {
   id: string; name: string; display_name: string; theme: string;
@@ -127,6 +127,14 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
     await fetch(`/api/brands/${bid}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dna: { content_language: lang } }),
+    });
+    await reload();
+  }
+
+  async function saveModelLook(look: 'auto' | 'vietnamese' | 'western') {
+    await fetch(`/api/brands/${bid}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dna: { model_look: look } }),
     });
     await reload();
   }
@@ -271,6 +279,26 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
                 return (
                   <button key={v} onClick={() => saveLang(v)}
                     className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${active ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      </Section>
+
+      {/* Mẫu người trong ảnh AI — brand bán US khoá mẫu Tây, brand VN mẫu Việt */}
+      <Section title="Mẫu người trong ảnh AI">
+        <Card>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <p className="text-xs text-gray-400 max-w-md">Khi ảnh có người mẫu, khoá kiểu người theo thị trường. Auto = theo ngôn ngữ (US/EN → Tây, VN → Việt). Lông mày/mắt đã được chỉ đạo tự nhiên.</p>
+            <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
+              {([['auto', '⚙️ Auto'], ['western', '🌎 Phương Tây'], ['vietnamese', '🇻🇳 Việt Nam']] as const).map(([v, label]) => {
+                const active = (dna?.model_look || 'auto').toLowerCase() === v;
+                return (
+                  <button key={v} onClick={() => saveModelLook(v)}
+                    className={`px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors ${active ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'}`}>
                     {label}
                   </button>
                 );

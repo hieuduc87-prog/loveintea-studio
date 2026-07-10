@@ -123,8 +123,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               basePath = resolveProductImagePath((ti?.image_url || '').split('?')[0]);
             }
             const raw = basePath
-              ? await editProductImage({ productImagePath: basePath, prompt: imagePrompt, size: '1024x1536' })
-              : await generateImage({ prompt: imagePrompt, size: '1024x1536' });
+              ? await editProductImage({ productImagePath: basePath, prompt: imagePrompt, size: '1024x1536', brandId: plan.brand_id })
+              : await generateImage({ prompt: imagePrompt, size: '1024x1536', brandId: plan.brand_id });
             imageUrl = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
           }
         }
