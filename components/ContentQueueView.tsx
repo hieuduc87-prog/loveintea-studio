@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { SKUS } from '@/lib/brand-dna';
 
 interface Post {
-  id: string; sku_id: string; caption: string; image_url?: string;
+  id: string; sku_id: string; caption: string; image_url?: string; video_url?: string;
   images_json?: string; content_type?: string;
   status: 'draft'|'scheduled'|'published'|'failed'; platform: string;
   scheduled_at?: string; published_at?: string;
@@ -186,6 +186,11 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
                         ) : (
                           <Image src={post.image_url} alt="" width={48} height={64} className="object-cover w-full h-full" />
                         )}
+                      </div>
+                    ) : post.video_url ? (
+                      <div className="w-12 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-black relative">
+                        <video src={post.video_url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+                        <span className="absolute inset-0 flex items-center justify-center text-white text-xs">🎬</span>
                       </div>
                     ) : (
                       <div className="w-12 h-16 rounded-lg flex-shrink-0 bg-gray-800 flex items-center justify-center">

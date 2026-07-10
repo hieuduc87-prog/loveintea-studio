@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { chunkedUpload } from '@/lib/chunk-upload';
+import { VideoScheduleSection } from './VideoScheduleSection';
 
 interface Clip {
   id: string; url: string; duration_s: number; width: number; height: number;
@@ -251,6 +252,9 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
           )}
         </div>
       </div>
+
+      {/* ── Lịch video định kỳ ── */}
+      <VideoScheduleSection brandId={brandId} products={products} />
 
       {/* ── Projects ── */}
       <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4">

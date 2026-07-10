@@ -26,6 +26,7 @@ import { ScoreboardView }   from './ScoreboardView';
 import { ContentTemplatesView } from './ContentTemplatesView';
 import { DashboardView }      from './DashboardView';
 import { VideoStudioView }    from './VideoStudioView';
+import { InspirationView }    from './InspirationView';
 import { CostView }           from './CostView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,7 +40,7 @@ type TabId =
   | 'dashboard'
   | 'brands' | 'brand_dna' | 'products' | 'scoreboard'
   | 'plan_calendar'
-  | 'create_studio' | 'text_overlay' | 'video_studio' | 'blog_factory' | 'cost'
+  | 'create_studio' | 'text_overlay' | 'video_studio' | 'inspiration' | 'blog_factory' | 'cost'
   | 'content_queue' | 'publisher' | 'job_queue'
   | 'analytics'
   | 'inbox'
@@ -65,6 +66,7 @@ const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   { id: 'create_studio',    label: 'Tạo Content',      icon: '✨', group: 'Create' },
   { id: 'text_overlay',     label: 'Chữ lên ảnh',      icon: '🔤', group: 'Create' },
   { id: 'video_studio',     label: 'Video Studio',     icon: '🎬', group: 'Create' },
+  { id: 'inspiration',      label: 'Nguồn học',        icon: '🕵️', group: 'Create' },
   { id: 'blog_factory',     label: 'Blog Factory',     icon: '📝', group: 'Create' },
   // REVIEW & PUBLISH — Queue (review desk), Schedule, Channels
   { id: 'content_queue',    label: 'Review & Queue',   icon: '✅', group: 'Publish' },
@@ -481,6 +483,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'text_overlay'     && <TextOverlayView brandId={bid} brandName={activeBrand.name} />}
                 {id === 'cost'             && <CostView brandId={bid} />}
                 {id === 'video_studio'     && <VideoStudioView brandId={bid} />}
+                {id === 'inspiration'      && <InspirationView brandId={bid} />}
                 {id === 'blog_factory'     && <BlogFactoryView brandId={bid} />}
                 {id === 'content_queue'    && <ContentQueueView brandId={bid} />}
                 {id === 'publisher'        && <PublisherView fbSuccess={fbSuccess} fbError={fbError} brandId={bid} />}

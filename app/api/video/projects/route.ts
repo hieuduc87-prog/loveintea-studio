@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       brandId?: string; title?: string; purpose?: string; productId?: string;
       targetDurationS?: number; bgmUrl?: string; notes?: string;
       useVoiceover?: boolean; voVoice?: string; language?: string; referenceClipId?: string;
+      inspirationItemId?: string;
     };
     const brandId = getBrandId(req) || body.brandId || '';
     const purpose = body.purpose || 'promo';
@@ -48,7 +49,16 @@ export async function POST(req: NextRequest) {
 
     // Reference video → recipe (reverse-engineer a proven viral structure to follow)
     let recipe: VideoRecipe | null = null;
-    if (body.referenceClipId) {
+    // Khuôn từ Nguồn học (đã phân tích sẵn) — ưu tiên vì không tốn thêm lượt Gemini
+    if (body.inspirationItemId) {
+      const item = db.prepare('SELECT recipe_json FROM inspiration_items WHERE id=? AND brand_id=?')
+        .get(body.inspirationItemId, brandId) as { recipe_json: string } | undefined;
+      try {
+        const r = JSON.parse(item?.recipe_json || '{}') as VideoRecipe;
+        if (r?.scenes?.length) recipe = r;
+      } catch { /* recipe hỏng → bỏ qua */ }
+    }
+    if (!recipe && body.referenceClipId) {
       const clip = db.prepare('SELECT filename FROM video_clips WHERE id=? AND brand_id=?').get(body.referenceClipId, brandId) as { filename: string } | undefined;
       if (clip) {
         const f = path.join(IMAGES_DIR, clip.filename);

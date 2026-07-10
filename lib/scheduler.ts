@@ -138,8 +138,8 @@ export async function publishDuePosts() {
     let anyOk = false;
     let anyFail = false;
 
-    // Bỏ qua bài rỗng (không caption + không ảnh) — không thể đăng.
-    if (!caption.trim() && imageUrls.length === 0) {
+    // Bỏ qua bài rỗng (không caption + không ảnh + không video) — không thể đăng.
+    if (!caption.trim() && imageUrls.length === 0 && !post.video_url) {
       logInsert.run(uuid(), post.id, 'all', 'failed', null, 'Bài rỗng — chưa có caption hoặc ảnh.');
       db.prepare("UPDATE posts SET status = 'failed', updated_at = datetime('now') WHERE id = ?").run(post.id);
       continue;
@@ -151,7 +151,10 @@ export async function publishDuePosts() {
       if (post.fb_post_id) {
         anyOk = true;
       } else {
-        const fb = await postToFacebook({ caption, imageUrls, brandId });
+        // Bài video (từ Video Studio / lịch định kỳ) → đăng qua /videos thay vì /feed ảnh.
+        const fb = post.video_url
+          ? await postVideoToFacebook({ caption, videoUrl: post.video_url, brandId })
+          : await postToFacebook({ caption, imageUrls, brandId });
         logInsert.run(uuid(), post.id, 'facebook', fb.ok ? 'ok' : 'failed', fb.postId ?? null, fb.error ?? null);
         if (fb.ok) {
           db.prepare('UPDATE posts SET fb_post_id = ? WHERE id = ?').run(fb.postId, post.id);
@@ -166,7 +169,9 @@ export async function publishDuePosts() {
       if (!hasIgCreds(brandId)) {
         logInsert.run(uuid(), post.id, 'instagram', 'skipped', null, 'IG chưa kết nối — bỏ qua, chỉ đăng các kênh khác.');
       } else {
-        const ig = await postToInstagram({ caption, imageUrls, brandId });
+        const ig = post.video_url
+          ? await postReelToInstagram({ caption, videoUrl: post.video_url, brandId })
+          : await postToInstagram({ caption, imageUrls, brandId });
         logInsert.run(uuid(), post.id, 'instagram', ig.ok ? 'ok' : 'failed', ig.postId ?? null, ig.error ?? null);
         if (ig.ok) {
           db.prepare('UPDATE posts SET ig_post_id = ? WHERE id = ?').run(ig.postId, post.id);
