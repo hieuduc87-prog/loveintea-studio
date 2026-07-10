@@ -21,6 +21,7 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
   const [cta, setCta] = useState('');
   const [badge, setBadge] = useState('');
   const [busy, setBusy] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [result, setResult] = useState('');
   const [err, setErr] = useState('');
 
@@ -42,6 +43,20 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
     } catch { /* ignore */ }
   }, [brandId]);
   useEffect(() => { loadGallery(); }, [loadGallery]);
+
+  async function suggest() {
+    setSuggesting(true); setErr('');
+    try {
+      const r = await fetch(`/api/content/text-overlay/suggest?brand=${brandId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: headline.trim() || undefined }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setErr(d.error || 'Lỗi gợi ý'); return; }
+      if (d.layout) setLayout(d.layout);
+      setHeadline(d.headline || ''); setSub(d.sub || ''); setCta(d.cta || ''); setBadge(d.badge || '');
+    } finally { setSuggesting(false); }
+  }
 
   async function render() {
     if (!base) { setErr('Chọn hoặc dán 1 ảnh nền trước'); return; }
@@ -107,7 +122,14 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
 
           {/* text fields */}
           <div className="space-y-2">
-            <div className="text-sm font-semibold text-white">3. Nội dung chữ</div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-white">3. Nội dung chữ</div>
+              <button onClick={suggest} disabled={suggesting}
+                className="text-xs px-3 py-1.5 rounded-lg bg-brand-600/20 border border-brand-600/40 text-brand-200 hover:bg-brand-600/30 disabled:opacity-50 font-medium">
+                {suggesting ? '⟳ AI đang nghĩ…' : '✨ AI gợi ý chữ (theo brand)'}
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500 -mt-1">Gõ ý chính vào ô tiêu đề (tuỳ chọn) rồi bấm gợi ý — AI đề xuất kiểu + tiêu đề/CTA đúng chất brand.</p>
             <input value={headline} onChange={e => setHeadline(e.target.value)} placeholder="Tiêu đề chính (bắt buộc)"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
             <input value={sub} onChange={e => setSub(e.target.value)}
