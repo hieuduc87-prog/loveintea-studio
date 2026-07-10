@@ -21,6 +21,9 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
   const [error, setError]         = useState('');
   const [result, setResult]       = useState<GeneratedImage | null>(null);
   const [history, setHistory]     = useState<GeneratedImage[]>([]);
+  // Card #3: AI phủ chữ thẳng lên ảnh vừa gen (1 bước) — không cần qua tab Chữ lên ảnh.
+  const [addingText, setAddingText] = useState(false);
+  const [overlaidUrl, setOverlaidUrl] = useState<string | null>(null);
 
   const selectedSku = SKUS.find(s => s.id === skuId);
 
@@ -40,10 +43,38 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? 'Image generation failed');
       setResult(data);
+      setOverlaidUrl(null);
       setHistory(h => [data, ...h].slice(0, 12));
     } catch (e) {
       setError(String(e));
     } finally {
+      setLoading(false);
+    }
+  }
+
+  // 1 bước: AI gợi ý chữ theo brand+sản phẩm rồi phủ thẳng lên ảnh vừa gen.
+  async function addText() {
+    if (!result) return;
+    setAddingText(true); setError('');
+    try {
+      const q = brandId ? `?brand=${encodeURIComponent(brandId)}` : '';
+      const s = await fetch(`/api/content/text-overlay/suggest${q}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: result.skuId }),
+      });
+      const sd = await s.json();
+      if (!s.ok) { setError(sd.error || 'Lỗi gợi ý chữ'); return; }
+      const r = await fetch(`/api/content/text-overlay${q}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseImageUrl: result.imageUrl, layout: sd.layout, headline: sd.headline, sub: sd.sub, cta: sd.cta, badge: sd.badge }),
+      });
+      const rd = await r.json();
+      if (!r.ok) { setError(rd.error || 'Lỗi phủ chữ lên ảnh'); return; }
+      setOverlaidUrl(rd.url);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setAddingText(false);
       setLoading(false);
     }
   }
@@ -191,6 +222,14 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
                       ⬇ Download
                     </a>
                     <button
+                      onClick={addText}
+                      disabled={addingText}
+                      title="AI gợi ý chữ theo brand + sản phẩm rồi phủ thẳng lên ảnh"
+                      className="px-3 py-1.5 bg-brand-600/20 border border-brand-600/40 text-brand-200 hover:bg-brand-600/30 disabled:opacity-50 text-xs rounded-lg transition-colors"
+                    >
+                      {addingText ? '⟳ Đang phủ chữ…' : '✨ Thêm chữ lên ảnh'}
+                    </button>
+                    <button
                       onClick={generate}
                       className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded-lg transition-colors"
                     >
@@ -199,6 +238,20 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
                   </div>
                 </div>
               </div>
+
+              {overlaidUrl && (
+                <div className="bg-gray-900 border border-brand-600/40 rounded-xl overflow-hidden">
+                  <div className="relative aspect-[4/5] bg-gray-800">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={overlaidUrl} alt="Ảnh có chữ" className="w-full h-full object-contain" />
+                  </div>
+                  <div className="p-4 flex items-center justify-between">
+                    <p className="text-xs text-brand-300">✨ Ảnh đã phủ chữ (AI gợi ý theo brand)</p>
+                    <a href={overlaidUrl} download={`loveintea-${result.skuId}-text.png`}
+                      className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs rounded-lg transition-colors">⬇ Tải ảnh có chữ</a>
+                  </div>
+                </div>
+              )}
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <p className="text-xs font-bold text-gray-400 mb-2">Prompt Used</p>
                 <p className="text-xs text-gray-300 leading-relaxed">{result.prompt}</p>
