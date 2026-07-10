@@ -6,6 +6,25 @@ import OpenAI from 'openai';
 
 export type TtsVoice = 'nova' | 'shimmer' | 'alloy' | 'echo' | 'fable' | 'onyx';
 
+export interface VoWord { t: string; s: number; e: number } // từ + start/end ms
+
+/** Word timings XẤP XỈ theo tỉ trọng độ dài từ (karaoke caption).
+ *  OpenAI TTS không trả timestamps — chia thời lượng audio đo được theo trọng số
+ *  (ký tự + khoảng thở + pause sau dấu câu). Sai số nhỏ với VO 15-40s, đủ cho
+ *  hiệu ứng karaoke; khi nào có TTS trả word boundary (Azure/11L) thì thay tại đây. */
+export function buildWordTimings(text: string, durationMs: number): VoWord[] {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length || durationMs <= 0) return [];
+  const weights = words.map(w => w.length + 0.6 + (/[,.!?;:…]$/.test(w) ? 0.9 : 0));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  return words.map((t, i) => {
+    const s = (acc / total) * durationMs;
+    acc += weights[i];
+    return { t, s: Math.round(s), e: Math.round((acc / total) * durationMs) };
+  });
+}
+
 function isQuota(e: unknown): boolean {
   const m = String(e).toLowerCase();
   return ['insufficient_quota', 'billing', 'exceeded', '429', 'rate limit'].some(s => m.includes(s));

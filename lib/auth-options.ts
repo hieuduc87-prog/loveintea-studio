@@ -46,8 +46,28 @@ export const authOptions: NextAuthOptions = {
   // COOKIE_DOMAIN is set in prod (e.g. .easycreativehub.com). Default otherwise.
   ...(process.env.COOKIE_DOMAIN ? {
     cookies: {
+      // Session dùng chung app.↔admin. Các cookie của LUỒNG OAuth (state/pkce/nonce/
+      // callback-url) cũng PHẢI domain-scoped: nếu login khởi tạo ở 1 subdomain nhưng
+      // callback luôn về app.<domain>, cookie host-only sẽ mất → "State cookie was missing".
+      // csrf giữ mặc định (__Host- prefix cấm thuộc tính domain).
       sessionToken: {
         name: '__Secure-next-auth.session-token',
+        options: { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: true, domain: process.env.COOKIE_DOMAIN },
+      },
+      callbackUrl: {
+        name: '__Secure-next-auth.callback-url',
+        options: { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: true, domain: process.env.COOKIE_DOMAIN },
+      },
+      state: {
+        name: '__Secure-next-auth.state',
+        options: { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: true, maxAge: 900, domain: process.env.COOKIE_DOMAIN },
+      },
+      pkceCodeVerifier: {
+        name: '__Secure-next-auth.pkce.code_verifier',
+        options: { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: true, maxAge: 900, domain: process.env.COOKIE_DOMAIN },
+      },
+      nonce: {
+        name: '__Secure-next-auth.nonce',
         options: { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: true, domain: process.env.COOKIE_DOMAIN },
       },
     },

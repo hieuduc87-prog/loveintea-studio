@@ -11,6 +11,9 @@ export interface OverlayProject {
   brandName: string;
   colors: { primary: string; accent: string; cream: string };
   segments: Array<{ startMs: number; endMs: number; text?: string; anim?: string }>;
+  /** Karaoke voiceover word-by-word (từ + start/end ms tuyệt đối). Có → hiện dòng
+   *  karaoke ở đáy safe-zone, caption segment dời lên trên để không chồng nhau. */
+  voWords?: Array<{ t: string; s: number; e: number }>;
 }
 
 /** HTML-escape untrusted text. hook/ctaText/brandName come from LLM output +
@@ -36,7 +39,14 @@ export function overlayHtml(p: OverlayProject): string {
     text-shadow:0 2px 16px rgba(0,0,0,.75); opacity:0; }
   #hook .accent { color:${p.colors.accent}; }
   /* bottom 300-400px is covered by IG/TikTok/Shorts UI (caption/share/buttons) — keep text above ~340px */
-  #caption { position:absolute; bottom:340px; left:30px; right:30px; text-align:center; opacity:0; }
+  #caption { position:absolute; bottom:${p.voWords?.length ? 560 : 340}px; left:30px; right:30px; text-align:center; opacity:0; }
+  /* karaoke VO word-by-word — 85% xem mute vẫn "đọc" được lời thoại */
+  #karaoke { position:absolute; bottom:400px; left:24px; right:24px; text-align:center;
+    font-size:30px; font-weight:800; line-height:1.5; display:${p.voWords?.length ? 'block' : 'none'}; }
+  #karaoke span { padding:0 3px; color:rgba(255,255,255,.92);
+    text-shadow:0 2px 10px rgba(0,0,0,.9), 0 0 3px rgba(0,0,0,.9); }
+  #karaoke span.on { color:${p.colors.accent}; }
+  #karaoke span.fut { color:rgba(255,255,255,.45); }
   #caption span { display:inline; background:rgba(0,0,0,.55); color:#fff; font-size:26px;
     font-weight:700; line-height:1.7; padding:6px 14px; border-radius:12px;
     -webkit-box-decoration-break:clone; box-decoration-break:clone; }
@@ -55,9 +65,16 @@ export function overlayHtml(p: OverlayProject): string {
   <div id="badge"><div class="dot">${brandInitial}</div><div class="n">${brandName}</div></div>
   <div id="hook">${hook}</div>
   <div id="caption"><span></span></div>
+  <div id="karaoke"></div>
   <div id="cta"><div class="t">${ctaText}</div><div class="b">${brandName}</div></div>
   <script>
-  const P = ${JSON.stringify({ durationMs: p.durationMs, segments: p.segments })};
+  const P = ${JSON.stringify({ durationMs: p.durationMs, segments: p.segments, voWords: p.voWords ?? [] })};
+  // Karaoke: nhóm 4 từ/dòng, xây span 1 lần, SEEK chỉ đổi class (pure theo t)
+  const KG = 4;
+  const kEl = document.getElementById('karaoke');
+  const kSpans = P.voWords.map(function(w){
+    const s = document.createElement('span'); s.textContent = w.t; return s;
+  });
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const easeOutCubic=t=>1-Math.pow(1-t,3);
   // pure function of t
@@ -89,6 +106,21 @@ export function overlayHtml(p: OverlayProject): string {
       }
     }
     cs.textContent=txt; c.style.opacity=co;
+    // karaoke: hiện nhóm 4 từ chứa từ đang đọc; từ hiện tại tô màu accent
+    if(P.voWords.length){
+      let idx=-1;
+      for(let i=0;i<P.voWords.length;i++){ if(ms>=P.voWords[i].s && ms<P.voWords[i].e){ idx=i; break; } if(P.voWords[i].s>ms) break; }
+      const lastE=P.voWords[P.voWords.length-1].e;
+      if(ms>=lastE || (idx===-1 && ms<P.voWords[0].s)){
+        kEl.textContent='';
+      } else {
+        if(idx===-1){ for(let i=0;i<P.voWords.length;i++){ if(P.voWords[i].e<=ms) idx=i; else break; } }
+        const g=Math.floor(Math.max(0,idx)/KG), a=g*KG, b=Math.min(P.voWords.length,a+KG);
+        // rebuild chỉ khi nhóm đổi (so sánh con đầu tiên)
+        if(kEl.firstChild!==kSpans[a]){ kEl.textContent=''; for(let i=a;i<b;i++) kEl.appendChild(kSpans[i]); }
+        for(let i=a;i<b;i++) kSpans[i].className = i===idx ? 'on' : (P.voWords[i].e<=ms ? '' : 'fut');
+      }
+    }
     // CTA end card: last 2600ms
     const ctaStart=P.durationMs-2600;
     const cta=document.getElementById('cta');

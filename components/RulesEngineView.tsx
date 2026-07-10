@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 
 interface Rule {
   id: string;
@@ -9,6 +10,7 @@ interface Rule {
   evidence: string | null;
   source: 'seed' | 'manual' | 'learn';
   status: 'active' | 'retired';
+  scope?: string; // 'brand' (riêng) | 'platform' (nguyên tắc chung toàn hệ)
   created_at: string;
   retired_at: string | null;
 }
@@ -42,6 +44,9 @@ function VersionBadge({ version }: { version: string }) {
 }
 
 export function RulesEngineView({ brandId }: { brandId: string }) {
+  const { data: session } = useSession();
+  const isAdmin = Boolean((session?.user as { allBrands?: boolean } | undefined)?.allBrands);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
   const [data, setData]             = useState<RulesData | null>(null);
   const [loading, setLoading]       = useState(true);
   const [showRetired, setShowRetired] = useState(false);
@@ -229,6 +234,9 @@ export function RulesEngineView({ brandId }: { brandId: string }) {
                 <div className="flex items-center gap-2 flex-wrap mb-1.5">
                   <VersionBadge version={rule.version} />
                   <SourceBadge source={rule.source} />
+                  {rule.scope === 'platform' && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-300" title="Nguyên tắc chung — áp dụng cho MỌI brand trong hệ thống">🌐 CHUNG</span>
+                  )}
                 </div>
                 <p className="text-sm font-semibold text-white leading-snug">{rule.rule_text}</p>
                 {rule.evidence && (
@@ -236,13 +244,33 @@ export function RulesEngineView({ brandId }: { brandId: string }) {
                 )}
                 <p className="text-[10px] text-gray-700 mt-1.5">Added {fmtDate(rule.created_at)}</p>
               </div>
-              <button
-                onClick={() => handleRetire(rule.id)}
-                disabled={retiringId === rule.id}
-                className="flex-shrink-0 px-3 py-1.5 bg-red-900/30 hover:bg-red-900/60 disabled:opacity-40 text-red-400 text-xs font-semibold rounded-lg border border-red-800/40 transition-colors whitespace-nowrap"
-              >
-                {retiringId === rule.id ? '⟳' : 'Retire'}
-              </button>
+              <div className="flex-shrink-0 flex flex-col gap-1.5 items-end">
+                {isAdmin && (
+                  <button
+                    onClick={async () => {
+                      setPromotingId(rule.id);
+                      await fetch(`/api/rules/${rule.id}`, {
+                        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ scope: rule.scope === 'platform' ? 'brand' : 'platform' }),
+                      });
+                      setPromotingId(null);
+                      await load();
+                    }}
+                    disabled={promotingId === rule.id}
+                    title={rule.scope === 'platform' ? 'Hạ về rule riêng brand này' : 'Promote thành nguyên tắc chung — áp MỌI brand'}
+                    className="px-3 py-1.5 bg-emerald-900/30 hover:bg-emerald-900/60 disabled:opacity-40 text-emerald-400 text-xs font-semibold rounded-lg border border-emerald-800/40 transition-colors whitespace-nowrap"
+                  >
+                    {promotingId === rule.id ? '⟳' : rule.scope === 'platform' ? '↓ Riêng brand' : '🌐 Promote toàn hệ'}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleRetire(rule.id)}
+                  disabled={retiringId === rule.id}
+                  className="px-3 py-1.5 bg-red-900/30 hover:bg-red-900/60 disabled:opacity-40 text-red-400 text-xs font-semibold rounded-lg border border-red-800/40 transition-colors whitespace-nowrap"
+                >
+                  {retiringId === rule.id ? '⟳' : 'Retire'}
+                </button>
+              </div>
             </div>
           ))}
         </div>

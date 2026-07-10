@@ -206,6 +206,23 @@ export async function renderProject(projectId: string): Promise<void> {
     } catch { /* defaults */ }
     const brandName = (db.prepare('SELECT name FROM brands WHERE id=?').get(brandId) as { name: string } | undefined)?.name ?? brandId;
 
+    // S5.0 — voiceover TTS TRƯỚC overlay: cần duration audio thật để tính karaoke word timings
+    let voFile: string | null = null;
+    let voWords: Array<{ t: string; s: number; e: number }> = [];
+    const voScript = String(project.vo_script || '').trim();
+    if (Number(project.use_voiceover) === 1 && voScript) {
+      try {
+        const { synthesizeVoice, buildWordTimings } = await import('./tts');
+        const voice = (String(project.vo_voice || 'nova')) as 'nova';
+        const buf = await synthesizeVoice(voScript, voice);
+        voFile = path.join(work, 'vo.mp3');
+        fs.writeFileSync(voFile, buf);
+        const voDur = (await probe(voFile)).duration;
+        voWords = buildWordTimings(voScript, Math.min(voDur, durS) * 1000);
+        log(logs, `voiceover synthesized (${voScript.length} chars, ${voDur.toFixed(1)}s, karaoke ${voWords.length} words, voice=${voice})`);
+      } catch (e) { log(logs, `voiceover TTS failed (continuing without): ${e}`); voFile = null; voWords = []; }
+    }
+
     let cursor = 0;
     const overlaySegs = board.segments.map(s => {
       const startMs = cursor * tScale * 1000; cursor += s.dur_s;
@@ -214,23 +231,9 @@ export async function renderProject(projectId: string): Promise<void> {
     const totalFrames = Math.round(durS * FPS);
     log(logs, `overlay: rendering ${totalFrames} frames…`);
     await renderOverlayFrames(
-      { durationMs: durS * 1000, hook: board.hook ?? '', ctaText: board.cta_text ?? '', brandName, colors, segments: overlaySegs },
+      { durationMs: durS * 1000, hook: board.hook ?? '', ctaText: board.cta_text ?? '', brandName, colors, segments: overlaySegs, voWords },
       path.join(work, 'frames'), totalFrames
     );
-
-    // S5.5 — voiceover TTS (optional). Mixed under the video with BGM ducking.
-    let voFile: string | null = null;
-    const voScript = String(project.vo_script || '').trim();
-    if (Number(project.use_voiceover) === 1 && voScript) {
-      try {
-        const { synthesizeVoice } = await import('./tts');
-        const voice = (String(project.vo_voice || 'nova')) as 'nova';
-        const buf = await synthesizeVoice(voScript, voice);
-        voFile = path.join(work, 'vo.mp3');
-        fs.writeFileSync(voFile, buf);
-        log(logs, `voiceover synthesized (${voScript.length} chars, voice=${voice})`);
-      } catch (e) { log(logs, `voiceover TTS failed (continuing without): ${e}`); voFile = null; }
-    }
 
     // S6 — composite video + audio mix
     const final = path.join(work, 'final.mp4');

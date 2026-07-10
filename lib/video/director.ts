@@ -20,7 +20,8 @@ export interface Segment {
 
 export interface Storyboard {
   title: string;
-  hook: string;            // big text first ~2.5s
+  hook: string;            // big text first ~2.5s (variant đang dùng)
+  hooks?: string[];        // 3 hook variants (result-first / mistake-warning / curiosity) — lịch định kỳ xoay vòng
   segments: Segment[];
   cta_text: string;        // end card
   voiceover: string;       // narration script paced to the duration (~2.3 words/sec)
@@ -119,8 +120,7 @@ ${JSON.stringify(productImages.map(p => p.image_url))}
 RULES (proven viral short-form editing — follow strictly):
 HOOK (first ~2.5s decides 70% of viewers — 2.2-2.8× views if 3s retention >70%):
 - Segment 1 must be the STRONGEST visual with MOVEMENT from the very first frame (pour / steam / close-up zoom). NEVER open on a logo, intro card, or a static frame.
-- Pick one hook pattern: result-first (show the finished cup), bold claim, curiosity question, or pattern-interrupt.
-- hook text: max 6 words, high-contrast, an open loop that the video pays off at the end.
+- Write THREE hook variants in "hooks" (each max 6 words, an open loop the video pays off): [0] result-first (show the finished cup), [1] mistake-warning or bold claim, [2] curiosity question. Set "hook" = variants[0]. Hook is the #1 performance lever — make each variant genuinely different, not rephrasings.
 STRUCTURE (4 blocks across the ${targetDurationS}s): Hook (0-3s) → Value/build (mid) → Payoff/hero shot → CTA (last ~5s). Distribute segment durations to fit these blocks.
 PACING: cut every 1.5-2.5s; ${beatRule.includes('BPM') ? 'snap every cut to the beat grid.' : 'vary shot lengths (short-short-LONG) to avoid monotony.'}
 1. ${recipe?.scenes?.length ? `Use ${recipe.scenes.length} segments (match the template above).` : '5-9 segments.'}
@@ -132,10 +132,15 @@ LANGUAGE: write ALL on-screen text, hook, cta_text and voiceover in ${langName}.
 6. voiceover: a smooth ${langName} narration over the whole video. Length ≈ ${Math.round(targetDurationS * 3)} words (≈3 words/sec — fast Reels pace for ${targetDurationS}s). Warm, on-brand, follows compliance, complements (does NOT just repeat) the on-screen text. One flowing paragraph, no timestamps.
 
 Return ONLY JSON:
-{"title":"...","hook":"...","segments":[{"dur_s":2.0,"source":"clip|image|ai_image","clip_id":"...","image_url":"...","image_prompt":"...","text":"...","text_anim":"fade|pop|slide"}],"cta_text":"...","voiceover":"..."}`;
+{"title":"...","hook":"...","hooks":["variant result-first","variant mistake/claim","variant curiosity"],"segments":[{"dur_s":2.0,"source":"clip|image|ai_image","clip_id":"...","image_url":"...","image_prompt":"...","text":"...","text_anim":"fade|pop|slide"}],"cta_text":"...","voiceover":"..."}`;
 
   const board = await generateJSON<Storyboard>(prompt);
   if (!board?.segments?.length) throw new Error('Director returned empty storyboard');
+
+  // Hook variants: giữ tối đa 3, đảm bảo hook chính luôn có mặt
+  board.hooks = (board.hooks ?? []).filter(h => typeof h === 'string' && h.trim()).slice(0, 3);
+  if (!board.hooks.length && board.hook) board.hooks = [board.hook];
+  if (!board.hook && board.hooks.length) board.hook = board.hooks[0];
 
   // Sanity: clamp durations, snap to beat grid, drop unknown clip ids
   const clipIds = new Set(clips.map(c => c.id));

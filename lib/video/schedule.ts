@@ -93,6 +93,14 @@ export async function processVideoSchedules(): Promise<void> {
         language: s.language ?? undefined, recipe,
       });
 
+      // Xoay vòng 3 hook variant qua các kỳ — mỗi video định kỳ mở đầu một kiểu khác
+      // (result-first / mistake-warning / curiosity) để test hook nào thắng.
+      if (board.hooks?.length) {
+        const runCount = (db.prepare('SELECT COUNT(*) c FROM video_projects WHERE schedule_id=?')
+          .get(s.id) as { c: number }).c;
+        board.hook = board.hooks[runCount % board.hooks.length];
+      }
+
       const projectId = uuid();
       db.prepare(`INSERT INTO video_projects
         (id, brand_id, title, purpose, product_id, target_duration_s, bgm_url, bpm, script_json, status,
