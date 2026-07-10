@@ -52,21 +52,15 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
     }
   }
 
-  // 1 bước: AI gợi ý chữ theo brand+sản phẩm rồi phủ thẳng lên ảnh vừa gen.
+  // TỰ ĐỘNG 1 bước: đọc ảnh mẫu (nếu có) → sinh chữ brand đúng bố cục → phủ lên ảnh.
   async function addText() {
     if (!result) return;
     setAddingText(true); setError('');
     try {
       const q = brandId ? `?brand=${encodeURIComponent(brandId)}` : '';
-      const s = await fetch(`/api/content/text-overlay/suggest${q}`, {
+      const r = await fetch(`/api/content/text-overlay/auto${q}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: result.skuId }),
-      });
-      const sd = await s.json();
-      if (!s.ok) { setError(sd.error || 'Lỗi gợi ý chữ'); return; }
-      const r = await fetch(`/api/content/text-overlay${q}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ baseImageUrl: result.imageUrl, layout: sd.layout, headline: sd.headline, sub: sd.sub, cta: sd.cta, badge: sd.badge }),
+        body: JSON.stringify({ baseImageUrl: result.imageUrl, productId: result.skuId }),
       });
       const rd = await r.json();
       if (!r.ok) { setError(rd.error || 'Lỗi phủ chữ lên ảnh'); return; }

@@ -86,6 +86,23 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
     } finally { setSuggesting(false); }
   }
 
+  // TỰ ĐỘNG hoàn toàn: đọc ảnh mẫu (nếu có) → sinh chữ brand đúng bố cục → render, 1 lần.
+  async function autoOverlay() {
+    if (!base) { setErr('Chọn hoặc dán 1 ảnh nền trước'); return; }
+    setBusy(true); setErr(''); setResult('');
+    try {
+      const r = await fetch(`/api/content/text-overlay/auto?brand=${brandId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseImageUrl: base, layout, brandName }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setErr(d.error || 'Lỗi tự động'); return; }
+      if (d.layout) setLayout(d.layout);
+      setHeadline(d.headline || ''); setSub(d.sub || ''); setCta(d.cta || ''); setBadge(d.badge || '');
+      setResult(d.url);
+    } finally { setBusy(false); }
+  }
+
   async function render() {
     if (!base) { setErr('Chọn hoặc dán 1 ảnh nền trước'); return; }
     setBusy(true); setErr(''); setResult('');
@@ -195,9 +212,13 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
             )}
           </div>
 
+          <button onClick={autoOverlay} disabled={busy || !base}
+            className="w-full bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 disabled:opacity-50 text-white font-semibold text-sm py-2.5 rounded-lg">
+            {busy ? 'Đang xử lý…' : '🤖 Tự động chèn chữ (đọc ảnh mẫu → tự viết → phủ)'}
+          </button>
           <button onClick={render} disabled={busy || !base || !headline}
-            className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-semibold text-sm py-2.5 rounded-lg">
-            {busy ? 'Đang render…' : `✨ Tạo ảnh có chữ (${cur.name})`}
+            className="w-full bg-brand-600/80 hover:bg-brand-500 disabled:opacity-50 text-white font-medium text-sm py-2 rounded-lg">
+            {busy ? 'Đang render…' : `Hoặc render tay (${cur.name})`}
           </button>
           {err && <p className="text-xs text-red-400">{err}</p>}
         </div>
