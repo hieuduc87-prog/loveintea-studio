@@ -264,6 +264,8 @@ function SidebarContent({
               </div>
               {items.filter(t => {
                 if (t.id === 'team') return userRole === 'root_admin' || userRole === 'admin';
+                // Cost & P&L = số liệu tài chính của nền tảng — KHÔNG cho khách (editor/viewer) xem.
+                if (t.id === 'cost') return userRole === 'root_admin' || userRole === 'admin';
                 return true;
               }).map(t => (
                 <button key={t.id}
@@ -490,7 +492,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'plan_calendar'    && <PlanCalendarView brandId={bid} />}
                 {id === 'create_studio'    && <CreateStudioView brandId={bid} />}
                 {id === 'text_overlay'     && <TextOverlayView brandId={bid} brandName={activeBrand.name} />}
-                {id === 'cost'             && <CostView brandId={bid} />}
+                {id === 'cost'             && (userRole === 'root_admin' || userRole === 'admin') && <CostView brandId={bid} />}
                 {id === 'video_studio'     && <VideoStudioView brandId={bid} />}
                 {id === 'inspiration'      && <InspirationView brandId={bid} />}
                 {id === 'blog_factory'     && <BlogFactoryView brandId={bid} />}
