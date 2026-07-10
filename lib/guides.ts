@@ -107,6 +107,7 @@ export const GUIDES: Guide[] = [
     steps: [
       'Thêm nguồn theo dõi (page FB / IG / TikTok / YouTube của đối thủ hoặc kênh bạn ngưỡng mộ) — chỉ để nhóm bài, không bắt buộc.',
       'Dán link video công khai vào ô "Nạp bài để học" (kèm caption gốc nếu muốn học cả công thức caption) → hệ thống tự tải + AI phân tích (vài phút).',
+      '📥 Dán HÀNG LOẠT (nhân viên sưu tầm): ô "Dán hàng loạt — lưu hết", mỗi dòng 1 link (tối đa 50) → "Lưu hết vào kho" — tải lần lượt từng video về lưu (badge "đã lưu video"), link trùng tự bỏ qua, phân tích sau bằng nút 🧠.',
       'Link private / tải lỗi → dùng nút "📁 Upload file" (screen record hoặc video tải tay).',
       'Xem kết quả ở "Thư viện đã học": 📖 bài học (vì sao viral) + số cảnh/cấu trúc của khuôn.',
       'Dùng khuôn: bấm "🎬 Tạo video theo khuôn này" (AI giữ cấu trúc thắng, thay nội dung brand bạn) hoặc gắn khuôn vào ⏰ Lịch định kỳ ở Video Studio.',

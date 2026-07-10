@@ -33,6 +33,39 @@ Trả về ONLY JSON:
   }
 }
 
+/** Chỉ TẢI VÀ LƯU video của item (không phân tích — nhân viên paste hàng loạt, học sau).
+ *  Xong đặt status='saved'; lỗi → 'failed' kèm message. */
+export async function saveInspirationItemVideo(itemId: string, brandId: string): Promise<void> {
+  const db = getDb();
+  const item = db.prepare('SELECT id, url, filename FROM inspiration_items WHERE id=? AND brand_id=?')
+    .get(itemId, brandId) as { id: string; url: string | null; filename: string | null } | undefined;
+  if (!item) return;
+  if (item.filename) { // đã có file → chỉ chuẩn hoá status
+    db.prepare(`UPDATE inspiration_items SET status='saved', error=NULL, updated_at=datetime('now') WHERE id=? AND status IN ('new','downloading','failed')`).run(itemId);
+    return;
+  }
+  if (!item.url) return;
+  try {
+    db.prepare(`UPDATE inspiration_items SET status='downloading', updated_at=datetime('now') WHERE id=?`).run(itemId);
+    const filename = await downloadSourceVideo(item.url, itemId);
+    db.prepare(`UPDATE inspiration_items SET filename=?, status='saved', error=NULL, updated_at=datetime('now') WHERE id=?`).run(filename, itemId);
+  } catch (e) {
+    db.prepare(`UPDATE inspiration_items SET status='failed', error=?, updated_at=datetime('now') WHERE id=?`)
+      .run(String(e instanceof Error ? e.message : e).slice(0, 400), itemId);
+  }
+}
+
+// Hàng đợi tải tuần tự trong process — paste 50 link không nghẽn server / không spam nguồn.
+let bulkChain: Promise<void> = Promise.resolve();
+export function enqueueBulkSave(itemIds: string[], brandId: string, alsoAnalyze: boolean): void {
+  for (const id of itemIds) {
+    bulkChain = bulkChain
+      .then(() => saveInspirationItemVideo(id, brandId))
+      .then(() => (alsoAnalyze ? analyzeInspirationItem(id, brandId).catch(() => { /* lỗi đã ghi vào row */ }) : undefined))
+      .catch(() => { /* không để 1 item hỏng chặn cả hàng đợi */ });
+  }
+}
+
 /** Chạy full phân tích cho item (tải nếu mới có URL). Cập nhật row trực tiếp. */
 export async function analyzeInspirationItem(itemId: string, brandId: string): Promise<void> {
   const db = getDb();

@@ -32,6 +32,9 @@ export function InspirationView({ brandId }: { brandId: string }) {
   const [itemCaption, setItemCaption] = useState('');
   const [itemSourceId, setItemSourceId] = useState('');
   const [creatingVideoFor, setCreatingVideoFor] = useState('');
+  // bulk paste (nhân viên dán nhiều link 1 lúc — lưu hết)
+  const [bulkUrls, setBulkUrls] = useState('');
+  const [bulkAnalyze, setBulkAnalyze] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -45,13 +48,26 @@ export function InspirationView({ brandId }: { brandId: string }) {
   }, [brandId]);
   useEffect(() => { load(); }, [load]);
 
-  // Poll khi có item đang tải/phân tích
+  // Poll khi có item đang tải/phân tích (kể cả hàng đợi bulk: item 'new' chờ tới lượt)
   useEffect(() => {
-    const busy = items.some(i => i.status === 'downloading' || i.status === 'analyzing');
+    const busy = items.some(i => i.status === 'downloading' || i.status === 'analyzing' || (i.status === 'new' && i.url));
     if (!busy) return;
     const t = setInterval(load, 6000);
     return () => clearInterval(t);
   }, [items, load]);
+
+  async function bulkSave() {
+    if (!bulkUrls.trim()) { setMsg('❌ Dán ít nhất 1 link (mỗi dòng 1 link)'); return; }
+    setBusy(true); setMsg('');
+    const r = await fetch('/api/inspiration/items/bulk', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId, urls: bulkUrls, sourceId: itemSourceId || undefined, analyze: bulkAnalyze }),
+    });
+    const d = await r.json() as { ok?: boolean; message?: string; error?: string };
+    if (!d.ok) setMsg('❌ ' + (d.error ?? 'Lỗi'));
+    else { setMsg('✅ ' + (d.message ?? 'Đã nhận, đang lưu lần lượt')); setBulkUrls(''); await load(); }
+    setBusy(false);
+  }
 
   async function addSource() {
     if (!srcName.trim() && !srcUrl.trim()) { setMsg('❌ Nhập tên hoặc link nguồn'); return; }
@@ -130,10 +146,11 @@ export function InspirationView({ brandId }: { brandId: string }) {
 
   const statusBadge = (s: string) => ({
     new: 'bg-gray-700 text-gray-300', downloading: 'bg-sky-600/30 text-sky-300 animate-pulse',
+    saved: 'bg-teal-600/30 text-teal-300',
     analyzing: 'bg-amber-600/30 text-amber-300 animate-pulse', analyzed: 'bg-emerald-600/30 text-emerald-300',
     failed: 'bg-red-600/30 text-red-300',
   }[s] ?? 'bg-gray-700 text-gray-300');
-  const statusLabel: Record<string, string> = { new: 'mới', downloading: 'đang tải', analyzing: 'AI đang học', analyzed: 'đã học xong', failed: 'lỗi' };
+  const statusLabel: Record<string, string> = { new: 'chờ lưu', downloading: 'đang tải', saved: 'đã lưu video', analyzing: 'AI đang học', analyzed: 'đã học xong', failed: 'lỗi' };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-5">
@@ -205,6 +222,24 @@ export function InspirationView({ brandId }: { brandId: string }) {
             </div>
           </div>
           <p className="text-[10px] text-gray-600">Link private / bị chặn tải → dùng nút Upload file (screen record hoặc tải tay). AI phân tích: cấu trúc cảnh · nhịp cắt · góc máy · hook · cảm xúc · caption.</p>
+
+          <div className="border-t border-gray-800 pt-3 space-y-2">
+            <h4 className="text-[11px] font-bold text-gray-300">📥 Dán hàng loạt — lưu hết (cho nhân viên sưu tầm)</h4>
+            <textarea value={bulkUrls} onChange={e => setBulkUrls(e.target.value)}
+              placeholder={'Dán nhiều link, MỖI DÒNG 1 LINK (tối đa 50):\nhttps://www.instagram.com/reel/...\nhttps://www.tiktok.com/@shop/video/...\nhttps://youtube.com/shorts/...'}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white resize-none h-24 font-mono" />
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={bulkSave} disabled={busy}
+                className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-bold">
+                📥 Lưu hết vào kho
+              </button>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={bulkAnalyze} onChange={e => setBulkAnalyze(e.target.checked)} className="rounded accent-brand-500" />
+                <span className="text-[11px] text-gray-300">🧠 Phân tích luôn từng bài (chậm hơn, tốn AI — thường để sau)</span>
+              </label>
+            </div>
+            <p className="text-[10px] text-gray-600">Hệ thống tải LẦN LƯỢT từng video về kho (status &quot;đã lưu&quot;) — link trùng tự bỏ qua. Phân tích lúc nào cũng được bằng nút 🧠 trên từng bài.</p>
+          </div>
         </div>
       </div>
 
@@ -240,8 +275,12 @@ export function InspirationView({ brandId }: { brandId: string }) {
                     </div>
                   )}
                   <div className="flex gap-2 mt-2.5 flex-wrap">
-                    {(it.status === 'new' || it.status === 'failed') && (
+                    {(it.status === 'new' || it.status === 'saved' || it.status === 'failed') && (
                       <button onClick={() => analyze(it.id)} className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-[10px] font-bold">🧠 Phân tích</button>
+                    )}
+                    {it.status === 'saved' && it.filename && (
+                      <a href={`/api/images/${it.filename}`} target="_blank" rel="noreferrer"
+                        className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-[10px] font-bold">▶ Xem video đã lưu</a>
                     )}
                     {it.status === 'analyzed' && (
                       <>
