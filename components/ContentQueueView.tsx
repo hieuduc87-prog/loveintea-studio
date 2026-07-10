@@ -60,6 +60,11 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
   const [pubResult, setPubResult] = useState<{ fb?: { ok: boolean; postId?: string; error?: string }; ig?: { ok: boolean; postId?: string; error?: string } } | null>(null);
   const [pubError, setPubError] = useState('');
 
+  // Sửa caption ngay trong queue (card #1) — quan trọng khi Review Desk chặn banned claim.
+  const [editingCap, setEditingCap] = useState(false);
+  const [capDraft, setCapDraft] = useState('');
+  const [savingCap, setSavingCap] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     const url = filter === 'all' ? '/api/posts' : `/api/posts?status=${filter}`;
@@ -77,6 +82,26 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
     setScheduledAt('');
     setPubResult(null);
     setPubError('');
+    setEditingCap(false);
+  }
+
+  async function saveCaption() {
+    if (!selected) return;
+    const text = capDraft.trim();
+    setSavingCap(true);
+    try {
+      const q = brandId ? `?brand=${encodeURIComponent(brandId)}` : '';
+      const res = await fetch(`/api/posts/${selected.id}${q}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption: text }),
+      });
+      if (!res.ok) { setPubError('Lưu caption thất bại'); return; }
+      setSelected(s => s ? { ...s, caption: text } : s);
+      setPosts(p => p.map(x => x.id === selected.id ? { ...x, caption: text } : x));
+      setEditingCap(false);
+      setPubError('');
+    } finally { setSavingCap(false); }
   }
 
   async function deletePost(id: string) {
@@ -263,16 +288,40 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
                   </div>
                 ) : null; })()}
 
-                {/* Caption */}
+                {/* Caption — xem + sửa tại chỗ */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Caption</p>
-                    <button onClick={() => navigator.clipboard.writeText(selected.caption)}
-                      className="text-xs text-gray-500 hover:text-white px-2 py-1 rounded hover:bg-gray-800 transition-colors">Copy</button>
+                    <div className="flex items-center gap-1">
+                      {!editingCap && (
+                        <button onClick={() => { setCapDraft(selected.caption || ''); setEditingCap(true); }}
+                          className="text-xs text-brand-400 hover:text-brand-300 px-2 py-1 rounded hover:bg-gray-800 transition-colors">✏️ Sửa</button>
+                      )}
+                      <button onClick={() => navigator.clipboard.writeText(selected.caption)}
+                        className="text-xs text-gray-500 hover:text-white px-2 py-1 rounded hover:bg-gray-800 transition-colors">Copy</button>
+                    </div>
                   </div>
-                  <div className="bg-gray-800/50 rounded-lg p-3">
-                    <p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{selected.caption}</p>
-                  </div>
+                  {editingCap ? (
+                    <div className="space-y-2">
+                      <textarea value={capDraft} onChange={e => setCapDraft(e.target.value)} rows={9}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm text-white whitespace-pre-wrap leading-relaxed focus:outline-none focus:border-brand-500 resize-y" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-gray-500">{capDraft.length} ký tự</span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setEditingCap(false)} disabled={savingCap}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 disabled:opacity-50">Hủy</button>
+                          <button onClick={saveCaption} disabled={savingCap}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-medium disabled:opacity-50">
+                            {savingCap ? '⟳ Đang lưu…' : '💾 Lưu caption'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-800/50 rounded-lg p-3">
+                      <p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{selected.caption}</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* IDs */}
