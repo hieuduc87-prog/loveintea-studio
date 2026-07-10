@@ -212,14 +212,15 @@ export async function renderProject(projectId: string): Promise<void> {
     const voScript = String(project.vo_script || '').trim();
     if (Number(project.use_voiceover) === 1 && voScript) {
       try {
-        const { synthesizeVoice, buildWordTimings } = await import('./tts');
+        const { synthesizeVoiceWithTimings, buildWordTimings } = await import('./tts');
         const voice = (String(project.vo_voice || 'nova')) as 'nova';
-        const buf = await synthesizeVoice(voScript, voice);
+        const { audio, words, engine } = await synthesizeVoiceWithTimings(voScript, voice);
         voFile = path.join(work, 'vo.mp3');
-        fs.writeFileSync(voFile, buf);
+        fs.writeFileSync(voFile, audio);
         const voDur = (await probe(voFile)).duration;
-        voWords = buildWordTimings(voScript, Math.min(voDur, durS) * 1000);
-        log(logs, `voiceover synthesized (${voScript.length} chars, ${voDur.toFixed(1)}s, karaoke ${voWords.length} words, voice=${voice})`);
+        // Ưu tiên timestamps thật từ edge-tts SRT; fallback ước lượng theo duration đo được
+        voWords = words?.length ? words : buildWordTimings(voScript, Math.min(voDur, durS) * 1000);
+        log(logs, `voiceover ${engine} (${voScript.length} chars, ${voDur.toFixed(1)}s, karaoke ${voWords.length} words${words?.length ? ' — real timestamps' : ' — estimated'}, voice=${voice})`);
       } catch (e) { log(logs, `voiceover TTS failed (continuing without): ${e}`); voFile = null; voWords = []; }
     }
 

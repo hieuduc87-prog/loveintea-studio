@@ -226,10 +226,11 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
             {useVoiceover && (
               <select value={voVoice} onChange={e => setVoVoice(e.target.value)}
                 className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-[11px] text-white">
-                <option value="nova">Nova (nữ ấm)</option>
-                <option value="shimmer">Shimmer (nữ nhẹ)</option>
-                <option value="alloy">Alloy (trung tính)</option>
-                <option value="onyx">Onyx (nam trầm)</option>
+                <option value="nova">Jenny (nữ Mỹ ấm — mặc định)</option>
+                <option value="shimmer">Aria (nữ Mỹ nhẹ)</option>
+                <option value="alloy">Michelle (nữ Mỹ)</option>
+                <option value="fable">Sonia (nữ Anh)</option>
+                <option value="onyx">Guy (nam Mỹ trầm)</option>
               </select>
             )}
           </div>

@@ -14,7 +14,9 @@ ENV PORT=3200
 
 # Video Studio: ffmpeg (assembly) + chromium (overlay render) + fonts (VN glyphs)
 # + yt-dlp (Nguồn học: tải video công khai IG/FB/TikTok/YouTube để phân tích)
-RUN apk add --no-cache ffmpeg chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto fontconfig yt-dlp
+# + edge-tts (voiceover FREE Microsoft neural + SRT word timestamps cho karaoke)
+RUN apk add --no-cache ffmpeg chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto fontconfig yt-dlp python3 py3-pip \
+  && pip3 install --no-cache-dir --break-system-packages edge-tts
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 RUN addgroup --system --gid 1001 nodejs
