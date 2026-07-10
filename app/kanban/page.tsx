@@ -228,7 +228,13 @@ export default function KanbanPage() {
   const fmtDur = (ms: number) => ms < 60000 ? `${Math.round(ms/1000)}s` : `${Math.round(ms/60000)}m`;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--bg-2)', minHeight: '100vh' }}>
+    <div className="flex flex-col h-full" style={{
+      // Bảng màu tối SẠCH cho kanban (các biến này trước KHÔNG được định nghĩa →
+      // mọi nền trong suốt, viền vô hình, modal thấy xuyên board). Định nghĩa tại root.
+      '--bg-1': '#16161c', '--bg-2': '#1f1f28', '--bg-3': '#2a2a35',
+      '--border': '#33333f', '--text-1': '#f4f4f6', '--text-2': '#a8a8b6', '--text-3': '#6d6d7a',
+      background: '#0f0f14', minHeight: '100vh',
+    } as React.CSSProperties}>
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-1)' }}>
         <div>
@@ -359,9 +365,9 @@ export default function KanbanPage() {
 
       {/* Modal */}
       {modalCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}
           onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
-          <div className="w-full max-w-lg rounded-xl border overflow-hidden flex flex-col" style={{ backgroundColor: 'var(--bg-1)', borderColor: 'var(--border)', maxHeight: '90vh' }}>
+          <div className="w-full max-w-lg rounded-xl border overflow-hidden flex flex-col" style={{ backgroundColor: 'var(--bg-1)', borderColor: 'var(--border)', maxHeight: '90vh', boxShadow: '0 24px 60px rgba(0,0,0,0.6)' }}>
             <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Edit Card</h2>
