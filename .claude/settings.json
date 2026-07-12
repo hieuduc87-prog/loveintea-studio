@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/inject-brief.sh",
+        "statusMessage": "Nạp PROJECT_BRIEF (ngữ cảnh dự án)" } ] }
+    ]
+  }
+}
