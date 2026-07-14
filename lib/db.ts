@@ -867,6 +867,28 @@ function initSchema(db: Database.Database) {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_bgm_tracks_brand ON bgm_tracks(brand_id)`);
   } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE video_schedules ADD COLUMN bgm_mode TEXT DEFAULT 'auto'`); } catch { /* already exists */ }
+  // ── Recipe Batch workflow (Bazan viral recipe) — lô sản xuất theo quy trình thật:
+  //    SOURCES/RECIPES/<món>/ + SOURCES/PRODUCT-BREWING/ + COLOR GRADING → FINAL VIDEO các version
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS recipe_batches (
+      id         TEXT PRIMARY KEY,
+      brand_id   TEXT NOT NULL DEFAULT 'loveintea',
+      name       TEXT,                      -- vd "AUTO POST 13"
+      grade_json TEXT DEFAULT '{}',         -- bộ thông số color grading cơ bản (per-batch, override per-video)
+      status     TEXT DEFAULT 'active',     -- active | archived
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_recipe_batches_brand ON recipe_batches(brand_id)`);
+  } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_clips ADD COLUMN batch_id TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_clips ADD COLUMN group_name TEXT`); } catch { /* already exists */ } // tên món | __product_brewing
+  try { db.exec(`ALTER TABLE video_clips ADD COLUMN recipe_json TEXT`); } catch { /* already exists */ } // classifier: role/step_label/best_start_s/...
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_video_clips_batch ON video_clips(batch_id)`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN template TEXT DEFAULT 'standard'`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN batch_id TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN dish_name TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN version_label TEXT`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN grade_json TEXT`); } catch { /* already exists */ }
   // ── Unified Job Queue — mọi nút "Tạo" (ảnh/content/carousel/plan/video) ghi 1 job để theo dõi ──
   try {
     db.exec(`CREATE TABLE IF NOT EXISTS jobs (

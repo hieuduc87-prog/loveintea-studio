@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { chunkedUpload } from '@/lib/chunk-upload';
 import { VideoScheduleSection } from './VideoScheduleSection';
 import { BgmLibrarySection, BgmTrack } from './BgmLibrarySection';
+import { RecipeBatchSection } from './RecipeBatchSection';
 
 interface Clip {
   id: string; url: string; duration_s: number; width: number; height: number;
@@ -272,6 +273,9 @@ export function VideoStudioView({ brandId }: { brandId: string }) {
           )}
         </div>
       </div>
+
+      {/* ── Recipe Batch — quy trình AUTO POST (Bazan) ── */}
+      <RecipeBatchSection brandId={brandId} />
 
       {/* ── Kho nhạc nền ── */}
       <BgmLibrarySection brandId={brandId} onTracks={setBgmTracks} />

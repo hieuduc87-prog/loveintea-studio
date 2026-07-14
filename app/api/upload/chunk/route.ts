@@ -103,6 +103,53 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, ...result });
       }
 
+      if (purpose === 'recipe_clip') {
+        // Clip nguồn cho Recipe Batch (Bazan workflow): batchId + groupName (tên món | __product_brewing)
+        const batchId = String(fd.get('batchId') || '');
+        const groupName = String(fd.get('groupName') || '').trim().slice(0, 80);
+        if (!batchId || !groupName) throw new Error('batchId + groupName required');
+        const { getDb } = await import('@/lib/db');
+        const { getBrandId } = await import('@/lib/brand-guard');
+        const db = getDb();
+        const batch = db.prepare('SELECT brand_id FROM recipe_batches WHERE id=?').get(batchId) as { brand_id: string } | undefined;
+        if (!batch) throw new Error('Batch not found');
+        const brandId = getBrandId(req);
+        if (brandId && batch.brand_id !== brandId) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+        const { v4: uuid } = await import('uuid');
+        const { probe } = await import('@/lib/video/ffmpeg');
+        const id = uuid();
+        const filename = `vidclip_${id}${ext}`;
+        const dest = path.join(IMAGES_DIR, filename);
+        fs.mkdirSync(IMAGES_DIR, { recursive: true });
+        fs.renameSync(assembled, dest);
+        let meta = { duration: 0, width: 0, height: 0 };
+        try { meta = await probe(dest); } catch { /* keep zeros */ }
+        const url = `/api/images/${filename}`;
+        db.prepare(`INSERT INTO video_clips (id, brand_id, url, filename, duration_s, width, height, source, status, batch_id, group_name)
+          VALUES (?,?,?,?,?,?,?, 'upload', 'tagging', ?, ?)`)
+          .run(id, batch.brand_id, url, filename, meta.duration, meta.width, meta.height, batchId, groupName);
+        // Phân loại vai trò recipe async — không chặn response
+        const mime = ext === '.mov' ? 'video/quicktime' : ext === '.webm' ? 'video/webm' : 'video/mp4';
+        const isShared = groupName === '__product_brewing'; // = PRODUCT_GROUP (recipe-workflow)
+        void (async () => {
+          try {
+            const { classifyRecipeClip } = await import('@/lib/video/recipe-workflow');
+            const m = await classifyRecipeClip(dest, mime, id);
+            // Clip nhóm product-brewing: ép role về product/brewing nếu classifier trả khác
+            if (m && isShared && !['product', 'brewing'].includes(m.role)) m.role = 'product';
+            db.prepare(`UPDATE video_clips SET recipe_json=?, status='ready' WHERE id=?`)
+              .run(JSON.stringify(m ?? { role: isShared ? 'product' : 'process' }), id);
+          } catch (e) {
+            console.warn('[recipe-clip] classify failed:', String(e).slice(0, 150));
+            try { db.prepare(`UPDATE video_clips SET recipe_json=?, status='ready' WHERE id=?`)
+              .run(JSON.stringify({ role: isShared ? 'product' : 'process' }), id); } catch { /* */ }
+          }
+        })();
+        return NextResponse.json({ ok: true, kind: 'recipe_clip', id, url, status: 'tagging' });
+      }
+
       if (purpose === 'bgm_video') {
         // Stash the video in IMAGES_DIR briefly, extract audio, drop the video.
         const tmpVid = `bgmsrc_${uploadId}${ext}`;

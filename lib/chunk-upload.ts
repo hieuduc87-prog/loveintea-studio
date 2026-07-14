@@ -8,7 +8,7 @@ const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB — safely under the 100MB CF limit
 
 export async function chunkedUpload(
   file: File,
-  purpose: 'product_media' | 'bgm_video',
+  purpose: 'product_media' | 'bgm_video' | 'recipe_clip',
   extra: Record<string, string> = {},
   onProgress?: (pct: number) => void,
 ): Promise<ChunkResult> {

@@ -120,7 +120,9 @@ async function concatWithTransitions(segFiles: string[], durs: number[], out: st
   return acc;
 }
 
-async function renderOverlayFrames(project: OverlayProject, framesDir: string, totalFrames: number) {
+/** Render mọi overlay HTML (có window.SEEK(ms) pure) thành chuỗi PNG alpha.
+ *  Dùng chung cho overlay chuẩn + overlay recipe (render-recipe.ts). */
+export async function renderOverlayFramesHtml(html: string, framesDir: string, totalFrames: number) {
   fs.mkdirSync(framesDir, { recursive: true });
   const { default: puppeteer } = await import('puppeteer-core');
   const browser = await puppeteer.launch({
@@ -132,7 +134,7 @@ async function renderOverlayFrames(project: OverlayProject, framesDir: string, t
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 540, height: 960, deviceScaleFactor: 2 }); // = 1080x1920 px
-    await page.setContent(overlayHtml(project), { waitUntil: 'domcontentloaded' });
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
     for (let i = 0; i < totalFrames; i++) {
       const ms = (i * 1000) / FPS;
       await page.evaluate(m => (window as unknown as { SEEK: (n: number) => void }).SEEK(m), ms);
@@ -151,6 +153,13 @@ export async function renderProject(projectId: string): Promise<void> {
   const logs: string[] = [];
   const project = db.prepare('SELECT * FROM video_projects WHERE id=?').get(projectId) as Record<string, string | number | null> | undefined;
   if (!project) throw new Error('project not found');
+
+  // Template bazan_recipe (Recipe Batch workflow) có renderer riêng: hard cut,
+  // giữ tiếng thật, color grade theo lô, overlay tên món/step captions.
+  if (String(project.template || '') === 'bazan_recipe') {
+    const { renderRecipeProject } = await import('./render-recipe');
+    return renderRecipeProject(projectId);
+  }
 
   const saveLog = (status: string, extra: Record<string, string | null> = {}) => {
     db.prepare(`UPDATE video_projects SET status=?, render_log=?, output_url=COALESCE(?, output_url), error=?, updated_at=datetime('now') WHERE id=?`)
@@ -231,8 +240,8 @@ export async function renderProject(projectId: string): Promise<void> {
     });
     const totalFrames = Math.round(durS * FPS);
     log(logs, `overlay: rendering ${totalFrames} frames…`);
-    await renderOverlayFrames(
-      { durationMs: durS * 1000, hook: board.hook ?? '', ctaText: board.cta_text ?? '', brandName, colors, segments: overlaySegs, voWords },
+    await renderOverlayFramesHtml(
+      overlayHtml({ durationMs: durS * 1000, hook: board.hook ?? '', ctaText: board.cta_text ?? '', brandName, colors, segments: overlaySegs, voWords }),
       path.join(work, 'frames'), totalFrames
     );
 
