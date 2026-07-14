@@ -28,4 +28,5 @@ Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com**
 - Session song song `git add -A` có thể sweep file dở của nhau — check `git show HEAD:file` trước khi hoảng.
 
 ## Cập nhật gần nhất (phiên sau ghi đè, giữ ≤5 dòng)
-- **2026-07-12 [LIT-OPS-0712A]**: Cài cơ chế handoff-phiên (hook inject-brief + PROJECT_BRIEF + luật CLAUDE.md). HEAD trước đó `9eaccd2` (edge-tts + karaoke timestamps thật, LIVE).
+- **2026-07-14 [LIT-VID-0714A]** (`f412707`): **Recipe Batch workflow** — tool AI tự dựng video công thức Bazan theo quy trình AUTO POST thật (lô → clip theo món + product-brewing chung → Gemini phân vai clip → template hook tên món/brand line/step captions/result → render GIỮ TIẾNG THẬT + color grade theo lô → nhiều version). UI trong Video Studio. E2E test clip thật pass (18.2s, QA pass). Chi tiết: `lib/video/recipe-workflow.ts`, `render-recipe.ts`, memory `bazan-recipe-workflow.md`.
+- **2026-07-12 [LIT-OPS-0712A]**: Cơ chế handoff-phiên (hook inject-brief + PROJECT_BRIEF + luật CLAUDE.md).
