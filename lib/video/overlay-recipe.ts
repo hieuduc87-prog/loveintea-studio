@@ -29,7 +29,8 @@ export function recipeOverlayHtml(p: RecipeOverlayProject): string {
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:540px; height:960px; background:transparent; overflow:hidden;
     font-family:'Noto Sans','DejaVu Sans',sans-serif; }
-  .sh { text-shadow:0 2px 10px rgba(0,0,0,.65), 0 0 2px rgba(0,0,0,.5); }
+  /* shadow dày như final gốc — caption trắng vẫn đọc được trên ly sữa trắng */
+  .sh { text-shadow:0 2px 12px rgba(0,0,0,.8), 0 1px 3px rgba(0,0,0,.7), 0 0 1px rgba(0,0,0,.6); }
   #dish { position:absolute; top:225px; left:24px; right:24px; text-align:center; opacity:0; }
   #dish .l1 { font-size:27px; font-weight:600; font-style:italic; color:#fff; letter-spacing:.5px; }
   #dish .l2 { font-size:58px; font-weight:900; font-style:italic; color:#fff; line-height:1.05; margin-top:2px; }

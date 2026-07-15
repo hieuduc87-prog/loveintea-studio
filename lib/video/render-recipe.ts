@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../db';
-import { ffmpeg, probeFull, probe, extractFrames, pixelFrameCheck, frozenCheck, measureLufs, maxBlackSpan, IMAGES_DIR, TMP_DIR } from './ffmpeg';
+import { ffmpeg, run, probeFull, probe, extractFrames, pixelFrameCheck, frozenCheck, measureLufs, maxBlackSpan, IMAGES_DIR, TMP_DIR } from './ffmpeg';
 import { RecipeStoryboard, gradeFilter, GradeParams } from './recipe-workflow';
 import { recipeOverlayHtml } from './overlay-recipe';
 import { renderOverlayFramesHtml } from './render';
@@ -18,6 +18,34 @@ import { renderOverlayFramesHtml } from './render';
 const FPS = 30;
 const W = 1080, H = 1920;
 const LN = 'loudnorm=I=-14:TP=-1.0:LRA=9';
+
+// ── HDR→SDR tonemap ───────────────────────────────────────────────────
+// iPhone quay mặc định HLG 10-bit BT.2020; final của team là SDR BT.709 (CapCut
+// tự tone-map). Không tonemap = màu nhạt/bệt hơn hẳn final gốc (đã đo: chroma
+// final ~3x source decode thô). Cần ffmpeg có libzimg (zscale) — Alpine & Homebrew đều có.
+// npl=130 (không phải 100): đo YAVG khớp final gốc của team (~127-140); npl=100 sáng hơn gốc ~6%
+const TONEMAP_VF =
+  'zscale=t=linear:npl=130,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,' +
+  'zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
+
+let zscaleChecked: boolean | null = null;
+async function hasZscale(): Promise<boolean> {
+  if (zscaleChecked !== null) return zscaleChecked;
+  try {
+    const out = await run('ffmpeg', ['-hide_banner', '-filters']);
+    zscaleChecked = out.includes('zscale');
+  } catch { zscaleChecked = false; }
+  return zscaleChecked;
+}
+
+/** Probe color transfer — HDR nếu HLG (arib-std-b67) hoặc PQ (smpte2084). */
+async function isHdr(file: string): Promise<boolean> {
+  try {
+    const out = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=color_transfer', '-of', 'csv=p=0', file], 30_000);
+    return /arib-std-b67|smpte2084/.test(out);
+  } catch { return false; }
+}
 
 function log(lines: string[], msg: string) {
   lines.push(`[${new Date().toISOString().slice(11, 19)}] ${msg}`);
@@ -64,7 +92,13 @@ export async function renderRecipeProject(projectId: string): Promise<void> {
       const out = path.join(work, `seg_${i}.mp4`);
 
       const meta = await probeFull(input);
-      const vf = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${FPS}` + (gradeVf ? `,${gradeVf}` : '');
+      // HDR (HLG/PQ) → tonemap SDR trước, rồi mới scale + grade — nếu không màu sẽ nhạt hơn final chuẩn
+      let tonemap = '';
+      if (await isHdr(input)) {
+        if (await hasZscale()) { tonemap = `${TONEMAP_VF},`; if (i === 0) log(logs, 'HDR source → tonemap HLG→SDR (zscale+hable)'); }
+        else { tonemap = 'eq=saturation=1.55:contrast=1.10,'; log(logs, `seg${i}: HDR nhưng ffmpeg thiếu zscale — dùng xấp xỉ eq (màu kém chính xác)`); }
+      }
+      const vf = `${tonemap}scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${FPS}` + (gradeVf ? `,${gradeVf}` : '');
       if (meta.hasAudio) {
         await ffmpeg([
           '-ss', start.toFixed(3), '-i', input, '-t', dur.toFixed(3),
@@ -152,6 +186,18 @@ export async function renderRecipeProject(projectId: string): Promise<void> {
       ]);
     }
     log(logs, `composite done (bgm=${hasBgm}, natural audio)`);
+
+    // S6.5 — loudness trim: loudnorm 1-pass thường lệch 1-2 LU so với target.
+    // Final gốc của team đo -13.9 LUFS → chỉnh gain phẳng về -14 (video copy, chỉ re-encode audio).
+    const measured = await measureLufs(final);
+    if (measured != null && Math.abs(measured + 14) > 0.8) {
+      const gain = (-14 - measured).toFixed(2);
+      const trimmed = path.join(work, 'final_ln.mp4');
+      await ffmpeg(['-i', final, '-c:v', 'copy', '-af', `volume=${gain}dB,alimiter=limit=0.891:level=false`,
+        '-c:a', 'aac', '-b:a', '160k', trimmed]);
+      fs.renameSync(trimmed, final);
+      log(logs, `loudness trim ${gain}dB (${measured.toFixed(1)} → -14 LUFS)`);
+    }
 
     // ── S7: QA gates (như renderer chuẩn) ──
     const qaFrames = await extractFrames(final, path.join(work, 'qa'), 6);

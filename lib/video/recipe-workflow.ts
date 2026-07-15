@@ -27,6 +27,7 @@ export interface RecipeClipMeta {
   role: 'hook_final' | 'process' | 'product' | 'brewing' | 'ambience';
   step_label?: string;      // caption nguyên liệu/bước nếu role=process (≤4 từ, thường lowercase)
   best_start_s?: number;    // in-point đẹp nhất để cắt
+  final_drink_s?: number | null; // giây nhìn thấy đồ uống HOÀN CHỈNH (null = không có) — neo hook/result
   movement?: number;        // 0-1 — hook phải có chuyển động từ frame đầu
   quality?: 'high' | 'medium' | 'low';
 }
@@ -113,13 +114,14 @@ Classify this ONE clip and return ONLY JSON:
 {"role":"hook_final|process|product|brewing|ambience",
  "step_label":"short ingredient/action label if role=process, lowercase, max 4 words (e.g. 'chocolate sauce','milk of choice','espresso shot','cocoa powder')",
  "best_start_s":<seconds of the best in-point to cut from — a moment with clear motion>,
+ "final_drink_s":<seconds where the COMPLETELY FINISHED drink is clearly visible, or null if it never is>,
  "movement":<0..1 how much visual motion in the first second from best_start_s>,
  "quality":"high|medium|low"}
-Roles:
-- hook_final: the FINISHED drink beauty shot (garnish, stirring, straw, drips, final glass on table)
-- process: a preparation step (pouring an ingredient, adding ice, mixing, measuring)
+Roles (STRICT):
+- hook_final: ONLY when the clip shows the COMPLETELY FINISHED drink — fully assembled with milk/cream AND topping/garnish, ready to serve (being stirred, garnished, straw in, hero shot). A plain espresso shot, glass of milk, or empty/ice-only glass is NOT hook_final.
+- process: a preparation step (pouring an ingredient, adding ice, mixing, measuring, placing empty glasses)
 - product: coffee bag / packaging showcase
-- brewing: coffee extraction (phin, espresso machine, moka, filter)
+- brewing: coffee extraction (phin, espresso machine, moka, filter, grinder)
 - ambience: anything else (room, hands only, b-roll)`;
 
 /** Phân loại 1 clip theo vai trò trong công thức. Fallback: 3 frame → Vision. */
@@ -207,10 +209,15 @@ export async function buildRecipeStoryboard(opts: {
   ).all(batchId, PRODUCT_GROUP) as ClipRow[]).filter(c => c.duration_s >= 1);
 
   // Phân vai. Tên file IMG_xxxx tăng dần theo thời gian quay = đúng thứ tự bước pha chế.
-  const finals = dishClips.filter(c => meta(c).role === 'hook_final')
-    .sort((a, b) => ((meta(b).movement ?? 0) + qScore(meta(b).quality)) - ((meta(a).movement ?? 0) + qScore(meta(a).quality)));
-  const steps = dishClips.filter(c => meta(c).role === 'process');
-  const others = dishClips.filter(c => !['hook_final', 'process'].includes(meta(c).role));
+  // Clip "thành phẩm" = role hook_final HOẶC classifier thấy đồ uống hoàn chỉnh (final_drink_s).
+  const isFinal = (c: ClipRow) => { const m = meta(c); return m.role === 'hook_final' || typeof m.final_drink_s === 'number'; };
+  const finals = dishClips.filter(isFinal)
+    .sort((a, b) => {
+      const score = (c: ClipRow) => { const m = meta(c); return (m.role === 'hook_final' ? 1 : 0) + (typeof m.final_drink_s === 'number' ? 1 : 0) + (m.movement ?? 0) + qScore(m.quality); };
+      return score(b) - score(a);
+    });
+  const steps = dishClips.filter(c => meta(c).role === 'process' && !isFinal(c));
+  const others = dishClips.filter(c => !isFinal(c) && meta(c).role !== 'process');
   // Không có shot thành phẩm rõ → dùng clip dài nhất làm hook (đoạn cuối thường là thành phẩm)
   if (!finals.length) {
     const longest = [...dishClips].sort((a, b) => b.duration_s - a.duration_s)[0];
@@ -224,37 +231,62 @@ export async function buildRecipeStoryboard(opts: {
   const productPool = sharedClips.length ? sharedClips : others;
   const productClip = productPool.length ? productPool[version % productPool.length] : null;
 
-  // Bước pha chế: giữ thứ tự quay; version lẻ đảo lựa chọn khi thừa bước
-  const MAX_STEPS = 5;
+  // Bước pha chế: final gốc ưu tiên bước NGUYÊN LIỆU (rót/đổ/rắc) — bước "đặt ly/xếp đồ"
+  // chỉ là B-roll, giữ tối đa 1-2 cảnh. Sau khi chọn, trả về đúng thứ tự quay.
+  const MAX_STEPS = 6;
+  const isPlacing = (t?: string) => /^(place|placing|position|arrange|set)\b/i.test(t ?? '');
   let chosenSteps = steps;
   if (steps.length > MAX_STEPS) {
-    // cửa sổ trượt theo version — mỗi version dùng nhóm bước hơi khác nhau
-    const skip = version % (steps.length - MAX_STEPS + 1);
-    chosenSteps = steps.slice(skip, skip + MAX_STEPS);
+    const ranked = [...steps].sort((a, b) => {
+      const pa = Number(isPlacing(meta(a).step_label)), pb = Number(isPlacing(meta(b).step_label));
+      if (pa !== pb) return pa - pb; // nguyên liệu trước, "đặt/xếp" sau
+      return (meta(b).movement ?? 0) - (meta(a).movement ?? 0);
+    });
+    // version xoay điểm bắt đầu trong nhóm đã xếp hạng → mỗi bản dựng khác nhau chút
+    const offset = version % Math.max(1, ranked.length - MAX_STEPS + 1);
+    const kept = new Set(ranked.slice(offset, offset + MAX_STEPS).map(c => c.id));
+    chosenSteps = steps.filter(c => kept.has(c.id));
   }
 
-  // ── Timeline ──
+  // ── Timeline (nhịp đo từ final gốc: hook ~4.8s → bước đầu thong thả →
+  //    shot sản phẩm chèn GIỮA các bước → chuỗi bước CẮT NHANH ~1s → result ~3s) ──
   const segments: RecipeSegment[] = [];
-  const hookDur = Math.min(3.5, Math.max(2.2, hookClip.duration_s - 0.2));
-  segments.push({ clip_id: hookClip.id, start_s: inPoint(hookClip, meta(hookClip), hookDur), dur_s: round1(hookDur), role: 'hook_final' });
+  const hookDur = Math.min(5.0, Math.max(3.2, hookClip.duration_s - 0.2));
+  // Neo hook vào lúc đồ uống hoàn chỉnh xuất hiện (final_drink_s) nếu classifier thấy
+  const hm = meta(hookClip);
+  const hookStart = typeof hm.final_drink_s === 'number'
+    ? Math.max(0, Math.min(hm.final_drink_s, hookClip.duration_s - hookDur - 0.1))
+    : inPoint(hookClip, hm, hookDur);
+  segments.push({ clip_id: hookClip.id, start_s: round1(hookStart), dur_s: round1(hookDur), role: 'hook_final' });
 
-  if (productClip) {
-    const d = Math.min(2.4, Math.max(1.4, productClip.duration_s - 0.1));
-    segments.push({ clip_id: productClip.id, start_s: inPoint(productClip, meta(productClip), d), dur_s: round1(d), role: meta(productClip).role === 'brewing' ? 'brewing' : 'product' });
-  }
-
-  for (const s of chosenSteps) {
+  const n = chosenSteps.length;
+  const baseStep = n ? Math.min(1.8, Math.max(0.9, 6.0 / n)) : 0;
+  const stepSegs: RecipeSegment[] = chosenSteps.map((s, idx) => {
     const m = meta(s);
-    const d = Math.min(2.2, Math.max(1.2, s.duration_s - 0.2));
-    segments.push({ clip_id: s.id, start_s: inPoint(s, m, d), dur_s: round1(d), role: 'process', text: m.step_label || undefined });
+    // bước đầu dài hơn ~1.5x (nhịp gốc), các bước sau cắt nhanh
+    const want = idx === 0 ? Math.min(2.6, baseStep * 1.5) : baseStep;
+    const d = Math.min(want, Math.max(0.8, s.duration_s - 0.15));
+    return { clip_id: s.id, start_s: inPoint(s, m, d), dur_s: round1(d), role: 'process' as const, text: m.step_label || undefined };
+  });
+
+  let productSeg: RecipeSegment | null = null;
+  if (productClip) {
+    const d = Math.min(2.0, Math.max(1.4, productClip.duration_s - 0.1));
+    productSeg = { clip_id: productClip.id, start_s: inPoint(productClip, meta(productClip), d), dur_s: round1(d), role: meta(productClip).role === 'brewing' ? 'brewing' : 'product' };
   }
 
-  // Result: nếu trùng clip hook thì lấy đoạn sau (không lặp cùng khoảnh khắc)
-  const resDur = Math.min(3.6, Math.max(2.0, resultClip.duration_s - 0.2));
+  // Chèn shot sản phẩm SAU 1-2 bước đầu (đúng vị trí trong final gốc), không phải ngay sau hook
+  const insertAt = Math.min(stepSegs.length, stepSegs.length >= 3 ? 2 : 1);
+  segments.push(...stepSegs.slice(0, insertAt));
+  if (productSeg) segments.push(productSeg);
+  segments.push(...stepSegs.slice(insertAt));
+
+  // Result: clip thành phẩm thường CHỐT đẹp ở CUỐI (rắc topping xong, ly hoàn thiện)
+  // → clip dài thì lấy đoạn cuối; nếu trùng clip hook thì càng phải tránh lặp khoảnh khắc đầu.
+  const resDur = Math.min(3.4, Math.max(2.6, resultClip.duration_s - 0.2));
   let resStart = inPoint(resultClip, meta(resultClip), resDur);
-  if (resultClip.id === hookClip.id) {
-    resStart = Math.min(Math.max(resStart + hookDur, 0), Math.max(0, resultClip.duration_s - resDur - 0.1));
-  }
+  const endStart = Math.max(0, resultClip.duration_s - resDur - 0.3);
+  if (resultClip.duration_s > resDur * 2 || resultClip.id === hookClip.id) resStart = endStart;
   segments.push({ clip_id: resultClip.id, start_s: round1(resStart), dur_s: round1(resDur), role: 'result' });
 
   // ── Text (Gemini): tách tên món 2 dòng + brand line + polish step captions ──
@@ -277,28 +309,35 @@ Return ONLY JSON:
  "brand_line1":"brand hook line 1, max 4 words (e.g. 'Vietnamese coffee')",
  "brand_line2":"brand hook line 2 accent, max 4 words (e.g. 'super super bold')",
  "steps":["polished caption per step, SAME order & count as given, lowercase, max 4 words each; keep ingredient names; empty string if the given caption is empty"]}
-Rules: dish_line1+dish_line2 must together read as the dish name (split naturally, line2 = the most appetizing word). Do NOT invent steps.`);
+Rules: dish_line1+dish_line2 must together read as the dish name (split naturally, line2 = the most appetizing word). Dish lines use natural Title Case (e.g. "Choco Chips" / "Mocha") — NEVER ALL CAPS. Do NOT invent steps.`);
   } catch (e) {
     console.warn('[recipe-board] text generation failed, using fallbacks:', String(e).slice(0, 120));
   }
 
-  // Fallback tách tên món: từ cuối làm dòng 2
-  const words = dishName.split(/\s+/);
+  // Fallback tách tên món: từ cuối làm dòng 2. Folder thường viết HOA → Title Case cho giống final gốc.
+  const titleCase = (s: string) => s === s.toUpperCase()
+    ? s.toLowerCase().replace(/(^|[\s-])\p{L}/gu, c => c.toUpperCase())
+    : s;
+  const words = titleCase(dishName).split(/\s+/);
   const fallback1 = words.slice(0, Math.max(1, words.length - 1)).join(' ');
   const fallback2 = words.length > 1 ? words[words.length - 1] : words[0];
   const polished = Array.isArray(text.steps) ? text.steps : [];
   let pi = 0;
+  let prevText = '';
   for (const s of segments) {
     if (s.role !== 'process') continue;
     const p = polished[pi++];
     if (typeof p === 'string' && p.trim()) s.text = p.trim().slice(0, 40);
+    // 2 bước liên tiếp cùng caption → chỉ hiện 1 lần (final gốc không lặp chữ)
+    if (s.text && s.text.toLowerCase() === prevText) s.text = undefined;
+    else prevText = (s.text ?? '').toLowerCase();
   }
 
   return {
     template: 'bazan_recipe',
-    title: dishName,
-    dish_line1: (text.dish_line1 || fallback1).slice(0, 30),
-    dish_line2: (text.dish_line2 || fallback2).slice(0, 24),
+    title: titleCase(dishName),
+    dish_line1: titleCase(text.dish_line1 || fallback1).slice(0, 30),
+    dish_line2: titleCase(text.dish_line2 || fallback2).slice(0, 24),
     brand_line1: (text.brand_line1 || '').slice(0, 30) || undefined,
     brand_line2: (text.brand_line2 || '').slice(0, 30) || undefined,
     segments,
