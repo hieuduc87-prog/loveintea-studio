@@ -308,6 +308,9 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
         </Card>
       </Section>
 
+      {/* Font chữ thương hiệu — dùng khi render "Chữ lên ảnh" (card ce0d8091) */}
+      <BrandFontsSection brandId={bid} />
+
       {/* Voice Traits */}
       {voiceTraits.length > 0 && (
         <Section title="Voice Traits (NON-NEGOTIABLE)">
@@ -470,5 +473,82 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
       </Section>
       </>)}
     </div>
+  );
+}
+
+/** Font chữ thương hiệu (card ce0d8091): upload .ttf/.otf/.woff/.woff2 cho Headline
+ *  và Subtext — render "Chữ lên ảnh" sẽ tự dùng đúng font đã upload. */
+function BrandFontsSection({ brandId }: { brandId: string }) {
+  type FontInfo = { filename: string; original_name: string; created_at: string };
+  const [fonts, setFonts] = useState<{ headline?: FontInfo; sub?: FontInfo }>({});
+  const [busy, setBusy] = useState<'headline' | 'sub' | null>(null);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    fetch(`/api/brand/fonts?brand=${brandId}`).then(r => r.json())
+      .then(d => setFonts(d.fonts || {}))
+      .catch(() => { /* */ });
+  }, [brandId]);
+
+  async function upload(role: 'headline' | 'sub', file: File) {
+    setBusy(role); setMsg('');
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('role', role);
+    const r = await fetch(`/api/brand/fonts?brand=${brandId}`, { method: 'POST', body: fd });
+    const d = await r.json() as { ok?: boolean; error?: string; filename?: string; original_name?: string };
+    if (d.ok) {
+      setFonts(prev => ({ ...prev, [role]: { filename: d.filename!, original_name: d.original_name || file.name, created_at: new Date().toISOString() } }));
+      setMsg(`✓ Đã lưu font ${role === 'headline' ? 'Headline' : 'Subtext'} — ảnh chữ mới sẽ dùng font này`);
+    } else setMsg(`✗ ${d.error || 'Upload thất bại'}`);
+    setBusy(null);
+  }
+
+  async function remove(role: 'headline' | 'sub') {
+    setBusy(role); setMsg('');
+    await fetch(`/api/brand/fonts?brand=${brandId}&role=${role}`, { method: 'DELETE' });
+    setFonts(prev => { const n = { ...prev }; delete n[role]; return n; });
+    setMsg('✓ Đã xoá — quay về font mặc định (Be Vietnam Pro)');
+    setBusy(null);
+  }
+
+  const rows: Array<{ role: 'headline' | 'sub'; label: string; desc: string }> = [
+    { role: 'headline', label: 'Font Headline', desc: 'Tiêu đề lớn trên ảnh' },
+    { role: 'sub', label: 'Font Subtext', desc: 'Chữ phụ, mô tả, bullet, CTA' },
+  ];
+
+  return (
+    <Section title="Font chữ thương hiệu (Chữ lên ảnh)">
+      <Card>
+        <p className="text-xs text-gray-400 mb-3">Cố định font khi AI chèn chữ lên ảnh. Hỗ trợ .ttf .otf .woff .woff2 — chưa upload thì dùng font mặc định (Be Vietnam Pro).</p>
+        <div className="grid md:grid-cols-2 gap-3">
+          {rows.map(({ role, label, desc }) => (
+            <div key={role} className="bg-gray-800/60 border border-gray-700 rounded-lg p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm text-white font-medium">{label}</p>
+                  <p className="text-[11px] text-gray-500">{desc}</p>
+                </div>
+                {fonts[role] && (
+                  <button onClick={() => remove(role)} disabled={busy === role}
+                    className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">Xoá</button>
+                )}
+              </div>
+              <p className="text-xs mt-2 truncate">
+                {fonts[role]
+                  ? <span className="text-green-400">✓ {fonts[role]!.original_name || fonts[role]!.filename}</span>
+                  : <span className="text-gray-500">Chưa upload — dùng mặc định</span>}
+              </p>
+              <label className={`mt-2 inline-block px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors ${busy === role ? 'bg-gray-700 text-gray-400' : 'bg-brand-600 hover:bg-brand-700 text-white'}`}>
+                {busy === role ? '⟳ Đang tải…' : fonts[role] ? 'Thay font' : '⬆ Upload font'}
+                <input type="file" accept=".ttf,.otf,.woff,.woff2" className="hidden" disabled={busy === role}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) upload(role, f); e.target.value = ''; }} />
+              </label>
+            </div>
+          ))}
+        </div>
+        {msg && <p className={`text-xs mt-3 ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</p>}
+      </Card>
+    </Section>
   );
 }

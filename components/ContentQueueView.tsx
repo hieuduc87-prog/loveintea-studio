@@ -57,7 +57,7 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
   const [toFb, setToFb] = useState(true);
   const [toIg, setToIg] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [pubResult, setPubResult] = useState<{ fb?: { ok: boolean; postId?: string; error?: string }; ig?: { ok: boolean; postId?: string; error?: string } } | null>(null);
+  const [pubResult, setPubResult] = useState<{ fb?: { ok: boolean; postId?: string; deferred?: boolean; error?: string }; ig?: { ok: boolean; postId?: string; deferred?: boolean; error?: string } } | null>(null);
   const [pubError, setPubError] = useState('');
 
   // Sửa caption ngay trong queue (card #1) — quan trọng khi Review Desk chặn banned claim.
@@ -139,6 +139,7 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
           caption: post.caption,
           imageUrls: postImages(post),
           brandId,
+          postId: post.id,
           platforms: [...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])],
           // datetime-local input is browser-local time — convert to ISO UTC
           // so the server (UTC container) schedules at the intended moment
@@ -150,18 +151,20 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
       else {
         setPubResult(d);
         const newStatus = scheduledAt ? 'scheduled' : 'published';
-        const fbPostId = d?.fb?.postId ?? '';
-        // Persist to DB
+        // Persist to DB — save BOTH platform post ids so the background
+        // scheduler / metrics sync never re-publishes (IG rejects duplicates)
+        const patch: Record<string, unknown> = {
+          status: newStatus,
+          platforms: [...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])].join(','),
+          published_at: newStatus === 'published' ? new Date().toISOString() : null,
+          scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+        };
+        if (d?.fb?.ok && d.fb.postId) patch.fb_post_id = d.fb.postId;
+        if (d?.ig?.ok && d.ig.postId) patch.ig_post_id = d.ig.postId;
         await fetch(`/api/posts/${post.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: newStatus,
-            fb_post_id: fbPostId,
-            platforms: [...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])].join(','),
-            published_at: newStatus === 'published' ? new Date().toISOString() : null,
-            scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-          }),
+          body: JSON.stringify(patch),
         });
         setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: newStatus } : p));
         setSelected(prev => prev?.id === post.id ? { ...prev, status: newStatus } : prev);
@@ -366,12 +369,12 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
                       <div className="space-y-2">
                         {pubResult.fb && (
                           <div className={`flex items-center gap-2 p-2 rounded-lg text-xs ${pubResult.fb.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
-                            {pubResult.fb.ok ? '✅' : '❌'} FB: {pubResult.fb.ok ? `Post ID ${pubResult.fb.postId}` : pubResult.fb.error}
+                            {pubResult.fb.ok ? '✅' : '❌'} FB: {pubResult.fb.ok ? (pubResult.fb.deferred ? '🗓 Đã lên lịch — hệ thống tự đăng đúng giờ' : `Post ID ${pubResult.fb.postId}`) : pubResult.fb.error}
                           </div>
                         )}
                         {pubResult.ig && (
                           <div className={`flex items-center gap-2 p-2 rounded-lg text-xs ${pubResult.ig.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
-                            {pubResult.ig.ok ? '✅' : '❌'} IG: {pubResult.ig.ok ? `Post ID ${pubResult.ig.postId}` : pubResult.ig.error}
+                            {pubResult.ig.ok ? '✅' : '❌'} IG: {pubResult.ig.ok ? (pubResult.ig.deferred ? '🗓 Đã lên lịch — hệ thống tự đăng đúng giờ' : `Post ID ${pubResult.ig.postId}`) : pubResult.ig.error}
                           </div>
                         )}
                       </div>

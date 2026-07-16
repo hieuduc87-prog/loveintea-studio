@@ -64,7 +64,7 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
   const [toFb, setToFb]           = useState(true);
   const [toIg, setToIg]           = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [pubResult, setPubResult] = useState<{ fb?: { ok: boolean; postId?: string; error?: string }; ig?: { ok: boolean; postId?: string; error?: string } } | null>(null);
+  const [pubResult, setPubResult] = useState<{ fb?: { ok: boolean; postId?: string; deferred?: boolean; error?: string }; ig?: { ok: boolean; postId?: string; deferred?: boolean; error?: string } } | null>(null);
   const [pubError, setPubError]   = useState('');
 
   const load = useCallback(async () => {
@@ -89,13 +89,16 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
     setToFb(true); setToIg(false);
   }
 
-  async function saveSchedule() {
+  async function saveSchedule(platforms?: string) {
     if (!selected || !editTime) return;
     setSaving(true); setSaveMsg('');
     const r = await fetch(`/api/posts/${selected.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scheduled_at: new Date(editTime).toISOString(), status: 'scheduled' }),
+      body: JSON.stringify({
+        scheduled_at: new Date(editTime).toISOString(), status: 'scheduled',
+        ...(platforms ? { platforms } : {}),
+      }),
     });
     if (r.ok) {
       setPosts(prev => prev.map(p => p.id === selected.id ? { ...p, scheduled_at: new Date(editTime).toISOString(), status: 'scheduled' } : p));
@@ -149,13 +152,18 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
         body: JSON.stringify({
           caption: selected.caption,
           imageUrls: selected.image_url ? [selected.image_url] : [],
+          postId: selected.id,
           platforms: [...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])],
-          scheduledAt: editTime,
+          // datetime-local is browser-local — convert to ISO UTC for the UTC container
+          scheduledAt: new Date(editTime).toISOString(),
         }),
       });
       const d = await r.json() as typeof pubResult & { error?: string };
       if (d?.error) setPubError(d.error);
-      else { setPubResult(d); await saveSchedule(); }
+      else {
+        setPubResult(d);
+        await saveSchedule([...(toFb ? ['facebook'] : []), ...(toIg ? ['instagram'] : [])].join(','));
+      }
     } catch (e) { setPubError(String(e)); }
     finally { setPublishing(false); }
   }
@@ -375,12 +383,12 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
                       <div className="space-y-1">
                         {pubResult.fb && (
                           <p className={`text-xs p-2 rounded-lg ${pubResult.fb.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
-                            {pubResult.fb.ok ? `✅ FB: ${pubResult.fb.postId}` : `❌ FB: ${pubResult.fb.error}`}
+                            {pubResult.fb.ok ? `✅ FB: ${pubResult.fb.deferred ? '🗓 đã lên lịch — tự đăng đúng giờ' : pubResult.fb.postId}` : `❌ FB: ${pubResult.fb.error}`}
                           </p>
                         )}
                         {pubResult.ig && (
                           <p className={`text-xs p-2 rounded-lg ${pubResult.ig.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
-                            {pubResult.ig.ok ? `✅ IG: ${pubResult.ig.postId}` : `❌ IG: ${pubResult.ig.error}`}
+                            {pubResult.ig.ok ? `✅ IG: ${pubResult.ig.deferred ? '🗓 đã lên lịch — tự đăng đúng giờ' : pubResult.ig.postId}` : `❌ IG: ${pubResult.ig.error}`}
                           </p>
                         )}
                       </div>
@@ -398,7 +406,7 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
                     </div>
 
                     {editTime && (
-                      <button onClick={saveSchedule} disabled={saving}
+                      <button onClick={() => saveSchedule()} disabled={saving}
                         className="w-full py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-xs font-medium transition-colors">
                         {saving ? '⟳ Saving…' : '💾 Save time only (no publish yet)'}
                       </button>

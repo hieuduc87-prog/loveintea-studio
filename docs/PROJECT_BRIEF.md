@@ -28,6 +28,7 @@ Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com**
 - Session song song `git add -A` có thể sweep file dở của nhau — check `git show HEAD:file` trước khi hoảng.
 
 ## Cập nhật gần nhất (phiên sau ghi đè, giữ ≤5 dòng)
+- **2026-07-16 [LIT-FIX-0716A]**: Fix 4 kanban card: (1) schedule bài → defer CẢ FB+IG cho scheduler (hết "IG Post ID undefined" + hết duplicate khi bấm lại; lưu ig_post_id sau publish ngay); (2) banned claim match whole-word (liver ≠ delivers); (3) ghi chú "ko kèm vỏ hộp" thắng role slide khi gen ảnh template; (4) upload font brand headline/sub (bảng brand_fonts + /api/brand/fonts + Brand DNA UI + @font-face render).
 - **2026-07-15 [LIT-VID-0715A]** (`32ff99d`): Recipe render **đạt chuẩn final gốc** sau 4 vòng audit→fix trên clip Bazan thật: tonemap **HDR HLG→SDR** (npl=130 — thiếu là màu bệt), nhịp final gốc (hook 5s/bước ~1s/product giữa bước/result cuối clip), classifier siết hook_final + `final_drink_s`, ưu tiên bước nguyên liệu, loudness 2-pass -14 LUFS. Verified YAVG/SAT/LUFS khớp gốc. Memory: `bazan-recipe-workflow.md`.
 - **2026-07-14 [LIT-VID-0714A]** (`f412707`): **Recipe Batch workflow** — lô → Gemini phân vai clip → template Bazan → render tiếng thật + grade → nhiều version. UI trong Video Studio.
 - **2026-07-12 [LIT-OPS-0712A]**: Cơ chế handoff-phiên (hook inject-brief + PROJECT_BRIEF + luật CLAUDE.md).

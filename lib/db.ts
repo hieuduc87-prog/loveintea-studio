@@ -96,6 +96,17 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_overlay_ref_brand_layout ON overlay_references(brand_id, layout);
 
+    -- Font chữ thương hiệu cho "Chữ lên ảnh" (card ce0d8091): mỗi brand cố định
+    -- 1 font cho Headline + 1 font cho Subtext. File nằm data/fonts/<brand_id>/.
+    CREATE TABLE IF NOT EXISTS brand_fonts (
+      brand_id      TEXT NOT NULL DEFAULT 'loveintea',
+      role          TEXT NOT NULL,             -- headline | sub
+      filename      TEXT NOT NULL,             -- tên file trong data/fonts/<brand_id>/
+      original_name TEXT DEFAULT '',
+      created_at    TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (brand_id, role)
+    );
+
     -- ─────────────────────────────────────────────
     -- POSTS — content queue (caption + image pairs)
     -- ─────────────────────────────────────────────

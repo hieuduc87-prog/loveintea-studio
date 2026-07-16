@@ -53,12 +53,19 @@ const bullets = (s = '') => s.split(/\s*[|•\n]\s*/).map(x => x.trim()).filter(
  * Full self-contained HTML page (1080x1350 @2x from 540x675 viewport).
  * imageSrc = data: URI of the base photo (embedded so Puppeteer needs no network).
  */
+/** Font brand đã nhúng data: URI (card ce0d8091) — Puppeteer không cần network. */
+export interface OverlayFonts {
+  headline?: { dataUri: string; format: string };  // format: truetype|opentype|woff|woff2
+  sub?: { dataUri: string; format: string };
+}
+
 export function overlayImageHtml(opts: {
   imageSrc: string;
   layout: OverlayLayout;
   fields: OverlayFields;
   colors?: OverlayColors;
   brandName?: string;
+  fonts?: OverlayFonts;
 }): string {
   const c = opts.colors || DEFAULT_COLORS;
   const f = opts.fields;
@@ -117,14 +124,26 @@ export function overlayImageHtml(opts: {
         </div>`;
   }
 
+  // Font brand upload (nếu có) đứng ĐẦU fallback chain — headline riêng, subtext riêng
+  const fHead = opts.fonts?.headline;
+  const fSub = opts.fonts?.sub;
+  const fontFaces = [
+    fHead ? `@font-face { font-family:'BrandHeadline'; src:url('${fHead.dataUri}') format('${fHead.format}'); font-display:block; }` : '',
+    fSub ? `@font-face { font-family:'BrandSub'; src:url('${fSub.dataUri}') format('${fSub.format}'); font-display:block; }` : '',
+  ].filter(Boolean).join('\n');
+  const headFamily = `${fHead ? "'BrandHeadline'," : ''}'Be Vietnam Pro','Noto Sans',system-ui,sans-serif`;
+  const subFamily = `${fSub ? "'BrandSub'," : ''}'Be Vietnam Pro','Noto Sans',system-ui,sans-serif`;
+
   return `<!doctype html><html><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
+  ${fontFaces}
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:540px; height:675px; overflow:hidden; }
   .stage { position:relative; width:540px; height:675px;
-    font-family:'Be Vietnam Pro','Noto Sans',system-ui,sans-serif; color:#fff; }
+    font-family:${subFamily}; color:#fff; }
+  .h { font-family:${headFamily}; }
   .stage img.bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .scrim-bottom { position:absolute; inset:0; background:linear-gradient(180deg, transparent 42%, rgba(0,0,0,0.28) 62%, rgba(0,0,0,0.82) 100%); }
   .scrim-full { position:absolute; inset:0; background:rgba(0,0,0,0.42); }

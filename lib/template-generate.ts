@@ -106,6 +106,13 @@ export async function generateTemplateImages(opts: {
   const paletteMood = [analysis.colors?.palette?.join(', '), analysis.colors?.mood].filter(Boolean).join(' / ');
   const styleBits = [styleKw, analysisKw, tpl.color_palette, paletteMood].filter(Boolean).join('. ');
 
+  // Card 49186625: ý định BAO BÌ trong ghi chú người dùng thắng vai trò slide
+  // ("ko kèm vỏ hộp" mà ảnh vẫn ra hộp vì role=product ép bao bì). So khớp
+  // không dấu để bắt cả "khong kem vo hop" / "ko có hộp" / "no box".
+  const normNote = (customPrompt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const noteNoPack = /(khong|ko)[^.;,]{0,24}(vo\s*hop|hop|bao\s*bi|box|packaging)|\b(no|without)\s+(the\s+)?(box|packaging)\b|ingredients?\s*only|chi\s+(co\s+)?nguyen\s*lieu/.test(normNote);
+  const noteWithPack = !noteNoPack && /(kem|co|hien|show|with)\s+(vo\s*hop|hop|bao\s*bi|box|packaging)/.test(normNote);
+
   const images: string[] = [];
   const warnings: string[] = [];
 
@@ -119,7 +126,8 @@ export async function generateTemplateImages(opts: {
     // - Slide vai trò SẢN PHẨM (product/cta/hero/packaging) → base = ảnh REF Loveintea, ép ĐÚNG bao bì vào bố cục slide.
     // - Slide vai trò NGUYÊN LIỆU/hook/benefit/how_to/proof → base = ảnh template slide (giữ bố cục),
     //   CHỈ hiện nguyên liệu của sản phẩm, TUYỆT ĐỐI không hộp/bao bì → carousel cân bằng nguyên liệu ↔ sản phẩm.
-    const showProduct = Boolean(productId) && slideShowsProduct(role);
+    const showProduct = noteNoPack ? false
+      : Boolean(productId) && (noteWithPack || slideShowsProduct(role));
     const base = showProduct
       ? (refPath || packshotPath || tplSlidePath)
       : (tplSlidePath || refPath || packshotPath);

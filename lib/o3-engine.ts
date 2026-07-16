@@ -324,10 +324,11 @@ export function reviewContent(caption: string, brandId: string): ReviewResult {
     dedup: { passed: true, issues: [] as string[] },
   };
 
-  // Gate 1: FDA claim safety
-  const lowerCaption = caption.toLowerCase();
+  // Gate 1: FDA claim safety — match whole words only, so "liver" doesn't
+  // flag "delivers" and "cures" doesn't flag "securest"
   for (const claim of BANNED_CLAIMS) {
-    if (lowerCaption.includes(claim)) {
+    const re = new RegExp(`\\b${claim.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    if (re.test(caption)) {
       gates.claimSafety.passed = false;
       gates.claimSafety.issues.push(`Contains banned claim: "${claim}"`);
     }

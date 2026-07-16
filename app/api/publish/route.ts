@@ -5,11 +5,12 @@ import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   try {
-    const { caption, imageUrls, platforms, scheduledAt } = await req.json() as {
+    const { caption, imageUrls, platforms, scheduledAt, postId } = await req.json() as {
       caption: string;
       imageUrls: string[];
       platforms: string[];
       scheduledAt?: string;
+      postId?: string;
     };
     // Brand from the trusted header — never body.brandId (would let a tenant
     // publish to another store's / the built-in Loveintea Page).
@@ -21,10 +22,19 @@ export async function POST(req: NextRequest) {
     const schedDate = scheduledAt ? new Date(scheduledAt) : undefined;
 
     if (platforms?.includes('facebook')) {
-      result.fb = await postToFacebook({ caption, imageUrls, scheduledAt: schedDate, brandId });
+      if (schedDate && postId) {
+        // Post row exists — defer to the background scheduler so re-clicking
+        // Schedule never creates duplicate FB-native scheduled posts.
+        result.fb = { ok: true, deferred: true };
+      } else {
+        result.fb = await postToFacebook({ caption, imageUrls, scheduledAt: schedDate, brandId });
+      }
     }
     if (platforms?.includes('instagram')) {
-      if (schedDate) {
+      if (schedDate && !postId) {
+        // No post row → the background scheduler has nothing to pick up.
+        result.ig = { ok: false, error: 'IG không hỗ trợ lên lịch trực tiếp — hãy tạo bài trong Review & Queue để hệ thống tự đăng đúng giờ' };
+      } else if (schedDate) {
         // IG doesn't support scheduling via Graph API — the background
         // scheduler (lib/scheduler.ts) publishes it when scheduled_at is due.
         result.ig = { ok: true, deferred: true };

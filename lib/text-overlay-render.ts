@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
-import { overlayImageHtml, DEFAULT_COLORS, OverlayColors, OverlayLayout, OverlayFields } from '@/lib/text-overlay';
+import { overlayImageHtml, DEFAULT_COLORS, OverlayColors, OverlayLayout, OverlayFields, OverlayFonts } from '@/lib/text-overlay';
 
 // Server-only render helper cho "Chữ lên ảnh" — dùng chung giữa route render tay
 // và route auto (tự động từ ảnh mẫu). Puppeteer + fs, KHÔNG import ở client.
@@ -52,6 +52,27 @@ export function brandColors(brandId: string): OverlayColors {
   } catch { return DEFAULT_COLORS; }
 }
 
+/** Font brand đã upload (card ce0d8091) → data: URI cho @font-face trong Puppeteer. */
+export function brandFonts(brandId: string): OverlayFonts {
+  const FORMAT: Record<string, string> = { ttf: 'truetype', otf: 'opentype', woff: 'woff', woff2: 'woff2' };
+  const fonts: OverlayFonts = {};
+  try {
+    const rows = getDb().prepare('SELECT role, filename FROM brand_fonts WHERE brand_id=?')
+      .all(brandId) as Array<{ role: string; filename: string }>;
+    for (const r of rows) {
+      const fp = path.join(DATA_DIR, 'fonts', brandId.replace(/[^a-z0-9_-]/gi, ''), r.filename);
+      if (!fs.existsSync(fp)) continue;
+      const ext = path.extname(fp).slice(1).toLowerCase();
+      const format = FORMAT[ext];
+      if (!format) continue;
+      const dataUri = `data:font/${ext};base64,${fs.readFileSync(fp).toString('base64')}`;
+      if (r.role === 'headline') fonts.headline = { dataUri, format };
+      if (r.role === 'sub') fonts.sub = { dataUri, format };
+    }
+  } catch { /* fonts best-effort — thiếu bảng/file thì dùng font mặc định */ }
+  return fonts;
+}
+
 async function renderHtmlToPng(html: string): Promise<Buffer> {
   const { default: puppeteer } = await import('puppeteer-core');
   const browser = await puppeteer.launch({
@@ -78,6 +99,7 @@ export async function renderOverlayToUrl(opts: {
   const html = overlayImageHtml({
     imageSrc, layout: opts.layout, fields: opts.fields,
     colors: brandColors(opts.brandId), brandName: opts.brandName,
+    fonts: brandFonts(opts.brandId),
   });
   const png = await renderHtmlToPng(html);
   fs.mkdirSync(IMAGES_DIR, { recursive: true });
