@@ -9,16 +9,24 @@ import { overlayImageHtml, DEFAULT_COLORS, OverlayColors, OverlayLayout, Overlay
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const IMAGES_DIR = path.join(DATA_DIR, 'images');
 
-/** Resolve a base image reference into a data: URI (embedded — no network in Puppeteer). */
-export function toDataUri(baseImageUrl: string): string {
+/** Resolve a base image reference into a data: URI (embedded — no network in Puppeteer).
+ *  Ảnh lớn (bản _4x ~10MB) được sharp thu về ≤1080px trước khi nhúng — data URI
+ *  khổng lồ làm Chromium trong container chết "Target closed" (card 80981061). */
+export async function toDataUri(baseImageUrl: string): Promise<string> {
   if (baseImageUrl.startsWith('data:')) return baseImageUrl;
   if (baseImageUrl.includes('/api/images/')) {
     const file = baseImageUrl.split('/api/images/')[1].split('?')[0];
     const fp = path.join(IMAGES_DIR, file);
     if (fs.existsSync(fp)) {
-      const ext = path.extname(fp).slice(1).toLowerCase();
-      const mime = ext === 'jpg' ? 'jpeg' : ext;
-      return `data:image/${mime};base64,${fs.readFileSync(fp).toString('base64')}`;
+      try {
+        const { default: sharp } = await import('sharp');
+        const buf = await sharp(fp).resize({ width: 1080, withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+        return `data:image/jpeg;base64,${buf.toString('base64')}`;
+      } catch {
+        const ext = path.extname(fp).slice(1).toLowerCase();
+        const mime = ext === 'jpg' ? 'jpeg' : ext;
+        return `data:image/${mime};base64,${fs.readFileSync(fp).toString('base64')}`;
+      }
     }
   }
   throw new Error('Không tìm thấy ảnh nền');
@@ -95,7 +103,7 @@ async function renderHtmlToPng(html: string): Promise<Buffer> {
 export async function renderOverlayToUrl(opts: {
   baseImageUrl: string; layout: OverlayLayout; fields: OverlayFields; brandId: string; brandName?: string;
 }): Promise<string> {
-  const imageSrc = toDataUri(opts.baseImageUrl);
+  const imageSrc = await toDataUri(opts.baseImageUrl);
   const html = overlayImageHtml({
     imageSrc, layout: opts.layout, fields: opts.fields,
     colors: brandColors(opts.brandId), brandName: opts.brandName,
