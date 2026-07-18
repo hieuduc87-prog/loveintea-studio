@@ -278,9 +278,12 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
     if (!dragId) return;
     const post = allPosts.find(p => p.id === dragId);
     if (post?.status === 'published') { setMsg('⚠ Bài đã đăng — không đổi lịch'); setDragId(null); return; }
+    // Kéo sang ngày khác: GIỮ NGUYÊN GIỜ cũ của bài (trước đây ép 9:00 làm mất giờ đã chọn)
+    const old = post?.scheduled_at ? new Date(post.scheduled_at) : null;
+    const hh = old ? old.getHours() : 9, mm = old ? old.getMinutes() : 0;
     await fetch(`/api/posts/${dragId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scheduled_at: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0).toISOString(), status: 'scheduled' }),
+      body: JSON.stringify({ scheduled_at: new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, 0).toISOString(), status: 'scheduled' }),
     });
     setDragId(null); setDropKey(null);
     await loadPosts();
