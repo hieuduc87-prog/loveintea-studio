@@ -48,6 +48,11 @@ export async function POST(req: NextRequest) {
       body.ruleVersion ?? body.rule_version ?? 'v1.0',
       body.planItemId ?? body.plan_item_id ?? null,
     );
+    // Carousel: nhiều ảnh (card 80981061 — Chữ lên ảnh carousel → Review & Queue)
+    const imgs = body.imagesJson ?? body.images_json;
+    if (Array.isArray(imgs) && imgs.length) {
+      db.prepare('UPDATE posts SET images_json=? WHERE id=?').run(JSON.stringify(imgs.map(String).slice(0, 10)), id);
+    }
     // Multi-tag from the start (from structured columns) for win-rate aggregation
     try {
       const { autoTagPost } = await import('@/lib/post-tags');

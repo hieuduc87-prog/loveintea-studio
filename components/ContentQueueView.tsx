@@ -79,7 +79,12 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
   function selectPost(post: Post) {
     if (selected?.id === post.id) { setSelected(null); return; }
     setSelected(post);
-    setScheduledAt('');
+    // Bài đã lên lịch → prefill giờ hiện tại (local) để sửa & bấm Schedule = reschedule (card 5cd1a4ab)
+    if (post.status === 'scheduled' && post.scheduled_at) {
+      const d = new Date(post.scheduled_at);
+      const pad = (x: number) => String(x).padStart(2, '0');
+      setScheduledAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    } else setScheduledAt('');
     setPubResult(null);
     setPubError('');
     setEditingCap(false);

@@ -79,11 +79,36 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
   const [newTagDim, setNewTagDim] = useState('segment');
   const [newTagVal, setNewTagVal] = useState('');
   const [capDraft, setCapDraft] = useState('');
+  // Reschedule (card 5cd1a4ab): sửa ngày + giờ bài đã lên lịch ngay trong panel
+  const [schedDraft, setSchedDraft] = useState('');
+  const [savingSched, setSavingSched] = useState(false);
+
+  async function saveSchedule() {
+    if (!selectedPost || !schedDraft) return;
+    setSavingSched(true);
+    const iso = new Date(schedDraft).toISOString(); // datetime-local (giờ VN) → ISO UTC cho container
+    const r = await fetch(`/api/posts/${selectedPost.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scheduled_at: iso, status: 'scheduled' }),
+    });
+    if (r.ok) {
+      setSelectedPost(prev => prev ? { ...prev, scheduled_at: iso, status: 'scheduled' } : prev);
+      setMsg('✓ Đã đổi lịch — hệ thống sẽ tự đăng đúng giờ mới');
+      await loadPosts();
+    } else setMsg('✗ Đổi lịch thất bại');
+    setSavingSched(false);
+  }
   const [savingCap, setSavingCap] = useState(false);
 
   useEffect(() => {
-    if (!selectedPost) { setPostTags([]); setCapDraft(''); return; }
+    if (!selectedPost) { setPostTags([]); setCapDraft(''); setSchedDraft(''); return; }
     setCapDraft(selectedPost.caption || '');
+    // Prefill giờ hẹn hiện tại (ISO UTC → local) cho ô datetime-local
+    if (selectedPost.scheduled_at) {
+      const d = new Date(selectedPost.scheduled_at);
+      const pad = (x: number) => String(x).padStart(2, '0');
+      setSchedDraft(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    } else setSchedDraft('');
     fetch(`/api/posts/${selectedPost.id}/tags`).then(r => r.json()).then(d => setPostTags(d.tags ?? [])).catch(() => setPostTags([]));
   }, [selectedPost]);
 
@@ -467,7 +492,21 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
                     rows={5} placeholder="(chưa có caption — gõ để soạn)"
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 resize-y focus:border-brand-500 focus:outline-none" />
                 </div>
-                {selectedPost.scheduled_at && <p className="text-[10px] text-gray-500">🗓 {new Date(selectedPost.scheduled_at).toLocaleString('vi-VN')}</p>}
+                {selectedPost.status === 'published' ? (
+                  selectedPost.scheduled_at && <p className="text-[10px] text-gray-500">🗓 {new Date(selectedPost.scheduled_at).toLocaleString('vi-VN')}</p>
+                ) : (
+                  <div className="border-t border-gray-800 pt-2">
+                    <p className="text-[9px] font-bold text-gray-500 uppercase mb-1">🗓 Đổi lịch đăng (ngày + giờ)</p>
+                    <div className="flex gap-1">
+                      <input type="datetime-local" value={schedDraft} onChange={e => setSchedDraft(e.target.value)}
+                        className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-[10px] text-white" />
+                      <button onClick={saveSchedule} disabled={savingSched || !schedDraft}
+                        className="px-2 py-1 rounded bg-brand-600 hover:bg-brand-500 text-[10px] text-white font-bold disabled:opacity-50">
+                        {savingSched ? '…' : '💾 Lưu'}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* Multi-tags (auto + manual) — for win-rate aggregation */}
                 <div className="border-t border-gray-800 pt-2">
                   <p className="text-[9px] font-bold text-gray-500 uppercase mb-1">Tags (segment / insight / hành vi…)</p>

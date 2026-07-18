@@ -27,7 +27,12 @@ Trả về ONLY JSON:
  "hook_pattern":"công thức hook nhận diện được, 1 câu",
  "caption_template":"khung caption tái dùng với placeholder {sản phẩm}/{lợi ích}/{CTA} — chỉ khi có caption gốc, không thì bỏ trống"}`;
   try {
-    return await generateJSON<InspirationLearnings>(prompt);
+    const raw = await generateJSON<Record<string, unknown>>(prompt);
+    // Gemini hay trả learnings là MẢNG gạch đầu dòng dù xin string — nếu bind thẳng
+    // vào better-sqlite3 thì mảng bị flatten thành nhiều tham số ("Too many parameter
+    // values were provided", card d66acda7). Ép mọi field về string.
+    const s = (v: unknown): string => Array.isArray(v) ? v.map(x => String(x)).join('\n') : (v == null ? '' : String(v));
+    return { learnings: s(raw.learnings), hook_pattern: s(raw.hook_pattern), caption_template: s(raw.caption_template) };
   } catch {
     return { learnings: '' };
   }

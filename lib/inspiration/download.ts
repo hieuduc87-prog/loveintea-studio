@@ -22,6 +22,27 @@ export function isAllowedSourceUrl(raw: string): boolean {
   } catch { return false; }
 }
 
+// IG (và đôi khi FB) chặn tải ẩn danh từ IP datacenter — cần cookies đăng nhập.
+// Admin xuất cookies (extension "Get cookies.txt LOCALLY", định dạng Netscape)
+// rồi đặt file vào data/yt-dlp/cookies.txt trên server (mount /opt/loveintea/data).
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+export const YTDLP_COOKIES_PATH = path.join(DATA_DIR, 'yt-dlp', 'cookies.txt');
+function cookiesArgs(): string[] {
+  return fs.existsSync(YTDLP_COOKIES_PATH) ? ['--cookies', YTDLP_COOKIES_PATH] : [];
+}
+
+/** Dịch lỗi yt-dlp phổ biến ra hướng xử lý tiếng Việt. */
+function friendlyDlError(kind: 'video' | 'nhạc', code: number | null, stderr: string): string {
+  if (/login required|rate-limit reached|Requested content is not available|--cookies/i.test(stderr)) {
+    const hasCookies = fs.existsSync(YTDLP_COOKIES_PATH);
+    return `Nền tảng đang chặn tải ẩn danh từ IP server (thường gặp với Instagram). Cách xử lý: (1) upload file ${kind === 'video' ? 'video' : 'mp3'} trực tiếp, hoặc (2) admin xuất cookies Instagram (extension "Get cookies.txt LOCALLY") và đặt vào data/yt-dlp/cookies.txt trên server${hasCookies ? ' — cookies hiện tại đã HẾT HẠN, cần xuất lại' : ''}.`;
+  }
+  if (/private|only available for registered users/i.test(stderr)) {
+    return 'Bài này ở chế độ private / giới hạn người xem — không tải được. Hãy upload file trực tiếp.';
+  }
+  return `Không tải được ${kind} (yt-dlp exit ${code}). Link có thể private/bị chặn — thử upload file trực tiếp. ${stderr.slice(-300)}`;
+}
+
 /** Tải CHỈ AUDIO từ link video/reel (kho nhạc nền) → trả filename mp3 trong IMAGES_DIR. */
 export async function downloadSourceAudio(url: string, id: string): Promise<string> {
   if (!isAllowedSourceUrl(url)) {
@@ -34,6 +55,7 @@ export async function downloadSourceAudio(url: string, id: string): Promise<stri
   await new Promise<void>((resolve, reject) => {
     const proc = spawn('yt-dlp', [
       '--no-playlist', '--max-filesize', '100m', '--socket-timeout', '30',
+      ...cookiesArgs(),
       '-x', '--audio-format', 'mp3', '--audio-quality', '192K',
       '-o', out,
       url,
@@ -51,7 +73,7 @@ export async function downloadSourceAudio(url: string, id: string): Promise<stri
     proc.on('close', code => {
       clearTimeout(timer);
       if (code === 0 && fs.existsSync(out)) resolve();
-      else reject(new Error(`Không tải được nhạc (yt-dlp exit ${code}). Link có thể private/bị chặn — thử upload file. ${stderr.slice(-300)}`));
+      else reject(new Error(friendlyDlError('nhạc', code, stderr)));
     });
   });
   return filename;
@@ -69,6 +91,7 @@ export async function downloadSourceVideo(url: string, id: string): Promise<stri
   await new Promise<void>((resolve, reject) => {
     const proc = spawn('yt-dlp', [
       '--no-playlist', '--max-filesize', '300m', '--socket-timeout', '30',
+      ...cookiesArgs(),
       '-f', 'mp4[height<=1920]/best[height<=1920]/best',
       '--recode-video', 'mp4',
       '-o', out,
@@ -87,7 +110,7 @@ export async function downloadSourceVideo(url: string, id: string): Promise<stri
     proc.on('close', code => {
       clearTimeout(timer);
       if (code === 0 && fs.existsSync(out)) resolve();
-      else reject(new Error(`Không tải được video (yt-dlp exit ${code}). Link có thể private/bị chặn — thử upload file trực tiếp. ${stderr.slice(-300)}`));
+      else reject(new Error(friendlyDlError('video', code, stderr)));
     });
   });
   return filename;

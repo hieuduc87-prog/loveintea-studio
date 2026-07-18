@@ -24,6 +24,12 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
   const [suggesting, setSuggesting] = useState(false);
   const [result, setResult] = useState('');
   const [err, setErr] = useState('');
+  // Carousel ≤5 ảnh (card 80981061) + đưa vào Review & Queue (card ca3a7b94)
+  const [carSel, setCarSel] = useState<string[]>([]);
+  const [carResults, setCarResults] = useState<string[]>([]);
+  const [carSlides, setCarSlides] = useState<{ headline: string; sub: string }[]>([]);
+  const [pushing, setPushing] = useState(false);
+  const [queueMsg, setQueueMsg] = useState('');
 
   const [gallery, setGallery] = useState<ImgItem[]>([]);
   // Kho ảnh nền để phủ chữ: lấy từ ảnh bài đã tạo + ảnh sản phẩm của brand.
@@ -103,6 +109,48 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
     } finally { setBusy(false); }
   }
 
+  function toggleCarousel(url: string) {
+    setCarSel(prev => prev.includes(url) ? prev.filter(u => u !== url) : (prev.length >= 5 ? prev : [...prev, url]));
+  }
+
+  // Carousel: AI viết bộ chữ NỐI TIẾP cho 2-5 ảnh rồi render từng ảnh cùng layout
+  async function carouselOverlay() {
+    if (carSel.length < 2) { setErr('Chọn ít nhất 2 ảnh cho carousel (bấm dấu + trên ảnh)'); return; }
+    setBusy(true); setErr(''); setCarResults([]); setQueueMsg('');
+    try {
+      const r = await fetch(`/api/content/text-overlay/carousel?brand=${brandId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrls: carSel, topic: headline.trim() || undefined, brandName }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setErr(d.error || 'Lỗi tạo carousel'); return; }
+      setCarResults(d.urls || []);
+      setCarSlides(d.slides || []);
+      setResult('');
+    } finally { setBusy(false); }
+  }
+
+  // Đưa thành phẩm vào Review & Queue thành bài draft — bấm Schedule ở đó
+  async function pushToQueue(urls: string[], caption: string) {
+    if (!urls.length) return;
+    setPushing(true); setQueueMsg('');
+    try {
+      const r = await fetch(`/api/posts?brand=${brandId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caption,
+          imageUrl: urls[0],
+          ...(urls.length > 1 ? { imagesJson: urls } : {}),
+          platforms: 'facebook,instagram',
+          notes: 'Tạo từ Chữ lên ảnh',
+        }),
+      });
+      const d = await r.json() as { ok?: boolean; id?: string; error?: string };
+      setQueueMsg(d.ok ? `✓ Đã tạo bài nháp${urls.length > 1 ? ` carousel ${urls.length} ảnh` : ''} — mở tab Review & Queue để duyệt/Schedule` : `✗ ${d.error || 'Lỗi tạo bài'}`);
+    } catch (e) { setQueueMsg(`✗ ${String(e)}`); }
+    finally { setPushing(false); }
+  }
+
   async function render() {
     if (!base) { setErr('Chọn hoặc dán 1 ảnh nền trước'); return; }
     setBusy(true); setErr(''); setResult('');
@@ -176,15 +224,35 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
             <input value={base} onChange={e => setBase(e.target.value)} placeholder="Dán link ảnh (/api/images/…) hoặc chọn bên dưới"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white mb-2" />
             <div className="grid grid-cols-5 gap-1.5 max-h-44 overflow-y-auto">
-              {gallery.map((g, i) => (
-                <button key={i} onClick={() => setBase(g.url)}
-                  className={`aspect-[4/5] rounded overflow-hidden border-2 ${base === g.url ? 'border-brand-500' : 'border-transparent'}`}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`${g.url}?w=160`} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
+              {gallery.map((g, i) => {
+                const pos = carSel.indexOf(g.url);
+                return (
+                  <div key={i} onClick={() => setBase(g.url)} role="button" tabIndex={0}
+                    className={`relative group aspect-[4/5] rounded overflow-hidden border-2 cursor-pointer ${base === g.url ? 'border-brand-500' : 'border-transparent'}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`${g.url}?w=160`} alt="" className="w-full h-full object-cover" />
+                    <span onClick={e => { e.stopPropagation(); toggleCarousel(g.url); }} role="button"
+                      title={pos >= 0 ? 'Bỏ khỏi carousel' : 'Thêm vào carousel (≤5 ảnh)'}
+                      className={`absolute top-1 right-1 w-5 h-5 rounded-full grid place-items-center text-[11px] font-bold transition-opacity ${pos >= 0 ? 'bg-brand-500 text-white' : 'bg-black/60 text-white opacity-0 group-hover:opacity-100'}`}>
+                      {pos >= 0 ? pos + 1 : '+'}
+                    </span>
+                  </div>
+                );
+              })}
               {!gallery.length && <div className="col-span-5 text-xs text-gray-600 py-4 text-center">Chưa có ảnh — tạo ảnh ở Create Studio trước, hoặc dán link.</div>}
             </div>
+            {carSel.length > 0 && (
+              <div className="mt-2 flex items-center justify-between gap-2 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+                <p className="text-xs text-gray-400">🎠 Carousel: <span className="text-white font-medium">{carSel.length}/5 ảnh</span> — thứ tự theo số trên ảnh. Ghi chủ đề vào ô tiêu đề (tuỳ chọn) rồi bấm tạo.</p>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => { setCarSel([]); setCarResults([]); }} className="text-xs text-gray-500 hover:text-white">Bỏ chọn</button>
+                  <button onClick={carouselOverlay} disabled={busy || carSel.length < 2}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-medium">
+                    {busy ? '⟳ Đang tạo…' : `🎠 Tạo chữ nối tiếp ${carSel.length} ảnh`}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* text fields */}
@@ -227,11 +295,36 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
         <div>
           <div className="text-sm font-semibold text-white mb-2">Kết quả</div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 grid place-items-center min-h-[420px]">
-            {result ? (
+            {carResults.length ? (
+              <div className="w-full">
+                <div className="grid grid-cols-2 gap-2">
+                  {carResults.map((u, i) => (
+                    <div key={i} className="text-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u} alt={`slide ${i + 1}`} className="rounded-lg w-full" />
+                      <a href={u} download className="text-[11px] text-brand-400 hover:underline">⬇ Ảnh {i + 1}</a>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => pushToQueue(carResults, carSlides.map(s => [s.headline, s.sub].filter(Boolean).join(' — ')).join('\n'))}
+                  disabled={pushing}
+                  className="w-full mt-3 py-2 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-medium">
+                  {pushing ? '⟳ Đang tạo bài…' : `➕ Đưa carousel ${carResults.length} ảnh vào Review & Queue`}
+                </button>
+                {queueMsg && <p className={`text-xs mt-2 text-center ${queueMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{queueMsg}</p>}
+              </div>
+            ) : result ? (
               <div className="text-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={result} alt="result" className="max-h-[540px] rounded-lg mx-auto" />
-                <a href={result} download className="inline-block mt-3 text-xs text-brand-400 hover:underline">⬇ Tải ảnh</a>
+                <div className="flex items-center justify-center gap-4 mt-3">
+                  <a href={result} download className="text-xs text-brand-400 hover:underline">⬇ Tải ảnh</a>
+                  <button onClick={() => pushToQueue([result], [headline, sub].filter(Boolean).join('\n'))} disabled={pushing}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white font-medium">
+                    {pushing ? '⟳ Đang tạo bài…' : '➕ Đưa vào Review & Queue'}
+                  </button>
+                </div>
+                {queueMsg && <p className={`text-xs mt-2 ${queueMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{queueMsg}</p>}
               </div>
             ) : base ? (
               <div className="text-center text-gray-600 text-sm">
