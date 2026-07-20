@@ -39,13 +39,19 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
         fetch(`/api/posts?brand=${brandId}`).then(r => r.json()).catch(() => ({ posts: [] })),
         fetch(`/api/products?brand=${brandId}`).then(r => r.json()).catch(() => ({ products: [] })),
       ]);
+      // Bài carousel: lấy ĐỦ mọi ảnh trong images_json, không chỉ ảnh bìa (card 3ba0801d)
       const a: ImgItem[] = (posts.posts || [])
-        .map((p: { image_url?: string }) => p.image_url).filter((u: string) => u && u.includes('/api/images/'))
+        .flatMap((p: { image_url?: string; images_json?: string }) => {
+          let imgs: string[] = [];
+          try { const j = JSON.parse(p.images_json || '[]'); if (Array.isArray(j)) imgs = j.map(String); } catch { /* bài thường */ }
+          return [p.image_url, ...imgs];
+        })
+        .filter((u?: string): u is string => Boolean(u && u.includes('/api/images/')))
         .map((u: string) => ({ url: u.split('?')[0] }));
       const b: ImgItem[] = (prods.products || [])
         .map((p: { image_url?: string; name?: string }) => p.image_url ? { url: p.image_url, label: p.name } : null).filter(Boolean);
       const seen = new Set<string>();
-      setGallery([...a, ...b].filter(i => i.url && !seen.has(i.url) && seen.add(i.url)).slice(0, 30));
+      setGallery([...a, ...b].filter(i => i.url && !seen.has(i.url) && seen.add(i.url)).slice(0, 40));
     } catch { /* ignore */ }
   }, [brandId]);
   useEffect(() => { loadGallery(); }, [loadGallery]);
