@@ -16,6 +16,7 @@ import { InboxView }          from './InboxView';
 import { AnalyticsView }      from './AnalyticsView';
 import { PlanCalendarView }   from './PlanCalendarView';
 import { UserGuideView }      from './UserGuideView';
+import { VideoToolGuideView } from './VideoToolGuideView';
 import { HelpDrawer }         from './HelpDrawer';
 import { BrandMembersView } from './BrandMembersView';
 import { AssetDamView }       from './AssetDamView';
@@ -47,13 +48,14 @@ type TabId =
   | 'content_templates'
   | 'asset_dam' | 'content_log'
   | 'payment'
-  | 'guide' | 'team';
+  | 'guide' | 'video_guide' | 'team';
 
 // Navigation restructured to match Closed-Loop Content Engine:
 // Brain → Plan → Create → Review → Publish → Engage → Learn → (loop)
 const TABS: { id: TabId; label: string; icon: string; group: string }[] = [
   // BẮT ĐẦU — hướng dẫn nổi bật ngay đầu sidebar, thấy ngay sau khi đăng nhập
   { id: 'guide',            label: 'Hướng dẫn sử dụng', icon: '📖', group: 'Bắt đầu' },
+  { id: 'video_guide',      label: 'Ra đề tool video',  icon: '📐', group: 'Bắt đầu' },
   // HOME — Dashboard tổng quan + system health
   { id: 'dashboard',        label: 'Dashboard',        icon: '🏠', group: 'Home' },
   // BRAIN — Brand identity + knowledge + rules (Fixed Core)
@@ -505,6 +507,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
                 {id === 'payment'          && <PaymentView />}
                 {id === 'inbox'            && <InboxView />}
                 {id === 'guide'            && <UserGuideView />}
+                {id === 'video_guide'      && <VideoToolGuideView />}
                 {id === 'team'             && <BrandMembersView brandId={bid} brandName={activeBrand.name} />}
               </div>
             );
