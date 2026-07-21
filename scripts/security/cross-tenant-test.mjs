@@ -113,6 +113,9 @@ const CROSS = [ // A hitting B's resources → must be 403/404
   ['POST',   `/api/content-templates/${P}b-tpl/generate`, {}],
   ['POST',   `/api/review`, { postId: `${P}b-post` }],
   ['DELETE', `/api/video/clips?id=${P}b-clip`],
+  // [LIT-SEC-0721A] brandId từ URL path / body — từng leak vì middleware chỉ validate ?brand=
+  ['POST',   `/api/brands/${P}b/dna/extract`, { text: 'probe' }],
+  ['POST',   `/api/image/generate`, { prompt: 'probe', brandId: `${P}b`, productId: `${P}b-product` }],
 ];
 const POSITIVE = [ // A hitting its OWN resources → must NOT be 403 (guard isn't blanket-deny)
   ['GET', `/api/brands/${P}a`],

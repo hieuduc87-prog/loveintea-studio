@@ -15,9 +15,15 @@ import { getDb } from '@/lib/db';
 import { generateJSON } from '@/lib/gemini';
 import { SEGMENTS } from '@/lib/brand-dna';
 import { fileToText } from '@/lib/product-knowledge';
+import { canAccessBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: brandId } = await params;
+  // TENANT ISOLATION: brandId đến từ URL path (middleware chỉ validate ?brand=
+  // query) — không check thì editor brand khác đọc được knowledge_docs qua DNA synth.
+  if (!canAccessBrand(req, brandId)) {
+    return NextResponse.json({ error: 'Forbidden — resource thuộc store khác.' }, { status: 403 });
+  }
   try {
     const db = getDb();
     // Customer file upload → extract DNA strategy fields directly from it

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { randomBytes } from 'crypto';
 import { getDb } from '@/lib/db';
 import { overlayImageHtml, DEFAULT_COLORS, OverlayColors, OverlayLayout, OverlayFields, OverlayFonts } from '@/lib/text-overlay';
 
@@ -111,7 +112,9 @@ export async function renderOverlayToUrl(opts: {
   });
   const png = await renderHtmlToPng(html);
   fs.mkdirSync(IMAGES_DIR, { recursive: true });
-  const filename = `textovl_${Date.now()}.png`;
+  // Suffix ngẫu nhiên: /api/images là PUBLIC (FB/IG fetch) — tên chỉ theo
+  // timestamp thì đoán/enumerate được ảnh của brand khác.
+  const filename = `textovl_${Date.now()}_${randomBytes(6).toString('hex')}.png`;
   fs.writeFileSync(path.join(IMAGES_DIR, filename), png);
   return `/api/images/${filename}`;
 }
