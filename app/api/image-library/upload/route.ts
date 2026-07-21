@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 import { upscaleImage } from '@/lib/upscale';
 
 export async function POST(req: NextRequest) {
@@ -41,9 +42,9 @@ export async function POST(req: NextRequest) {
     // Save to image_library
     const db = getDb();
     db.prepare(`
-      INSERT INTO image_library (id, sku_id, image_url, model, prompt)
-      VALUES (?, ?, ?, 'upload', 'User uploaded image')
-    `).run(id, skuId, imageUrl);
+      INSERT INTO image_library (id, sku_id, image_url, model, prompt, brand_id)
+      VALUES (?, ?, ?, 'upload', 'User uploaded image', ?)
+    `).run(id, skuId, imageUrl, getBrandId(req) || 'loveintea');
 
     return NextResponse.json({ ok: true, id, imageUrl });
   } catch (e) {

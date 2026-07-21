@@ -35,6 +35,7 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
   const load = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
+    if (brandId)   params.set('brand', brandId);   // admin xem đúng brand đang chọn
     if (skuFilter) params.set('sku', skuFilter);
     if (uspFilter) params.set('usp', uspFilter);
     if (favOnly)   params.set('fav', '1');
@@ -43,13 +44,15 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
     const d = await r.json();
     setImages(d.images ?? []);
     setLoading(false);
-  }, [skuFilter, uspFilter, favOnly]);
+  }, [skuFilter, uspFilter, favOnly, brandId]);
 
   useEffect(() => { load(); }, [load]);
 
+  const bq = brandId ? `?brand=${encodeURIComponent(brandId)}` : '';
+
   async function toggleFavorite(img: LibImage) {
     const newVal = img.is_favorite ? 0 : 1;
-    await fetch(`/api/image-library/${img.id}`, {
+    await fetch(`/api/image-library/${img.id}${bq}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_favorite: newVal }),
@@ -60,7 +63,7 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
 
   async function deleteImage(id: string) {
     if (!confirm('Delete this image from library?')) return;
-    await fetch(`/api/image-library/${id}`, { method: 'DELETE' });
+    await fetch(`/api/image-library/${id}${bq}`, { method: 'DELETE' });
     setImages(imgs => imgs.filter(i => i.id !== id));
     if (selected?.id === id) setSelected(null);
   }
@@ -70,7 +73,7 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('sku_id', uploadSku);
-    const r = await fetch('/api/image-library/upload', { method: 'POST', body: fd });
+    const r = await fetch(`/api/image-library/upload${bq}`, { method: 'POST', body: fd });
     const d = await r.json() as { ok?: boolean; error?: string };
     if (d.ok) { setUploadMsg('✓ Uploaded'); await load(); }
     else { setUploadMsg('✗ ' + d.error); }

@@ -21,10 +21,13 @@ export function BlogFactoryView({ brandId }: { brandId?: string } = {}) {
   const [selected, setSelected] = useState<{ post: BlogPost; content: string } | null>(null);
   const [error, setError]     = useState('');
 
-  useEffect(() => { loadPosts(); }, []);
+  // Brand context — admin xem đúng brand đang chọn (non-admin đã bị middleware scope).
+  const bq = brandId ? `?brand=${encodeURIComponent(brandId)}` : '';
+
+  useEffect(() => { loadPosts(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [brandId]);
 
   async function loadPosts() {
-    const r = await fetch('/api/blog');
+    const r = await fetch(`/api/blog${bq}`);
     const d = await r.json();
     setPosts(d.posts ?? []);
   }
@@ -34,7 +37,7 @@ export function BlogFactoryView({ brandId }: { brandId?: string } = {}) {
     setLoading(true);
     setError('');
     try {
-      const r = await fetch('/api/blog', {
+      const r = await fetch(`/api/blog${bq}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic, skuId }),
@@ -50,7 +53,7 @@ export function BlogFactoryView({ brandId }: { brandId?: string } = {}) {
   }
 
   async function viewPost(id: string) {
-    const r = await fetch(`/api/blog/${id}`);
+    const r = await fetch(`/api/blog/${id}${bq}`);
     const d = await r.json();
     const post = posts.find(p => p.id === id);
     if (post) setSelected({ post, content: d.content ?? '' });

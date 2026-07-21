@@ -6,12 +6,18 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { SEGMENTS } from '@/lib/brand-dna';
+import { canAccessBrand } from '@/lib/brand-guard';
 
 interface Node { label: string; detail?: string }
 interface Branch { key: string; label: string; icon: string; children: Node[] }
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: brandId } = await params;
+  // TENANT ISOLATION: brandId từ PATH — không check thì editor brand khác đọc
+  // trọn bộ DNA/sản phẩm/tri thức/rules/template của brand này qua mindmap.
+  if (!canAccessBrand(req, brandId)) {
+    return NextResponse.json({ error: 'Forbidden — resource thuộc store khác.' }, { status: 403 });
+  }
   const db = getDb();
   const brand = db.prepare('SELECT name FROM brands WHERE id=?').get(brandId) as { name: string } | undefined;
   const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;

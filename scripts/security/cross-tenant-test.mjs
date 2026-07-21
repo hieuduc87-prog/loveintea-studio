@@ -55,13 +55,18 @@ function seed(db) {
       .run(`${P}b-doc`, `${P}b`, 'rule', 'B Doc');
     db.prepare('INSERT OR REPLACE INTO video_clips (id, brand_id, product_id, url, filename) VALUES (?,?,?,?,?)')
       .run(`${P}b-clip`, `${P}b`, `${P}b-product`, '/api/images/none.mp4', 'none.mp4');
+    // [LIT-SEC-0721A] blog + image_library (feature loveintea-legacy vừa được scope brand)
+    db.prepare('INSERT OR REPLACE INTO blog_posts (id, brand_id, sku_id, topic, title, status) VALUES (?,?,?,?,?,?)')
+      .run(`${P}b-blog`, `${P}b`, '', 'B topic', 'B blog', 'draft');
+    db.prepare('INSERT OR REPLACE INTO image_library (id, brand_id, sku_id, image_url) VALUES (?,?,?,?)')
+      .run(`${P}b-img`, `${P}b`, 'hibiscus', '/api/images/none.png');
   });
   tx();
 }
 
 function cleanup(db) {
   const tables = ['video_clips', 'knowledge_docs', 'content_templates', 'content_plans',
-    'posts', 'products', 'brand_members', 'auth_users', 'brands'];
+    'posts', 'products', 'blog_posts', 'image_library', 'brand_members', 'auth_users', 'brands'];
   for (const t of tables) {
     try {
       const col = t === 'brand_members' ? 'user_id' : t === 'auth_users' ? 'id' : 'id';
@@ -116,6 +121,13 @@ const CROSS = [ // A hitting B's resources → must be 403/404
   // [LIT-SEC-0721A] brandId từ URL path / body — từng leak vì middleware chỉ validate ?brand=
   ['POST',   `/api/brands/${P}b/dna/extract`, { text: 'probe' }],
   ['POST',   `/api/image/generate`, { prompt: 'probe', brandId: `${P}b`, productId: `${P}b-product` }],
+  // [LIT-SEC-0721B] GET đọc trọn nội dung brand khác qua PATH; blog + kho ảnh dùng chung
+  ['GET',    `/api/brands/${P}b/mindmap`],
+  ['GET',    `/api/brands/${P}b/segments`],
+  ['GET',    `/api/blog/${P}b-blog`],
+  ['DELETE', `/api/blog/${P}b-blog`],
+  ['PATCH',  `/api/image-library/${P}b-img`, { is_favorite: 1 }],
+  ['DELETE', `/api/image-library/${P}b-img`],
 ];
 const POSITIVE = [ // A hitting its OWN resources → must NOT be 403 (guard isn't blanket-deny)
   ['GET', `/api/brands/${P}a`],

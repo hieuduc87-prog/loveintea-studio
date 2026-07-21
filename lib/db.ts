@@ -784,6 +784,10 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE auth_users ADD COLUMN must_change_password INTEGER DEFAULT 0`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN plan_id TEXT REFERENCES content_plans(id)`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN brand_id TEXT DEFAULT 'loveintea'`); } catch { /* already exists */ }
+  // TENANT ISOLATION: image_library + blog_posts là feature loveintea-legacy chưa
+  // có cột brand — thêm để scope theo brand (dòng cũ backfill về 'loveintea').
+  try { db.exec(`ALTER TABLE image_library ADD COLUMN brand_id TEXT DEFAULT 'loveintea'`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE blog_posts ADD COLUMN brand_id TEXT DEFAULT 'loveintea'`); } catch { /* already exists */ }
   // Lineage columns for closed-loop attribution
   try { db.exec(`ALTER TABLE posts ADD COLUMN brief_id TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN rule_version TEXT DEFAULT 'v1.0'`); } catch { /* already exists */ }

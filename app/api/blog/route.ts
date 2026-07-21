@@ -5,11 +5,14 @@ import { generateCaption } from '@/lib/gemini';
 import { BRAND, SKUS } from '@/lib/brand-dna';
 import { sanitizeBlogHtml } from '@/lib/sanitize-html';
 import { enforceRateLimit } from '@/lib/rate-limit';
+import { getBrandId } from '@/lib/brand-guard';
 import { v4 as uuid } from 'uuid';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const db = getDb();
-  const posts = db.prepare('SELECT id, sku_id, topic, title, status, created_at FROM blog_posts ORDER BY created_at DESC').all();
+  // TENANT ISOLATION: blog scope theo brand (trước dùng chung mọi brand).
+  const posts = db.prepare('SELECT id, sku_id, topic, title, status, created_at FROM blog_posts WHERE brand_id=? ORDER BY created_at DESC')
+    .all(getBrandId(req) || 'loveintea');
   return NextResponse.json({ posts });
 }
 
@@ -54,8 +57,8 @@ Return as JSON:
     const db = getDb();
     const id = uuid();
     db.prepare(
-      'INSERT INTO blog_posts (id, sku_id, topic, title, slug, excerpt, content, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, skuId ?? null, topic, parsed.title, parsed.slug, parsed.excerpt, sanitizeBlogHtml(parsed.content), 'draft');
+      'INSERT INTO blog_posts (id, sku_id, topic, title, slug, excerpt, content, status, brand_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, skuId ?? null, topic, parsed.title, parsed.slug, parsed.excerpt, sanitizeBlogHtml(parsed.content), 'draft', getBrandId(req) || 'loveintea');
 
     return NextResponse.json({ id, title: parsed.title, ok: true });
   } catch (e) {
