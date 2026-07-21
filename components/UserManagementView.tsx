@@ -76,6 +76,17 @@ export function UserManagementView() {
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
 
+  // Brand assignment (phân quyền theo store)
+  const [stores, setStores] = useState<Array<{ id: string; name: string }>>([]);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [userBrands, setUserBrands] = useState<string[]>([]);
+  const [brandsLoading, setBrandsLoading] = useState(false);
+  const [brandsSaving, setBrandsSaving] = useState(false);
+
+  // Temp password vừa sinh (hiện 1 lần, kèm copy)
+  const [tempPw, setTempPw] = useState<{ email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
   // Invite form state
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -107,7 +118,66 @@ export function UserManagementView() {
 
   useEffect(() => {
     fetchUsers();
+    fetch('/api/admin/stores')
+      .then(r => r.ok ? r.json() : { stores: [] })
+      .then((d: { stores?: Array<{ id: string; name: string }> }) => setStores(d.stores || []))
+      .catch(() => setStores([]));
   }, [fetchUsers]);
+
+  async function toggleBrandEditor(user: UserRecord) {
+    if (expandedUser === user.id) { setExpandedUser(null); return; }
+    setExpandedUser(user.id);
+    setBrandsLoading(true);
+    try {
+      const r = await fetch(`/api/admin/users/${user.id}/brands`);
+      const d = await r.json() as { brandIds?: string[] };
+      setUserBrands(d.brandIds || []);
+    } catch {
+      setUserBrands([]);
+    } finally {
+      setBrandsLoading(false);
+    }
+  }
+
+  async function saveBrands(userId: string) {
+    setBrandsSaving(true);
+    try {
+      const r = await fetch(`/api/admin/users/${userId}/brands`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandIds: userBrands }),
+      });
+      if (!r.ok) { const d = await r.json(); alert(d.error ?? 'Lỗi'); return; }
+      setExpandedUser(null);
+    } finally {
+      setBrandsSaving(false);
+    }
+  }
+
+  async function resetPassword(user: UserRecord) {
+    if (!confirm(`Reset mật khẩu cho ${user.email}? Mật khẩu cũ sẽ hết hiệu lực ngay.`)) return;
+    setActionLoading(prev => ({ ...prev, [user.id]: true }));
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reset_password: true }),
+      });
+      const d = await res.json();
+      if (!res.ok) { alert(d.error ?? 'Lỗi'); return; }
+      setTempPw({ email: user.email, password: d.tempPassword });
+      setCopied(false);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [user.id]: false }));
+    }
+  }
+
+  function copyTempPw() {
+    if (!tempPw) return;
+    navigator.clipboard.writeText(`Đăng nhập: ${tempPw.email}\nMật khẩu tạm: ${tempPw.password}\n(Sẽ được yêu cầu đổi mật khẩu khi đăng nhập)`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   // Access denied for non-admin
   if (sessionRole !== 'root_admin' && sessionRole !== 'admin') {
@@ -194,7 +264,8 @@ export function UserManagementView() {
       });
       const data = await res.json();
       if (!res.ok) { setInviteError(data.error ?? 'Error'); return; }
-      setInviteSuccess(`Invited ${inviteEmail.trim()} as ${inviteRole}`);
+      setInviteSuccess(`Đã mời ${inviteEmail.trim()} (${ROLE_LABELS[inviteRole] ?? inviteRole})`);
+      if (data.tempPassword) { setTempPw({ email: inviteEmail.trim(), password: data.tempPassword }); setCopied(false); }
       setInviteEmail('');
       await fetchUsers();
       setTimeout(() => setInviteSuccess(''), 3000);
@@ -227,6 +298,23 @@ export function UserManagementView() {
           {showInviteForm ? 'Cancel' : 'Invite User'}
         </button>
       </div>
+
+      {/* Temp password — hiện 1 lần, copy đưa cho user */}
+      {tempPw && (
+        <div className="bg-yellow-900/25 border border-yellow-700/50 rounded-xl p-4 flex items-start gap-3 flex-wrap">
+          <div className="flex-1 min-w-[220px]">
+            <p className="text-sm text-yellow-200 font-medium">🔑 Mật khẩu tạm cho {tempPw.email}</p>
+            <p className="font-mono text-lg text-white tracking-wider mt-1 select-all">{tempPw.password}</p>
+            <p className="text-xs text-yellow-500/80 mt-1">Chỉ hiện 1 lần — copy gửi cho user. Họ đăng nhập bằng email + mật khẩu này (hoặc Google) và sẽ phải đổi mật khẩu.</p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={copyTempPw} className="text-xs bg-yellow-700/60 hover:bg-yellow-600/60 text-white px-3 py-1.5 rounded-lg">
+              {copied ? '✓ Đã copy' : 'Copy'}
+            </button>
+            <button onClick={() => setTempPw(null)} className="text-xs text-yellow-500/70 hover:text-yellow-300 px-2 py-1.5">Đóng</button>
+          </div>
+        </div>
+      )}
 
       {/* Invite form */}
       {showInviteForm && (
@@ -344,8 +432,10 @@ export function UserManagementView() {
                 const isCurrentUser = user.id === sessionId;
                 const manageable = canManageUser(user) && !isCurrentUser;
                 const isRootAdmin = user.role === 'root_admin';
+                const isAdminLevel = user.role === 'root_admin' || user.role === 'admin';
                 return (
-                  <div key={user.id} className="px-4 py-3 flex items-center gap-3 flex-wrap hover:bg-gray-900/30 transition-colors">
+                  <div key={user.id}>
+                  <div className="px-4 py-3 flex items-center gap-3 flex-wrap hover:bg-gray-900/30 transition-colors">
                     <Avatar user={user} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -364,6 +454,9 @@ export function UserManagementView() {
                       <span className="text-xs text-gray-600 hidden sm:block">
                         {user.last_login ? `Active ${formatDate(user.last_login)}` : 'Never logged in'}
                       </span>
+                      {isAdminLevel && (
+                        <span className="text-[11px] text-gray-500 hidden md:block">mọi brand</span>
+                      )}
                       {manageable && (
                         <div className="flex items-center gap-2">
                           <select
@@ -376,6 +469,23 @@ export function UserManagementView() {
                               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                             ))}
                           </select>
+                          {!isAdminLevel && (
+                            <button
+                              disabled={actionLoading[user.id]}
+                              onClick={() => toggleBrandEditor(user)}
+                              className={`text-xs px-2.5 py-1 rounded-lg transition-colors border ${expandedUser === user.id ? 'bg-brand-600/30 border-brand-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}
+                            >
+                              🏪 Brand
+                            </button>
+                          )}
+                          <button
+                            disabled={actionLoading[user.id]}
+                            onClick={() => resetPassword(user)}
+                            className="text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-400 hover:text-white px-2.5 py-1 rounded-lg transition-colors border border-gray-700"
+                            title="Cấp mật khẩu tạm mới"
+                          >
+                            🔑 Reset MK
+                          </button>
                           <button
                             disabled={actionLoading[user.id]}
                             onClick={() => handleBlock(user)}
@@ -386,6 +496,39 @@ export function UserManagementView() {
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  {/* Panel phân quyền brand */}
+                  {expandedUser === user.id && (
+                    <div className="px-4 pb-3 bg-gray-900/40">
+                      <div className="border border-gray-800 rounded-lg p-3">
+                        <p className="text-xs text-gray-400 mb-2">Store mà <span className="text-white">{user.email}</span> được truy cập (không chọn gì = không vào được store nào):</p>
+                        {brandsLoading ? <p className="text-xs text-gray-500">Đang tải…</p> : (
+                          <div className="flex flex-wrap gap-2">
+                            {stores.map(s => {
+                              const on = userBrands.includes(s.id);
+                              return (
+                                <button key={s.id}
+                                  onClick={() => setUserBrands(prev => on ? prev.filter(b => b !== s.id) : [...prev, s.id])}
+                                  className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${on ? 'bg-brand-600/30 border-brand-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300'}`}
+                                >
+                                  {on ? '✓ ' : ''}{s.name}
+                                </button>
+                              );
+                            })}
+                            {!stores.length && <p className="text-xs text-gray-600">Chưa có store nào.</p>}
+                          </div>
+                        )}
+                        <div className="flex gap-2 mt-3">
+                          <button onClick={() => saveBrands(user.id)} disabled={brandsSaving || brandsLoading}
+                            className="text-xs bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg">
+                            {brandsSaving ? 'Đang lưu…' : 'Lưu phân quyền'}
+                          </button>
+                          <button onClick={() => setExpandedUser(null)} className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1.5">Hủy</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   </div>
                 );
               })}

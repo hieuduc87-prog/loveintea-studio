@@ -20,7 +20,7 @@ import { NextResponse } from 'next/server';
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token as
-      | { role?: string; brands?: string[]; allBrands?: boolean }
+      | { role?: string; brands?: string[]; allBrands?: boolean; mustChangePassword?: boolean }
       | null;
     const role = token?.role ?? 'viewer';
     const { pathname } = req.nextUrl;
@@ -44,6 +44,12 @@ export default withAuth(
     const isBypass = pathname.startsWith('/api') || pathname.startsWith('/login') || pathname.startsWith('/_next');
     // The platform surface = the explicit /platform route OR anything on the crm host.
     const isPlatformSurface = pathname.startsWith('/platform') || (crmHost && !isBypass);
+
+    // Mật khẩu tạm: chặn mọi TRANG cho tới khi đổi mật khẩu (API vẫn chạy để
+    // /api/account/password và /api/auth hoạt động; đổi xong flag clear ngay).
+    if (token?.mustChangePassword && !isBypass && !pathname.startsWith('/change-password')) {
+      return NextResponse.redirect(new URL('/change-password', req.url));
+    }
 
     if (pathname.startsWith('/api/admin') && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 });

@@ -42,6 +42,8 @@ export function PlatformConsole() {
   const [inviteRole, setInviteRole] = useState('editor');
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState('');
+  const [tempPw, setTempPw] = useState<{ email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const loadStores = useCallback(async () => {
     setLoading(true);
@@ -90,9 +92,30 @@ export function PlatformConsole() {
       const d = await r.json();
       if (!r.ok) { setInviteMsg('❌ ' + (d.error || 'Lỗi')); return; }
       setInviteMsg(d.created ? '✅ Đã tạo & gán khách mới' : '✅ Đã gán vào store');
+      if (d.tempPassword) { setTempPw({ email: inviteEmail.trim(), password: d.tempPassword }); setCopied(false); }
       setInviteEmail('');
       await loadMembers(selected); await loadStores();
     } finally { setInviting(false); }
+  }
+
+  async function resetMk(m: Member) {
+    if (!selected) return;
+    if (!confirm(`Reset mật khẩu cho ${m.email}? Mật khẩu cũ hết hiệu lực ngay.`)) return;
+    const r = await fetch(`/api/admin/stores/${selected}/members`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset', userId: m.id }),
+    });
+    const d = await r.json();
+    if (!r.ok) { alert(d.error || 'Lỗi'); return; }
+    setTempPw({ email: m.email, password: d.tempPassword });
+    setCopied(false);
+  }
+
+  function copyTempPw() {
+    if (!tempPw) return;
+    navigator.clipboard.writeText(`Đăng nhập: https://app.easycreativehub.com\nEmail: ${tempPw.email}\nMật khẩu tạm: ${tempPw.password}\n(Sẽ được yêu cầu đổi mật khẩu khi đăng nhập)`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   async function removeMember(userId: string) {
@@ -250,6 +273,20 @@ export function PlatformConsole() {
                 </div>
                 {inviteMsg && <p className="text-xs mb-2 text-gray-400">{inviteMsg}</p>}
 
+                {tempPw && (
+                  <div className="bg-yellow-900/25 border border-yellow-700/50 rounded-lg p-3 mb-3 flex items-start gap-2 flex-wrap">
+                    <div className="flex-1 min-w-[180px]">
+                      <p className="text-xs text-yellow-200 font-medium">🔑 Mật khẩu tạm cho {tempPw.email}</p>
+                      <p className="font-mono text-base text-white tracking-wider select-all">{tempPw.password}</p>
+                      <p className="text-[11px] text-yellow-500/80 mt-0.5">Chỉ hiện 1 lần — copy gửi cho khách. Họ có thể đăng nhập Google hoặc email + mật khẩu này (bắt đổi khi vào).</p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={copyTempPw} className="text-xs bg-yellow-700/60 hover:bg-yellow-600/60 text-white px-3 py-1.5 rounded-lg">{copied ? '✓ Đã copy' : 'Copy'}</button>
+                      <button onClick={() => setTempPw(null)} className="text-xs text-yellow-500/70 hover:text-yellow-300 px-2 py-1.5">Đóng</button>
+                    </div>
+                  </div>
+                )}
+
                 {membersLoading ? <p className="text-gray-500 text-sm">Đang tải…</p> : (
                   <div className="space-y-1">
                     {members.map(m => (
@@ -262,7 +299,10 @@ export function PlatformConsole() {
                             {m.last_login ? ` · đăng nhập ${new Date(m.last_login).toLocaleDateString('vi')}` : ' · chưa đăng nhập'}
                           </div>
                         </div>
-                        <button onClick={() => removeMember(m.id)} className="text-xs text-red-400 hover:text-red-300 shrink-0">Gỡ</button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button onClick={() => resetMk(m)} className="text-xs text-gray-400 hover:text-white" title="Cấp mật khẩu tạm mới">🔑 Reset MK</button>
+                          <button onClick={() => removeMember(m.id)} className="text-xs text-red-400 hover:text-red-300">Gỡ</button>
+                        </div>
                       </div>
                     ))}
                     {!members.length && <p className="text-gray-600 text-sm">Chưa có khách nào. Mời bằng email Google ở trên.</p>}

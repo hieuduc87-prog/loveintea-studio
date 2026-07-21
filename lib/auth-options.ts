@@ -124,6 +124,11 @@ export const authOptions: NextAuthOptions = {
         const db = getDb();
         const isAdmin = token.role === 'admin' || token.role === 'root_admin';
         token.allBrands = isAdmin;
+        // Temp-password gate: refreshed every request so the flag clears ngay
+        // sau khi user đổi mật khẩu (không cần re-login).
+        const pwRow = db.prepare('SELECT must_change_password FROM auth_users WHERE id = ?')
+          .get(token.id) as { must_change_password?: number } | undefined;
+        token.mustChangePassword = !!pwRow?.must_change_password;
         if (isAdmin) {
           token.brands = [];
         } else {

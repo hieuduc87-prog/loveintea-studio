@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth-options';
 import { getDb } from '@/lib/db';
+import { hashPassword, genPassword } from '@/lib/password';
 
 function isAdminOrAbove(role: string) {
   return role === 'root_admin' || role === 'admin';
@@ -22,7 +23,7 @@ export async function PATCH(
 
   const { id } = params;
   const body = await req.json();
-  const { role, is_approved } = body as { role?: string; is_approved?: number };
+  const { role, is_approved, reset_password } = body as { role?: string; is_approved?: number; reset_password?: boolean };
 
   const db = getDb();
   const existing = db
@@ -46,6 +47,14 @@ export async function PATCH(
     if (role === 'root_admin' || role === 'admin') {
       return NextResponse.json({ error: 'Forbidden: cannot assign admin-level roles' }, { status: 403 });
     }
+  }
+
+  // Reset password → new temp password, returned once (must change on next login)
+  if (reset_password) {
+    const tempPassword = genPassword();
+    db.prepare('UPDATE auth_users SET password_hash = ?, must_change_password = 1 WHERE id = ?')
+      .run(hashPassword(tempPassword), id);
+    return NextResponse.json({ ok: true, tempPassword });
   }
 
   // Prevent downgrading last root_admin

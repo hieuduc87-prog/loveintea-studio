@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth-options';
 import { getDb } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
+import { hashPassword, genPassword } from '@/lib/password';
 
 function isAdminOrAbove(role: string) {
   return role === 'root_admin' || role === 'admin';
@@ -83,17 +84,19 @@ export async function POST(req: NextRequest) {
 
   if (!existing) {
     if (resolvedAction === 'invite') {
-      // Pre-approved invitation — user just needs to sign in with Google
+      // Pre-approved invitation — signs in with Google OR the temp password below
+      // (must change it on first password login).
       const id = uuidv4();
       const roleVal = role ?? 'viewer';
+      const tempPassword = genPassword();
       db.prepare(
-        `INSERT INTO auth_users (id, email, role, is_approved, created_at)
-         VALUES (?, ?, ?, 1, datetime('now'))`
-      ).run(id, email, roleVal);
+        `INSERT INTO auth_users (id, email, role, is_approved, password_hash, must_change_password, created_at)
+         VALUES (?, ?, ?, 1, ?, 1, datetime('now'))`
+      ).run(id, email, roleVal, hashPassword(tempPassword));
       const created = db.prepare(
         'SELECT id, name, email, image, role, is_approved, created_at, last_login FROM auth_users WHERE id = ?'
       ).get(id);
-      return NextResponse.json({ user: created }, { status: 201 });
+      return NextResponse.json({ user: created, tempPassword }, { status: 201 });
     }
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
