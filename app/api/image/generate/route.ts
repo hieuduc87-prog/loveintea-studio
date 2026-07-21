@@ -12,16 +12,23 @@ import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-i
 import { resolveProductImagePath } from '@/lib/plan-generate';
 import { createJob, logJob, finishJob, failJob } from '@/lib/jobs';
 import { enforceRateLimit } from '@/lib/rate-limit';
+import { getBrandId, canAccessBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   const limited = enforceRateLimit(req, { scope: 'ai:image', limit: 20, windowMs: 60_000 });
   if (limited) return limited;
   let jobId = '';
   try {
-    const { prompt, productId, brandId, refImageUrl, templateId } = await req.json() as {
+    const { prompt, productId, brandId: bodyBrandId, refImageUrl, templateId } = await req.json() as {
       prompt?: string; productId?: string; brandId?: string; refImageUrl?: string; templateId?: string;
     };
     if (!prompt?.trim()) return NextResponse.json({ error: 'prompt required' }, { status: 400 });
+    // TENANT ISOLATION: brandId từ body là client-supplied — phải nằm trong quyền
+    // của caller, nếu không rơi về brand tin cậy từ middleware (x-brand-id).
+    if (bodyBrandId && !canAccessBrand(req, bodyBrandId)) {
+      return NextResponse.json({ error: 'Forbidden — bạn không có quyền store này.' }, { status: 403 });
+    }
+    const brandId = bodyBrandId || getBrandId(req) || 'loveintea';
     const db = getDb();
     jobId = createJob({ brandId, kind: 'image', source: 'CreateLab', title: `Tạo ảnh: ${prompt.slice(0, 60)}`, meta: { productId, templateId, refImageUrl } });
 
@@ -29,8 +36,8 @@ export async function POST(req: NextRequest) {
     let finalPrompt = prompt;
     let templateImageUrl: string | undefined;
     if (templateId) {
-      const t = db.prepare('SELECT image_url, tags, color_palette, analysis FROM content_templates WHERE id=?')
-        .get(templateId) as { image_url?: string; tags?: string; color_palette?: string; analysis?: string } | undefined;
+      const t = db.prepare('SELECT image_url, tags, color_palette, analysis FROM content_templates WHERE id=? AND brand_id=?')
+        .get(templateId, brandId) as { image_url?: string; tags?: string; color_palette?: string; analysis?: string } | undefined;
       if (t) {
         templateImageUrl = t.image_url;
         let styleTags = '';
@@ -56,8 +63,8 @@ export async function POST(req: NextRequest) {
     let editingProductBase = false;
     if (refImageUrl) { basePath = resolveProductImagePath(refImageUrl.split('?')[0]); editingProductBase = Boolean(basePath); }
     if (!basePath && productId) {
-      const p = db.prepare('SELECT image_url FROM products WHERE id=? OR (brand_id=? AND slug=?)')
-        .get(productId, brandId || 'loveintea', productId) as { image_url: string } | undefined;
+      const p = db.prepare('SELECT image_url FROM products WHERE brand_id=? AND (id=? OR slug=?)')
+        .get(brandId, productId, productId) as { image_url: string } | undefined;
       basePath = resolveProductImagePath(p?.image_url);
       editingProductBase = Boolean(basePath);
     }
