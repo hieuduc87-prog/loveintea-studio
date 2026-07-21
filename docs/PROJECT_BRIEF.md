@@ -5,7 +5,7 @@
 ## Dự án là gì
 Marketing OS SaaS đa-tenant (Strategy → Plan → Create → Publish → Measure → Learn) cho các brand F&B/DTC.
 Stack: Next.js 14.2 App Router (standalone), SQLite better-sqlite3 (WAL, `data/studio.db`), NextAuth (Google + email/password), gpt-image-2, Gemini 2.5 (flash/flash-lite stable ONLY), edge-tts, sharp, yt-dlp.
-Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com** (Platform Console) + landing. Store thật: loveintea / bazan / rootin.
+Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com** (Platform Console) + landing. Store thật: loveintea / bazan / rootin / gossby.
 
 ## Trạng thái vĩ mô (verify 2026-07-12)
 - **Production = Hetzner 178.105.246.16**, Docker container `loveintea-app`, port 3202, data mount `/opt/loveintea/data/` (studio.db + images/). Mac launchd chỉ là standby, KHÔNG serve domain.
@@ -28,9 +28,8 @@ Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com**
 - Session song song `git add -A` có thể sweep file dở của nhau — check `git show HEAD:file` trước khi hoảng.
 
 ## Cập nhật gần nhất (phiên sau ghi đè, giữ ≤5 dòng)
+- **2026-07-21 [LIT-OPS-0721A]** (data-only, prod): Tạo brand **gossby** (Gossby) + brand_dna + brand_members cho `uyenvt@dlsinc.com` (user `dls-uyenvt`, role admin → vốn đã thấy mọi brand; membership để tường minh). Không đổi code, không rebuild. Store thật giờ: loveintea/bazan/rootin/gossby.
 - **2026-07-21 [LIT-FIX-0720A]** (`9357dc8`, LIVE): Card 3ba0801d — gallery "Ảnh nền" của Chữ lên ảnh giờ lấy ĐỦ mọi ảnh bài carousel từ `images_json` (trước chỉ ảnh bìa → mất ảnh 2), nới 30→40 ảnh. Verified prod.
 - **2026-07-19 [LIT-FIX-0719A]**: Fix 4 kanban card mới: (1) BLOCKER Nguồn học — upload .mp4 lỗi "Too many parameter values" (Gemini trả learnings là MẢNG → better-sqlite3 flatten khi bind; ép string) + link IG bị chặn từ IP server → hỗ trợ cookies `data/yt-dlp/cookies.txt` + lỗi tiếng Việt chỉ cách xử lý; (2) Chữ lên ảnh → nút "Đưa vào Review & Queue" (POST /api/posts nhận imagesJson); (3) carousel ≤5 ảnh text nối tiếp (`/api/content/text-overlay/carousel` + chọn ảnh đánh số trong gallery); (4) reschedule — editor ngày+giờ trong panel Plan & Lịch + prefill giờ ở Review & Queue.
 - **2026-07-16 [LIT-FIX-0716A]**: Fix 4 kanban card: (1) schedule bài → defer CẢ FB+IG cho scheduler (hết "IG Post ID undefined" + hết duplicate khi bấm lại; lưu ig_post_id sau publish ngay); (2) banned claim match whole-word (liver ≠ delivers); (3) ghi chú "ko kèm vỏ hộp" thắng role slide khi gen ảnh template; (4) upload font brand headline/sub (bảng brand_fonts + /api/brand/fonts + Brand DNA UI + @font-face render).
 - **2026-07-15 [LIT-VID-0715A]** (`32ff99d`): Recipe render **đạt chuẩn final gốc** sau 4 vòng audit→fix trên clip Bazan thật: tonemap **HDR HLG→SDR** (npl=130 — thiếu là màu bệt), nhịp final gốc (hook 5s/bước ~1s/product giữa bước/result cuối clip), classifier siết hook_final + `final_drink_s`, ưu tiên bước nguyên liệu, loudness 2-pass -14 LUFS. Verified YAVG/SAT/LUFS khớp gốc. Memory: `bazan-recipe-workflow.md`.
-- **2026-07-14 [LIT-VID-0714A]** (`f412707`): **Recipe Batch workflow** — lô → Gemini phân vai clip → template Bazan → render tiếng thật + grade → nhiều version. UI trong Video Studio.
-- **2026-07-12 [LIT-OPS-0712A]**: Cơ chế handoff-phiên (hook inject-brief + PROJECT_BRIEF + luật CLAUDE.md).
