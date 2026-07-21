@@ -7,11 +7,13 @@ import { enforceRateLimit } from '@/lib/rate-limit';
 import { buildImageEditPrompt } from '@/lib/o3-engine';
 import { SKUS } from '@/lib/brand-dna';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   const limited = enforceRateLimit(req, { scope: 'ai:image', limit: 20, windowMs: 60_000 });
   if (limited) return limited;
   const db = getDb();
+  const brandId = getBrandId(req) || 'loveintea';
   const { skuId, uspId, contextId, customPrompt, useEdit = true } = await req.json();
 
   const sku = SKUS.find(s => s.id === skuId);
@@ -65,9 +67,9 @@ export async function POST(req: NextRequest) {
     // Save to image library
     const libId = uuid();
     db.prepare(`
-      INSERT INTO image_library (id, job_id, sku_id, usp_id, context_id, prompt, image_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(libId, jobId, skuId, uspId ?? '', contextId ?? '', prompt, savedUrl);
+      INSERT INTO image_library (id, job_id, sku_id, usp_id, context_id, prompt, image_url, brand_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(libId, jobId, skuId, uspId ?? '', contextId ?? '', prompt, savedUrl, brandId);
 
     return NextResponse.json({ jobId, imageUrl: savedUrl, prompt, skuId, libId, durationMs });
   } catch (e) {
