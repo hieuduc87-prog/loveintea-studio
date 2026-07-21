@@ -23,6 +23,10 @@ export default function ChangePasswordPage() {
     const d = await r.json();
     if (!r.ok) { setMsg('❌ ' + (d.error || 'Lỗi')); return; }
     setDone(true);
+    // Re-encode JWT cookie (clear cờ mustChangePassword) rồi mới về trang chính,
+    // nếu không middleware sẽ đá ngược lại đây.
+    await fetch('/api/auth/session');
+    setTimeout(() => { window.location.href = '/'; }, 700);
   }
 
   return (
@@ -32,7 +36,7 @@ export default function ChangePasswordPage() {
         <p className="text-sm text-gray-400 mb-5">Đặt mật khẩu riêng của bạn thay cho mật khẩu tạm.</p>
         {done ? (
           <div className="text-sm text-green-400">
-            ✅ Đã đổi mật khẩu. <a href="/" className="text-brand-400 hover:underline">Về trang chính →</a>
+            ✅ Đã đổi mật khẩu. Đang vào trang chính…
           </div>
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-2.5">
