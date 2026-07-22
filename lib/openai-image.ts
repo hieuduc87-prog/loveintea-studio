@@ -33,24 +33,45 @@ function getClient(): OpenAI {
 
 function isQuotaError(e: unknown): boolean {
   const msg = String(e).toLowerCase();
-  return ['insufficient_quota', 'billing', 'exceeded your current quota', '429', 'rate limit']
+  return ['insufficient_quota', 'billing', 'exceeded your current quota', '429', 'rate limit', 'hard limit']
     .some(s => msg.includes(s));
+}
+
+/** Dịch lỗi OpenAI kỹ thuật (tiếng Anh) → thông báo tiếng Việt rõ ràng cho nhân viên,
+ *  phân biệt rõ "cần founder nạp tiền/tăng hạn mức" với "quá tải tạm thời, thử lại". */
+function friendlyImageError(e: unknown): Error {
+  const msg = String((e as { message?: string })?.message ?? e).toLowerCase();
+  if (msg.includes('hard limit') || msg.includes('billing')) {
+    return new Error('Tài khoản OpenAI đã chạm HẠN MỨC CHI TIÊU tháng — không tạo được ảnh AI. Báo quản trị viên vào platform.openai.com → Settings → Limits để tăng "monthly budget" hoặc nạp thêm credit. (Ảnh đã tạo trước đó vẫn dùng bình thường.)');
+  }
+  if (msg.includes('insufficient_quota') || msg.includes('exceeded your current quota')) {
+    return new Error('Tài khoản OpenAI đã HẾT credit — báo quản trị viên nạp thêm tại platform.openai.com → Billing.');
+  }
+  if (msg.includes('429') || msg.includes('rate limit')) {
+    return new Error('OpenAI đang quá tải yêu cầu (rate limit) — chờ ~30 giây rồi thử tạo lại.');
+  }
+  return e instanceof Error ? e : new Error(String(e));
 }
 
 /**
  * Run an OpenAI call; on quota/billing exhaustion retry once with
  * OPENAI_API_KEY_BACKUP (optional second account) so image generation
- * keeps working when the primary key runs dry.
+ * keeps working when the primary key runs dry. Khi hết đường lùi → ném
+ * lỗi tiếng Việt dễ hiểu thay vì raw English của OpenAI.
  */
 async function withQuotaFallback<T>(fn: (client: OpenAI) => Promise<T>): Promise<T> {
   try {
     return await fn(getClient());
   } catch (e) {
     const backupKey = process.env.OPENAI_API_KEY_BACKUP;
-    if (!backupKey || !isQuotaError(e)) throw e;
+    if (!backupKey || !isQuotaError(e)) throw friendlyImageError(e);
     console.warn('[openai-image] primary key quota exhausted — retrying with OPENAI_API_KEY_BACKUP');
     if (!_backupClient) _backupClient = new OpenAI({ apiKey: backupKey });
-    return await fn(_backupClient);
+    try {
+      return await fn(_backupClient);
+    } catch (e2) {
+      throw friendlyImageError(e2);
+    }
   }
 }
 

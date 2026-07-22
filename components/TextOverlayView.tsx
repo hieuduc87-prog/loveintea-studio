@@ -27,7 +27,11 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
   // Carousel ≤5 ảnh (card 80981061) + đưa vào Review & Queue (card ca3a7b94)
   const [carSel, setCarSel] = useState<string[]>([]);
   const [carResults, setCarResults] = useState<string[]>([]);
-  const [carSlides, setCarSlides] = useState<{ headline: string; sub: string }[]>([]);
+  type SlideFields = { headline: string; sub: string; cta: string; badge: string };
+  const [carSlides, setCarSlides] = useState<SlideFields[]>([]);
+  const [carLayout, setCarLayout] = useState<LayoutId>('bottom-headline');
+  const [carBaseUrls, setCarBaseUrls] = useState<string[]>([]); // ảnh nền gốc để render lại từng slide
+  const [reRendering, setReRendering] = useState<number | null>(null);
   const [pushing, setPushing] = useState(false);
   const [queueMsg, setQueueMsg] = useState('');
 
@@ -131,9 +135,31 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
       const d = await r.json();
       if (!r.ok) { setErr(d.error || 'Lỗi tạo carousel'); return; }
       setCarResults(d.urls || []);
-      setCarSlides(d.slides || []);
+      setCarSlides((d.slides || []).map((s: Partial<SlideFields>) => ({ headline: s.headline || '', sub: s.sub || '', cta: s.cta || '', badge: s.badge || '' })));
+      setCarLayout((d.layout as LayoutId) || layout);
+      setCarBaseUrls([...carSel]);
       setResult('');
     } finally { setBusy(false); }
+  }
+
+  // Sửa text 1 slide trong carousel rồi render lại RIÊNG ảnh đó (card 40b556ba —
+  // sửa gồm cả xóa hết text/thêm bớt). Giữ nguyên các ảnh còn lại.
+  function editSlideField(i: number, field: keyof SlideFields, val: string) {
+    setCarSlides(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
+  }
+  async function reRenderSlide(i: number) {
+    const f = carSlides[i]; const base = carBaseUrls[i];
+    if (!base) { setErr('Không tìm thấy ảnh nền gốc của slide này'); return; }
+    setReRendering(i); setErr('');
+    try {
+      const r = await fetch(`/api/content/text-overlay?brand=${brandId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseImageUrl: base, layout: carLayout, headline: f.headline, sub: f.sub, cta: f.cta, badge: f.badge, brandName }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setErr(d.error || 'Lỗi render lại ảnh'); return; }
+      setCarResults(prev => prev.map((u, idx) => idx === i ? `${d.url}?t=${Date.now()}` : u));
+    } finally { setReRendering(null); }
   }
 
   // Đưa thành phẩm vào Review & Queue thành bài draft — bấm Schedule ở đó
@@ -303,17 +329,41 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 grid place-items-center min-h-[420px]">
             {carResults.length ? (
               <div className="w-full">
-                <div className="grid grid-cols-2 gap-2">
+                <p className="text-[11px] text-gray-500 mb-2">Sửa chữ từng ảnh (xoá hết cũng được) rồi bấm «Render lại ảnh này». Xong đưa cả bộ sang Review & Queue.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {carResults.map((u, i) => (
-                    <div key={i} className="text-center">
+                    <div key={i} className="bg-gray-800/40 border border-gray-800 rounded-lg p-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={u} alt={`slide ${i + 1}`} className="rounded-lg w-full" />
-                      <a href={u} download className="text-[11px] text-brand-400 hover:underline">⬇ Ảnh {i + 1}</a>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-[11px] text-gray-400 font-medium">Ảnh {i + 1}</span>
+                        <a href={u} download className="text-[11px] text-brand-400 hover:underline">⬇ Tải</a>
+                      </div>
+                      {carSlides[i] && (
+                        <div className="space-y-1 mt-1.5">
+                          <input value={carSlides[i].headline} onChange={e => editSlideField(i, 'headline', e.target.value)} placeholder="Tiêu đề (để trống = không chữ)"
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[11px] text-white" />
+                          <input value={carSlides[i].sub} onChange={e => editSlideField(i, 'sub', e.target.value)} placeholder={carLayout === 'benefit-list' ? 'Lợi ích, ngăn bằng |' : 'Phụ đề'}
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[11px] text-white" />
+                          {(carLayout === 'top-banner' || carLayout === 'benefit-list' || carLayout === 'promo-badge') && (
+                            <input value={carSlides[i].cta} onChange={e => editSlideField(i, 'cta', e.target.value)} placeholder="CTA"
+                              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[11px] text-white" />
+                          )}
+                          {carLayout === 'promo-badge' && (
+                            <input value={carSlides[i].badge} onChange={e => editSlideField(i, 'badge', e.target.value)} placeholder="Badge"
+                              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-[11px] text-white" />
+                          )}
+                          <button onClick={() => reRenderSlide(i)} disabled={reRendering !== null}
+                            className="w-full py-1 rounded bg-brand-600/80 hover:bg-brand-500 disabled:opacity-50 text-white text-[11px] font-medium">
+                            {reRendering === i ? '⟳ Đang render…' : '🔄 Render lại ảnh này'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
-                <button onClick={() => pushToQueue(carResults, carSlides.map(s => [s.headline, s.sub].filter(Boolean).join(' — ')).join('\n'))}
-                  disabled={pushing}
+                <button onClick={() => pushToQueue(carResults.map(u => u.split('?')[0]), carSlides.map(s => [s.headline, s.sub].filter(Boolean).join(' — ')).filter(Boolean).join('\n'))}
+                  disabled={pushing || reRendering !== null}
                   className="w-full mt-3 py-2 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-medium">
                   {pushing ? '⟳ Đang tạo bài…' : `➕ Đưa carousel ${carResults.length} ảnh vào Review & Queue`}
                 </button>

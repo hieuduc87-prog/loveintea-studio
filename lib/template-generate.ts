@@ -159,13 +159,19 @@ export async function generateTemplateImages(opts: {
       if (url) images.push(url);
       onLog?.(`slide ${i + 1}/${slideUrls.length} ✓`);
     } catch (e) {
-      const m = `slide ${i + 1}: ${String(e instanceof Error ? e.message : e).slice(0, 160)}`;
+      const m = `slide ${i + 1}: ${String(e instanceof Error ? e.message : e).slice(0, 260)}`;
       warnings.push(m); onLog?.(`⚠ ${m}`);
     }
     onProgress?.(((i + 1) / slideUrls.length) * 90);
   }
 
-  if (!images.length) throw new Error(`Không sinh được ảnh nào. ${warnings.join(' | ') || 'Kiểm tra OPENAI_API_KEY / quota.'}`);
+  if (!images.length) {
+    // Nếu MỌI slide fail cùng 1 lý do (vd hết hạn mức OpenAI) → hiện 1 lần cho gọn,
+    // không lặp "slide 1: ... | slide 2: ..." với cùng nội dung.
+    const reasons = warnings.map(w => w.replace(/^slide \d+:\s*/, ''));
+    const uniq = Array.from(new Set(reasons));
+    throw new Error(uniq.length === 1 ? uniq[0] : `Không sinh được ảnh nào. ${warnings.join(' | ') || 'Kiểm tra OPENAI_API_KEY / quota.'}`);
+  }
 
   // Caption bám structure (English mặc định — brand bán US)
   let caption = ''; let hashtags = '';
