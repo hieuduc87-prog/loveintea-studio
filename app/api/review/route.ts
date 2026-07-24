@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No caption to review' }, { status: 400 });
     }
 
-    const result = reviewContent(captionText, bid);
+    const result = reviewContent(captionText, bid, postId);
 
     // Update post review status if postId provided
     if (postId) {

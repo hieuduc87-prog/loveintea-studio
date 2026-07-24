@@ -252,6 +252,20 @@ export async function postReelToInstagram(opts: {
 }
 
 /** Post to Instagram Business Account */
+/** IG media container xử lý ẢNH BẤT ĐỒNG BỘ — publish ngay khi container chưa
+ *  FINISHED sẽ lỗi/rớt âm thầm (đặc biệt carousel nhiều ảnh). Poll status_code
+ *  tới FINISHED trước khi publish. Trả '' nếu ok, hoặc message lỗi tiếng Việt. */
+async function waitIgContainer(containerId: string, tok: string, tries = 20): Promise<string> {
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch(`${GRAPH}/${containerId}?fields=status_code,status&access_token=${tok}`);
+    const d = await r.json() as { status_code?: string; status?: string };
+    if (d.status_code === 'FINISHED') return '';
+    if (d.status_code === 'ERROR' || d.status_code === 'EXPIRED') return `IG xử lý ảnh thất bại (${d.status_code}${d.status ? ': ' + d.status : ''})`;
+    await new Promise(res => setTimeout(res, 2000)); // IN_PROGRESS → chờ 2s
+  }
+  return 'IG xử lý ảnh quá lâu (timeout) — thử đăng lại';
+}
+
 export async function postToInstagram(opts: {
   caption: string;
   imageUrls: string[];
@@ -277,6 +291,9 @@ export async function postToInstagram(opts: {
       const cont = await contRes.json() as { id?: string; error?: { message: string } };
       if (!cont.id) return { ok: false, error: cont.error?.message ?? 'Container failed' };
 
+      const waitErr = await waitIgContainer(cont.id, tok);
+      if (waitErr) return { ok: false, error: waitErr };
+
       const pubRes = await fetch(`${GRAPH}/${igId}/media_publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -287,7 +304,7 @@ export async function postToInstagram(opts: {
       return { ok: true, postId: pub.id };
     }
 
-    // Carousel
+    // Carousel — tạo từng child, CHỜ mỗi child FINISHED, rồi tạo container carousel, CHỜ, publish.
     const children: string[] = [];
     for (const url of imageUrls) {
       const r = await fetch(`${GRAPH}/${igId}/media`, {
@@ -295,8 +312,11 @@ export async function postToInstagram(opts: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_url: toAbsoluteUrl(url), is_carousel_item: true, access_token: tok }),
       });
-      const d = await r.json() as { id?: string };
-      if (d.id) children.push(d.id);
+      const d = await r.json() as { id?: string; error?: { message: string } };
+      if (!d.id) return { ok: false, error: d.error?.message ?? 'IG tạo ảnh carousel thất bại' };
+      const waitErr = await waitIgContainer(d.id, tok);
+      if (waitErr) return { ok: false, error: waitErr };
+      children.push(d.id);
     }
     const carRes = await fetch(`${GRAPH}/${igId}/media`, {
       method: 'POST',
@@ -305,6 +325,9 @@ export async function postToInstagram(opts: {
     });
     const car = await carRes.json() as { id?: string; error?: { message: string } };
     if (!car.id) return { ok: false, error: car.error?.message ?? 'Carousel failed' };
+
+    const carWaitErr = await waitIgContainer(car.id, tok);
+    if (carWaitErr) return { ok: false, error: carWaitErr };
 
     const pubRes = await fetch(`${GRAPH}/${igId}/media_publish`, {
       method: 'POST',

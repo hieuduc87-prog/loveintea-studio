@@ -76,7 +76,8 @@ ${rules}`;
       plan = await generateJSON(`Bạn là art director. Đề xuất chữ phủ lên ảnh quảng cáo, đúng chất brand.\n${brandBlock}\nYÊU CẦU:\n${rules}`);
     }
 
-    const layout = (LAYOUTS.includes(plan.layout as OverlayLayout) ? plan.layout : (layoutHint || 'bottom-headline')) as OverlayLayout;
+    // Layout NGƯỜI DÙNG chọn thắng (card cafd98b7) — chỉ để AI tự chọn khi user chưa chỉ định.
+    const layout = (layoutHint || (LAYOUTS.includes(plan.layout as OverlayLayout) ? plan.layout : 'bottom-headline')) as OverlayLayout;
     const url = await renderOverlayToUrl({
       baseImageUrl: body.baseImageUrl, layout,
       fields: {

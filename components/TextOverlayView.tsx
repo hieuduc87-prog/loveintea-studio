@@ -34,6 +34,9 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
   const [reRendering, setReRendering] = useState<number | null>(null);
   const [pushing, setPushing] = useState(false);
   const [queueMsg, setQueueMsg] = useState('');
+  // Sản phẩm gắn kèm để AI viết chữ BÁM sản phẩm (card 438de571)
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [productId, setProductId] = useState('');
 
   const [gallery, setGallery] = useState<ImgItem[]>([]);
   // Kho ảnh nền để phủ chữ: lấy từ ảnh bài đã tạo + ảnh sản phẩm của brand.
@@ -54,6 +57,7 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
         .map((u: string) => ({ url: u.split('?')[0] }));
       const b: ImgItem[] = (prods.products || [])
         .map((p: { image_url?: string; name?: string }) => p.image_url ? { url: p.image_url, label: p.name } : null).filter(Boolean);
+      setProducts((prods.products || []).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
       const seen = new Set<string>();
       setGallery([...a, ...b].filter(i => i.url && !seen.has(i.url) && seen.add(i.url)).slice(0, 40));
     } catch { /* ignore */ }
@@ -93,7 +97,7 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
     try {
       const r = await fetch(`/api/content/text-overlay/suggest?brand=${brandId}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: headline.trim() || undefined }),
+        body: JSON.stringify({ topic: headline.trim() || undefined, productId: productId || undefined, layout }),
       });
       const d = await r.json();
       if (!r.ok) { setErr(d.error || 'Lỗi gợi ý'); return; }
@@ -109,7 +113,7 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
     try {
       const r = await fetch(`/api/content/text-overlay/auto?brand=${brandId}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ baseImageUrl: base, layout, brandName }),
+        body: JSON.stringify({ baseImageUrl: base, layout, productId: productId || undefined, brandName }),
       });
       const d = await r.json();
       if (!r.ok) { setErr(d.error || 'Lỗi tự động'); return; }
@@ -130,7 +134,7 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
     try {
       const r = await fetch(`/api/content/text-overlay/carousel?brand=${brandId}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrls: carSel, topic: headline.trim() || undefined, brandName }),
+        body: JSON.stringify({ imageUrls: carSel, topic: headline.trim() || undefined, layout, productId: productId || undefined, brandName }),
       });
       const d = await r.json();
       if (!r.ok) { setErr(d.error || 'Lỗi tạo carousel'); return; }
@@ -296,7 +300,14 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
                 {suggesting ? '⟳ AI đang nghĩ…' : '✨ AI gợi ý chữ (theo brand)'}
               </button>
             </div>
-            <p className="text-[11px] text-gray-500 -mt-1">Gõ ý chính vào ô tiêu đề (tuỳ chọn) rồi bấm gợi ý — AI đề xuất kiểu + tiêu đề/CTA đúng chất brand.</p>
+            <p className="text-[11px] text-gray-500 -mt-1">Chọn sản phẩm + gõ ý chính (vd &quot;công dụng của trà Hibiscus&quot;) vào ô tiêu đề, rồi bấm gợi ý / tạo — AI viết chữ BÁM sản phẩm &amp; chủ đề đó.</p>
+            {products.length > 0 && (
+              <select value={productId} onChange={e => setProductId(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="">— Không gắn sản phẩm (viết chung theo brand) —</option>
+                {products.map(p => <option key={p.id} value={p.id}>🫖 {p.name}</option>)}
+              </select>
+            )}
             <input value={headline} onChange={e => setHeadline(e.target.value)} placeholder="Tiêu đề chính (bắt buộc)"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
             <input value={sub} onChange={e => setSub(e.target.value)}

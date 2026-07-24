@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120; // IG poll status container (carousel nhiều ảnh) có thể mất chục giây
 import { NextRequest, NextResponse } from 'next/server';
 import { postToFacebook, postToInstagram } from '@/lib/facebook';
 import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';

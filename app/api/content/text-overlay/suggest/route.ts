@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const db = getDb();
     const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;
     const product = body.productId
-      ? db.prepare('SELECT name, pitch, theme, ingredients, best_moment FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(body.productId, brandId, body.productId) as Record<string, string> | undefined
+      ? db.prepare('SELECT name, pitch, theme, ingredients, best_moment, use_cases FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(body.productId, brandId, body.productId) as Record<string, string> | undefined
       : undefined;
 
     // Phân tích chữ của template đã chọn (nếu có) — để bám ĐÚNG kiểu text template dùng.
@@ -40,25 +40,34 @@ export async function POST(req: NextRequest) {
     }
 
     const langName = resolveLangName(undefined, brandId);
+    const userLayout = body.layout && LAYOUTS.includes(body.layout) ? body.layout : '';
     const prompt = `Bạn là art director. Đề xuất PHƯƠNG ÁN CHỮ để PHỦ LÊN ẢNH quảng cáo (không viết caption dài), đúng chất thương hiệu.
 
 BRAND: ${brandId}
 - Tagline: ${dna?.tagline ?? ''} | Voice: ${dna?.voice_traits ?? '[]'}
 - Khách hàng: ${dna?.target_audience ?? ''} | Insight: ${dna?.insight ?? ''}
 - COMPLIANCE (tuyệt đối tuân thủ, KHÔNG nói điều cấm): ${dna?.compliance_json ?? '{}'}
-${product ? `SẢN PHẨM: ${product.name} — ${product.pitch ?? ''} (${product.theme ?? ''}; thành phần: ${product.ingredients ?? ''})` : 'Brand-level (không gắn sản phẩm cụ thể)'}
-${body.topic ? `Ý CHÍNH: ${body.topic}` : ''}${tplText}
+${product ? `SẢN PHẨM (BÁM SÁT — viết ĐÚNG về sản phẩm này, KHÔNG chung chung):
+- Tên: ${product.name}
+- Pitch: ${product.pitch ?? ''}
+- Chủ đề/công dụng chính: ${product.theme ?? ''}
+- Thành phần: ${product.ingredients ?? ''}
+- Thời điểm dùng: ${product.best_moment ?? ''}
+- Trường hợp dùng / lợi ích: ${product.use_cases ?? ''}` : 'Brand-level (không gắn sản phẩm cụ thể)'}
+${body.topic ? `Ý CHÍNH NGƯỜI DÙNG YÊU CẦU (BÁM SÁT chủ đề này, viết đúng trọng tâm): ${body.topic}` : ''}${tplText}
 
 YÊU CẦU:
 - Viết TOÀN BỘ chữ bằng ${langName}. Ngắn, mạnh, dừng-cuộn được.
-- Chọn 1 layout phù hợp trong: ${LAYOUTS.join(', ')} (bottom-headline=tiêu đề đáy; top-banner=banner đỉnh; center-quote=trích dẫn giữa; benefit-list=liệt kê lợi ích; promo-badge=khuyến mãi).
+${product || body.topic ? '- Nội dung PHẢI liên quan trực tiếp tới sản phẩm/chủ đề nêu trên (đúng thành phần, công dụng, cách dùng thật); công dụng diễn đạt theo compliance (vd "theo truyền thống dùng để hỗ trợ..."). TUYỆT ĐỐI không lạc đề, không chung chung.' : ''}
+${userLayout ? `- Kiểu layout ĐÃ CHỌN (giữ nguyên, viết chữ đúng kiểu này): "${userLayout}".` : `- Chọn 1 layout phù hợp trong: ${LAYOUTS.join(', ')} (bottom-headline=tiêu đề đáy; top-banner=banner đỉnh; center-quote=trích dẫn giữa; benefit-list=liệt kê lợi ích; promo-badge=khuyến mãi).`}
 - headline: cực ngắn (≤7 từ), hook mạnh. sub: 1 câu bổ trợ (có thể rỗng). cta: động từ + cụ thể (vd "Mua ngay"). badge: chỉ khi promo (vd "MỚI","-20%"), không thì rỗng.
 - Nếu layout=benefit-list: sub là 2-3 lợi ích ngăn nhau bằng dấu | .
 
 Trả ONLY JSON: {"layout":"...","headline":"...","sub":"...","cta":"...","badge":""}`;
 
     const o = await generateJSON<{ layout?: string; headline?: string; sub?: string; cta?: string; badge?: string }>(prompt);
-    const layout = LAYOUTS.includes(String(o.layout)) ? String(o.layout) : (body.layout && LAYOUTS.includes(body.layout) ? body.layout : 'bottom-headline');
+    // Layout người dùng chọn thắng (card cafd98b7); chỉ dùng AI-chọn khi user chưa chỉ định.
+    const layout = userLayout || (LAYOUTS.includes(String(o.layout)) ? String(o.layout) : 'bottom-headline');
     return NextResponse.json({
       ok: true,
       layout,

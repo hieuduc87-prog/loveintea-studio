@@ -317,7 +317,7 @@ const BANNED_CLAIMS = [
   'weight loss', 'anti-aging', 'cleanses', 'flushes toxins',
 ];
 
-export function reviewContent(caption: string, brandId: string): ReviewResult {
+export function reviewContent(caption: string, brandId: string, excludePostId?: string): ReviewResult {
   const gates = {
     claimSafety: { passed: true, issues: [] as string[] },
     aiQuality: { passed: true, issues: [] as string[] },
@@ -350,12 +350,15 @@ export function reviewContent(caption: string, brandId: string): ReviewResult {
   // Gate 3: Dedup — check against recent posts
   try {
     const db = getDb();
+    // Loại CHÍNH bài đang đăng ra khỏi so sánh — nếu không, đăng FB xong rồi đăng
+    // tiếp IG sẽ thấy bản FB vừa đăng là "trùng 100%" và bị chặn (card df16e755).
     const recent = db.prepare(
       `SELECT caption FROM posts
        WHERE brand_id = ? AND status IN ('published', 'scheduled')
        AND created_at > datetime('now', '-30 days')
+       AND id != ?
        ORDER BY created_at DESC LIMIT 50`
-    ).all(brandId) as { caption: string }[];
+    ).all(brandId, excludePostId ?? '') as { caption: string }[];
 
     for (const post of recent) {
       if (!post.caption) continue;
