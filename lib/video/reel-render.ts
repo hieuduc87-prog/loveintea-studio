@@ -21,7 +21,7 @@ import {
 } from './ffmpeg';
 import { falImage, falImageToVideo, falSfx, friendlyFalError } from './fal';
 import { ReelPlan, ReelSceneSpec } from './reel-director';
-import { SKUS, PALETTE, REEL_GRADE_VF, NEGATIVE_PROMPT, SAFE } from './reel-template';
+import { SKUS, PALETTE, REEL_GRADE_VF, SAFE } from './reel-template';
 import { ensureBrandLibrary, brandLibRoot, clipCacheRoot, resolvePackshot, resolveLogo, resolveFonts } from './brand-library';
 import { renderOverlayFramesHtml } from './render';
 import { analyzeImage } from '../gemini';
@@ -191,32 +191,39 @@ async function buildEndCard(brandId: string, skuCode: string, ctaText: string, d
   ]);
 }
 
-/** Ghép segments: hard/match = concat, xfade = xfade 0.3s. Trả tổng duration. */
+/** Ghép segments trong MỘT filter graph (1 lần encode duy nhất — không generation
+ *  loss): trong nhóm hard/match cut = concat; giữa các nhóm = xfade 0.3s. */
 async function assemble(segs: Array<{ file: string; dur: number; transitionOut: string }>, work: string, out: string): Promise<number> {
-  let acc = segs[0].dur;
-  let current = segs[0].file;
+  const groups: number[][] = [[0]];
   for (let i = 1; i < segs.length; i++) {
-    const next = segs[i];
-    const stepOut = path.join(work, `asm_${i}.mp4`);
-    if (segs[i - 1].transitionOut === 'xfade') {
-      const offset = Math.max(0, acc - XF);
-      await ffmpeg([
-        '-i', current, '-i', next.file,
-        '-filter_complex', `[0:v][1:v]xfade=transition=fade:duration=${XF}:offset=${offset.toFixed(3)}[v]`,
-        '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p', stepOut,
-      ]);
-      acc = acc + next.dur - XF;
-    } else {
-      await ffmpeg([
-        '-i', current, '-i', next.file,
-        '-filter_complex', `[0:v][1:v]concat=n=2:v=1:a=0[v]`,
-        '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p', stepOut,
-      ]);
-      acc = acc + next.dur;
-    }
-    current = stepOut;
+    if (segs[i - 1].transitionOut === 'xfade') groups.push([i]);
+    else groups[groups.length - 1].push(i);
   }
-  fs.copyFileSync(current, out);
+  const inputs: string[] = [];
+  segs.forEach(s => inputs.push('-i', s.file));
+  const parts: string[] = [];
+  const groupLabels: string[] = [];
+  const groupDurs: number[] = [];
+  groups.forEach((g, gi) => {
+    const lbl = `[g${gi}]`;
+    if (g.length === 1) parts.push(`[${g[0]}:v]null${lbl}`);
+    else parts.push(g.map(i => `[${i}:v]`).join('') + `concat=n=${g.length}:v=1:a=0${lbl}`);
+    groupLabels.push(lbl);
+    groupDurs.push(g.reduce((a, i) => a + segs[i].dur, 0));
+  });
+  let prev = groupLabels[0];
+  let acc = groupDurs[0];
+  for (let gi = 1; gi < groups.length; gi++) {
+    const label = gi === groups.length - 1 ? '[v]' : `[x${gi}]`;
+    parts.push(`${prev}${groupLabels[gi]}xfade=transition=fade:duration=${XF}:offset=${Math.max(0, acc - XF).toFixed(3)}${label}`);
+    acc = acc + groupDurs[gi] - XF;
+    prev = label;
+  }
+  await ffmpeg([
+    ...inputs, '-filter_complex', parts.join(';'),
+    '-map', groups.length === 1 ? groupLabels[0] : '[v]',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', out,
+  ]);
   return acc;
 }
 
