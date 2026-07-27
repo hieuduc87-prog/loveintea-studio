@@ -30,4 +30,5 @@ Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com**
 ## Cập nhật gần nhất (phiên sau ghi đè, giữ ≤5 dòng)
 
 
-- [session 2026-07-27] 6 commit — feat(reel) · fix(reel) · test(security) · refactor(reel) · feat(video) · docs(video)
+
+- [session 2026-07-27] 7 commit — fix(reel) · feat(reel) · test(security) · refactor(reel) · feat(video) · docs(video)

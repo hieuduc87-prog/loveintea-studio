@@ -213,16 +213,19 @@ async function assemble(segs: Array<{ file: string; dur: number; transitionOut: 
   const groupDurs: number[] = [];
   groups.forEach((g, gi) => {
     const lbl = `[g${gi}]`;
-    if (g.length === 1) parts.push(`[${g[0]}:v]null${lbl}`);
-    else parts.push(g.map(i => `[${i}:v]`).join('') + `concat=n=${g.length}:v=1:a=0${lbl}`);
+    // settb=AVTB: xfade BẮT BUỘC 2 input cùng timebase (end card từ PNG ra
+    // tb 1/1000000, clip h264 1/15360 — không ép là fail).
+    if (g.length === 1) parts.push(`[${g[0]}:v]settb=AVTB,fps=${FPS}${lbl}`);
+    else parts.push(g.map(i => `[${i}:v]`).join('') + `concat=n=${g.length}:v=1:a=0,settb=AVTB,fps=${FPS}${lbl}`);
     groupLabels.push(lbl);
     groupDurs.push(g.reduce((a, i) => a + segs[i].dur, 0));
   });
   let prev = groupLabels[0];
   let acc = groupDurs[0];
   for (let gi = 1; gi < groups.length; gi++) {
-    const label = gi === groups.length - 1 ? '[v]' : `[x${gi}]`;
-    parts.push(`${prev}${groupLabels[gi]}xfade=transition=fade:duration=${XF}:offset=${Math.max(0, acc - XF).toFixed(3)}${label}`);
+    const last = gi === groups.length - 1;
+    const label = last ? '[v]' : `[x${gi}]`;
+    parts.push(`${prev}${groupLabels[gi]}xfade=transition=fade:duration=${XF}:offset=${Math.max(0, acc - XF).toFixed(3)}${last ? '' : ',settb=AVTB,fps=' + FPS}${label}`);
     acc = acc + groupDurs[gi] - XF;
     prev = label;
   }
