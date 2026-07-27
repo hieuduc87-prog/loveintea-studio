@@ -161,6 +161,13 @@ export async function renderProject(projectId: string): Promise<void> {
     return renderRecipeProject(projectId);
   }
 
+  // Template ai_reel (Creative Hub Reel Machine): full AI footage theo đề bài
+  // Iced Summer — renderer riêng (fal.ai i2v + ASMR + end card composite).
+  if (String(project.template || '') === 'ai_reel') {
+    const { renderReelProject } = await import('./reel-render');
+    return renderReelProject(projectId);
+  }
+
   const saveLog = (status: string, extra: Record<string, string | null> = {}) => {
     db.prepare(`UPDATE video_projects SET status=?, render_log=?, output_url=COALESCE(?, output_url), error=?, updated_at=datetime('now') WHERE id=?`)
       .run(status, logs.join('\n'), extra.output_url ?? null, extra.error ?? null, projectId);
