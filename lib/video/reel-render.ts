@@ -102,7 +102,14 @@ async function generateSceneClip(scene: ReelSceneSpec, skuName: string, work: st
       fs.writeFileSync(imgCached, img);
     }
     logJob(jobId, `${scene.blockId}: image→video (Hailuo 6s)${attempt ? ' — retry' : ''}…`);
-    const video = await falImageToVideo(img, scene.prompt + strengthen);
+    let video: Buffer;
+    try {
+      video = await falImageToVideo(img, scene.prompt + strengthen);
+    } catch (e) {
+      logJob(jobId, `${scene.blockId}: fal lỗi — ${friendlyFalError(e)}`);
+      if (attempt === 1) throw e;
+      continue; // transient (timeout/queue) → thử lại vòng 2
+    }
     const tmp = path.join(work, `gen_${scene.blockId}_${attempt}.mp4`);
     fs.writeFileSync(tmp, video);
     const qa = await qaClip(tmp, scene, skuName, work);

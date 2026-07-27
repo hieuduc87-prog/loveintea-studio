@@ -85,9 +85,10 @@ export async function falImage(prompt: string, width = 768, height = 1344): Prom
 /** Hailuo 02 standard i2v — 6s 768P từ 1 frame gốc. Ảnh gửi dạng data URI. */
 export async function falImageToVideo(imagePng: Buffer, prompt: string): Promise<Buffer> {
   const dataUri = `data:image/png;base64,${imagePng.toString('base64')}`;
+  // 12 phút: Hailuo giờ cao điểm có thể xếp hàng lâu (thực tế 27/07: >6 phút)
   const out = await falRun<{ video: { url: string } }>('fal-ai/minimax/hailuo-02/standard/image-to-video', {
     prompt, image_url: dataUri, duration: '6', resolution: '768P', prompt_optimizer: true,
-  });
+  }, 720_000);
   const url = out.video?.url;
   if (!url) throw new Error('fal hailuo: không có video trả về');
   // Hailuo-02 standard 768P: $0.045/s × 6s = $0.27/clip (fal pricing)
