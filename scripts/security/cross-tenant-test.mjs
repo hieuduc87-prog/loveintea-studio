@@ -128,10 +128,15 @@ const CROSS = [ // A hitting B's resources → must be 403/404
   ['DELETE', `/api/blog/${P}b-blog`],
   ['PATCH',  `/api/image-library/${P}b-img`, { is_favorite: 1 }],
   ['DELETE', `/api/image-library/${P}b-img`],
+  // [LIT-VID-0727A] Reel Machine — brand từ ?brand= phải bị middleware chặn chéo store
+  ['GET',    `/api/video/reel?brand=${P}b`],
+  ['POST',   `/api/video/reel?brand=${P}b`, { sku: 'HIB', videoType: 'iced_summer', prompt: 'probe' }],
+  ['POST',   `/api/video/reel/analyze-refs?brand=${P}b`],
 ];
 const POSITIVE = [ // A hitting its OWN resources → must NOT be 403 (guard isn't blanket-deny)
   ['GET', `/api/brands/${P}a`],
   ['GET', `/api/products/${P}a-product/images`],
+  ['GET', `/api/video/reel?brand=${P}a`],
 ];
 
 async function call(jar, method, url, body) {
