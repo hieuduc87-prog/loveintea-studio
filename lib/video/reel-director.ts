@@ -12,9 +12,10 @@ import { generateJSON } from '../gemini';
 import { analyzeReferenceVideo, ReferenceAnalysis } from './analyze-reference';
 import { referencesRoot, readLibJson, writeLibJson, ensureBrandLibrary } from './brand-library';
 import {
-  ICED_SUMMER_BLOCKS, SKUS, SkuInfo, NEGATIVE_PROMPT, QUALITY_BLOCK, SCENE_CANVAS,
-  VIDEO_TYPE_ORDERS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE, HERO_CONCEPT,
+  ICED_SUMMER_BLOCKS, SKUS, NEGATIVE_PROMPT, QUALITY_BLOCK, SCENE_CANVAS,
+  VIDEO_TYPE_ORDERS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE,
 } from './reel-template';
+import { getProductProfile, ProductProfile } from './product-profile';
 
 export interface ReelSceneSpec {
   blockId: string;
@@ -31,7 +32,10 @@ export interface ReelSceneSpec {
 
 export interface ReelPlan {
   template: string;
+  /** Mã SKU legacy (LoveinTea) — plan mới dùng profile là chính. */
   sku: string;
+  /** Profile sản phẩm snapshot lúc dựng plan — render KHÔNG phụ thuộc bảng SKU. */
+  profile?: ProductProfile;
   videoType: string;
   userPrompt: string;
   scenes: ReelSceneSpec[];
@@ -77,11 +81,11 @@ function loadMotionDictionary(brandId: string, templateKey = REEL_TEMPLATE_ID): 
   return readLibJson<Record<string, unknown>>(brandId, `MOTION/${templateKey.replace(/_v\d+$/, '')}_motion_dictionary.json`);
 }
 
-function fillConcept(tpl: string, sku: SkuInfo): string {
+function fillConcept(tpl: string, prof: Pick<ProductProfile, 'ingredient' | 'garnish' | 'liquidColor'>): string {
   return tpl
-    .replaceAll('{ingredient}', sku.ingredient)
-    .replaceAll('{garnish}', sku.garnish)
-    .replaceAll('{liquidColor}', sku.liquidColor);
+    .replaceAll('{ingredient}', prof.ingredient)
+    .replaceAll('{garnish}', prof.garnish)
+    .replaceAll('{liquidColor}', prof.liquidColor);
 }
 
 function stripClaims(text: string): string {
@@ -90,13 +94,27 @@ function stripClaims(text: string): string {
   return out;
 }
 
-/** M1 — dựng ReelPlan. Gemini tinh chỉnh concept theo user prompt; template giữ khung cứng. */
+/** M1 — dựng ReelPlan. Gemini tinh chỉnh concept theo user prompt; template giữ khung cứng.
+ *  KHÁI QUÁT: nhận productId của BẤT KỲ brand/sản phẩm nào (profile đúc từ DB);
+ *  sku code là đường legacy LoveinTea. */
 export async function buildReelPlan(opts: {
-  brandId: string; sku: string; videoType: string; userPrompt: string;
+  brandId: string; sku?: string; productId?: string; videoType: string; userPrompt: string;
   versionIndex?: number; language?: string;
 }): Promise<ReelPlan> {
-  const sku = SKUS[opts.sku];
-  if (!sku) throw new Error(`SKU không hợp lệ: ${opts.sku} (chọn ${Object.keys(SKUS).join('/')})`);
+  let profile: ProductProfile;
+  if (opts.productId) {
+    profile = await getProductProfile(opts.brandId, opts.productId);
+  } else {
+    const legacy = SKUS[String(opts.sku || '').toUpperCase()];
+    if (!legacy) throw new Error(`Cần productId hoặc SKU hợp lệ (${Object.keys(SKUS).join('/')})`);
+    profile = {
+      productId: `prod-${legacy.productSlug}`, productName: legacy.name, productSlug: legacy.productSlug,
+      ingredient: legacy.ingredient, garnish: legacy.garnish, liquidColor: legacy.liquidColor,
+      moment: legacy.moment, heroSubject: `iced ${legacy.liquidColor} herbal tea`,
+    };
+  }
+  const skuCode = Object.values(SKUS).find(s => s.productSlug === profile.productSlug)?.code
+    || profile.productSlug.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 4) || 'PROD';
   const order = VIDEO_TYPE_ORDERS[opts.videoType] || VIDEO_TYPE_ORDERS.iced_summer;
   const motionDict = loadMotionDictionary(opts.brandId);
   const vIdx = opts.versionIndex ?? 0;
@@ -119,14 +137,14 @@ export async function buildReelPlan(opts: {
   try {
     const aiBlocks = blocks.filter(b => b.kind === 'ai');
     const r = await generateJSON<{ scenes: Record<string, string>; overlays: Array<{ blockId: string; text: string; role: string }>; cta: string }>(
-      `You are the scene director for a 10s premium vertical reel for LoveinTea ${sku.name} herbal tea (SKU ${sku.code}).
+      `You are the scene director for a 10s premium vertical reel for the beverage product "${profile.productName}".
 User's creative brief (Vietnamese possible): "${opts.userPrompt.slice(0, 500)}"
 Video type: ${opts.videoType}. Version index: ${vIdx} (vary wording slightly per version).
 Motion grammar learned from references (abstract only): ${JSON.stringify(motionDict ?? {}).slice(0, 3000)}
 
-For each scene id, refine the base concept into ONE vivid English sentence (subject + ONE action) staying 100% LoveinTea: ingredient = ${sku.ingredient}; garnish = ${sku.garnish}; liquid color = ${sku.liquidColor}. NEVER mention any text, logo, packaging, brand names, or competitor elements. NEVER change camera or timing.
+For each scene id, refine the base concept into ONE vivid English sentence (subject + ONE action) staying 100% true to THIS product: ingredient = ${profile.ingredient}; garnish = ${profile.garnish}; liquid color = ${profile.liquidColor}. NEVER mention any text, logo, packaging, brand names, or competitor elements. NEVER change camera or timing.
 Also propose AT MOST ${SAFE.maxTexts - 1} short text overlays (≤6 words each, sentence case, English) + 1 soft CTA (no "Buy now"/"Hurry"/urgency; no health claims like ${FORBIDDEN_CLAIMS.slice(0, 6).join(', ')}).
-Base concepts: ${JSON.stringify(Object.fromEntries(aiBlocks.map(b => [b.id, fillConcept(b.concept, sku)])))}
+Base concepts: ${JSON.stringify(Object.fromEntries(aiBlocks.map(b => [b.id, fillConcept(b.concept, profile)])))}
 Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"blockId":"...","text":"...","role":"hook|micro"}],"cta":"..."}`
     );
     refined = r.scenes || {};
@@ -139,7 +157,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
   }
 
   const scenes: ReelSceneSpec[] = blocks.map(b => {
-    const concept = refined[b.id] || fillConcept(b.concept, sku);
+    const concept = refined[b.id] || fillConcept(b.concept, profile);
     const motion = `${concept}. Camera: ${b.camera}, single continuous move.`;
     return {
       blockId: b.id,
@@ -149,7 +167,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
       hasGlass: b.hasGlass,
       // Continuity: editInstruction lấy NGUYÊN VĂN template (không cho Gemini refine —
       // refine tự do là nguồn "mỗi cảnh một cái ly" đã trả giá 27/07)
-      editInstruction: b.edit ? fillConcept(b.edit, sku) : undefined,
+      editInstruction: b.edit ? fillConcept(b.edit, profile) : undefined,
       imagePrompt: b.kind === 'ai'
         ? `${concept}. ${SCENE_CANVAS}. ${QUALITY_BLOCK}. ${NEGATIVE_PROMPT}`
         : '',
@@ -162,15 +180,16 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
 
   return {
     template: REEL_TEMPLATE_ID,
-    sku: sku.code,
+    sku: skuCode,
+    profile,
     videoType: opts.videoType,
     userPrompt: opts.userPrompt,
     scenes,
-    heroPrompt: `${fillConcept(HERO_CONCEPT, sku)}. ${SCENE_CANVAS}. ${QUALITY_BLOCK}. ${NEGATIVE_PROMPT}`,
+    heroPrompt: `a tall clear glass filled with ${profile.heroSubject}, realistic ice cubes, condensation drops on the glass, natural color, premium beverage beauty shot. ${SCENE_CANVAS}. ${QUALITY_BLOCK}. ${NEGATIVE_PROMPT}`,
     totalS: Math.round(cursor * 10) / 10,
     ctaText,
     textOverlays: [...overlays, { blockId: 'PRODUCT_CTA', text: ctaText, role: 'cta' }],
-    captionHint: `${sku.name} — ${sku.moment}. ${opts.userPrompt.slice(0, 200)}`,
+    captionHint: `${profile.productName} — ${profile.moment}. ${opts.userPrompt.slice(0, 200)}`,
     versionLabel: `v${vIdx + 1}`,
   };
 }

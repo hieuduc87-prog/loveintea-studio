@@ -83,6 +83,35 @@ export function resolveFonts(brandId: string): { headline: string | null; sub: s
   return { headline: find('headline'), sub: find('sub') };
 }
 
+// ── Template registry (repo + custom per-brand) ────────────────────────
+import { REEL_TEMPLATES, ReelTemplateDef } from './reel-template';
+
+/** Template theo id: repo registry trước, rồi BRAND_LIBRARY/TEMPLATES/reel_<id>.json
+ *  (template đúc từ brief). Không thấy → default iced_summer_v01. */
+export function getReelTemplate(brandId: string, templateId?: string): ReelTemplateDef {
+  const id = templateId || 'iced_summer_v01';
+  if (REEL_TEMPLATES[id]) return REEL_TEMPLATES[id];
+  const custom = readLibJson<ReelTemplateDef>(brandId, `TEMPLATES/reel_${id}.json`);
+  if (custom?.blocks?.length) return custom;
+  return REEL_TEMPLATES['iced_summer_v01'];
+}
+
+/** Danh sách template khả dụng của brand (repo + custom) — cho UI + brief matcher. */
+export function listReelTemplates(brandId: string): Array<{ id: string; name: string; description: string; source: 'builtin' | 'custom' }> {
+  const out: Array<{ id: string; name: string; description: string; source: 'builtin' | 'custom' }> =
+    Object.values(REEL_TEMPLATES).map(t => ({ id: t.id, name: t.name, description: t.description, source: 'builtin' as const }));
+  try {
+    const dir = path.join(brandLibRoot(brandId), 'TEMPLATES');
+    for (const f of fs.readdirSync(dir)) {
+      const m = f.match(/^reel_(.+)\.json$/);
+      if (!m || REEL_TEMPLATES[m[1]]) continue;
+      const t = readLibJson<ReelTemplateDef>(brandId, `TEMPLATES/${f}`);
+      if (t?.blocks?.length) out.push({ id: t.id || m[1], name: t.name || m[1], description: t.description || '', source: 'custom' });
+    }
+  } catch { /* chưa có custom */ }
+  return out;
+}
+
 export interface LibraryChecklist {
   ok: boolean;
   items: Array<{ key: string; label: string; ok: boolean; detail: string }>;

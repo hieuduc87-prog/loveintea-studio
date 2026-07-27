@@ -23,8 +23,13 @@ export async function GET(req: NextRequest) {
   const skuCodes = Object.keys(SKUS);
   const slugs = Object.fromEntries(skuCodes.map(k => [k, SKUS[k].productSlug]));
   const checklist = libraryChecklist(brandId, skuCodes, slugs);
+  // KHÁI QUÁT: mọi sản phẩm của brand đều chạy được (profile tự đúc từ DB)
+  const products = getDb().prepare(
+    'SELECT id, name, slug, image_url FROM products WHERE brand_id=? ORDER BY sort_order, name LIMIT 100'
+  ).all(brandId) as Array<{ id: string; name: string; slug: string; image_url: string | null }>;
   return NextResponse.json({
     checklist,
+    products: products.map(p => ({ id: p.id, name: p.name, hasImage: Boolean(p.image_url) })),
     skus: skuCodes.map(k => ({ code: k, name: SKUS[k].name, moment: SKUS[k].moment })),
     videoTypes: Object.keys(VIDEO_TYPE_ORDERS),
     falConfigured: Boolean(process.env.FAL_KEY),
@@ -39,34 +44,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'FAL_KEY chưa cấu hình — founder thêm key fal.ai vào .env server rồi restart.' }, { status: 400 });
   }
   const body = await req.json().catch(() => ({})) as {
-    sku?: string; videoType?: string; prompt?: string; versions?: number;
+    sku?: string; productId?: string; videoType?: string; prompt?: string; versions?: number;
   };
-  const sku = String(body.sku || 'HIB').toUpperCase();
-  if (!SKUS[sku]) return NextResponse.json({ error: `SKU không hợp lệ: ${sku}` }, { status: 400 });
+  const db = getDb();
+  // KHÁI QUÁT: productId của brand là đường chính; sku code là legacy LoveinTea
+  let productId = String(body.productId || '').trim() || undefined;
+  const sku = body.sku ? String(body.sku).toUpperCase() : undefined;
+  if (productId) {
+    const owned = db.prepare('SELECT id, name FROM products WHERE id=? AND brand_id=?').get(productId, brandId) as { id: string; name: string } | undefined;
+    if (!owned) return NextResponse.json({ error: 'Sản phẩm không thuộc brand này' }, { status: 403 });
+  } else if (!sku || !SKUS[sku]) {
+    return NextResponse.json({ error: 'Cần chọn sản phẩm (productId) hoặc SKU hợp lệ' }, { status: 400 });
+  }
+  const displayName = productId
+    ? (db.prepare('SELECT name FROM products WHERE id=?').get(productId) as { name: string }).name
+    : SKUS[sku!].name;
   const videoType = VIDEO_TYPE_ORDERS[String(body.videoType || '')] ? String(body.videoType) : 'iced_summer';
   const userPrompt = String(body.prompt || '').slice(0, 600);
   if (!userPrompt.trim()) return NextResponse.json({ error: 'Prompt là bắt buộc (Phiếu A).' }, { status: 400 });
   const versions = Math.min(3, Math.max(1, Number(body.versions) || 1));
 
-  const db = getDb();
   const jobId = createJob({
     brandId, kind: 'video', source: 'ReelMachine',
-    title: `🧊 Reel AI ${SKUS[sku].name} ×${versions}`,
-    meta: { sku, videoType, versions },
+    title: `🧊 Reel AI ${displayName} ×${versions}`,
+    meta: { sku, productId, videoType, versions },
   });
 
   try {
     const projectIds: string[] = [];
     for (let v = 0; v < versions; v++) {
       logJob(jobId, `Dựng plan ${v + 1}/${versions} (Gemini)…`);
-      const plan = await buildReelPlan({ brandId, sku, videoType, userPrompt, versionIndex: v });
+      const plan = await buildReelPlan({ brandId, sku, productId, videoType, userPrompt, versionIndex: v });
       const id = uuid();
       db.prepare(`INSERT INTO video_projects
         (id, brand_id, title, purpose, product_id, platform, aspect, target_duration_s,
          script_json, status, template, batch_id, version_label)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-        .run(id, brandId, `🧊 ${SKUS[sku].name} Reel ${plan.versionLabel}`, videoType,
-          `prod-${SKUS[sku].productSlug}`, 'reels', '9:16', Math.round(plan.totalS),
+        .run(id, brandId, `🧊 ${displayName} Reel ${plan.versionLabel}`, videoType,
+          productId || plan.profile?.productId || null, 'reels', '9:16', Math.round(plan.totalS),
           JSON.stringify(plan), 'queued', 'ai_reel', jobId, plan.versionLabel);
       projectIds.push(id);
     }

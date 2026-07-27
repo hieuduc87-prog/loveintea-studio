@@ -232,7 +232,7 @@ async function getSceneImage(scene: ReelSceneSpec, plan: ReelPlan, work: string,
 /** Gen 1 scene clip (cache theo hash prompt + ẢNH GỐC — đổi ảnh là clip mới). */
 async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: string, jobId: string): Promise<string> {
   const cacheDir = clipCacheRoot();
-  const skuName = SKUS[plan.sku]?.name || plan.sku;
+  const skuName = plan.profile?.productName || SKUS[plan.sku]?.name || plan.sku;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const strengthen = attempt === 1 ? ' STRICTLY: no letters of any kind, natural realistic beverage, physically correct.' : '';
@@ -285,9 +285,9 @@ async function encodeSceneSegment(src: string, scene: ReelSceneSpec, out: string
 
 /** End card 1.2s: packshot alpha + logo + CTA trên Cotton Cream, zoom 1.0→1.04.
  *  Chữ render bằng font brand THẬT qua Chromium — đúng luật "AI không vẽ chữ". */
-async function buildEndCard(brandId: string, skuCode: string, ctaText: string, durS: number, work: string, out: string): Promise<void> {
-  const sku = SKUS[skuCode];
-  const pack = resolvePackshot(brandId, skuCode, sku?.productSlug || '');
+async function buildEndCard(brandId: string, plan: ReelPlan, ctaText: string, durS: number, work: string, out: string): Promise<void> {
+  const slug = plan.profile?.productSlug || SKUS[plan.sku]?.productSlug || '';
+  const pack = resolvePackshot(brandId, plan.sku, slug);
   const logo = resolveLogo(brandId);
   const fonts = resolveFonts(brandId);
   const fontFace = (name: string, file: string | null) => file
@@ -531,8 +531,9 @@ export async function renderReelProject(projectId: string): Promise<void> {
     resetFalCostLog(); // chi phí THỰC: đếm từng call fal của run này
     const plan = JSON.parse(String(project.script_json || '{}')) as ReelPlan;
     if (!plan.scenes?.length) throw new Error('ReelPlan trống — tạo lại từ API /api/video/reel');
-    const sku = SKUS[plan.sku];
-    log(`ReelPlan ${plan.template} SKU=${plan.sku} type=${plan.videoType} ${plan.scenes.length} scene ${plan.versionLabel}`);
+    const prodName = plan.profile?.productName || SKUS[plan.sku]?.name || plan.sku;
+    const prodSlug = plan.profile?.productSlug || SKUS[plan.sku]?.productSlug || 'video';
+    log(`ReelPlan ${plan.template} ${prodName} SKU=${plan.sku} type=${plan.videoType} ${plan.scenes.length} scene ${plan.versionLabel}`);
 
     // M2 — gen clip AI (tuần tự — server 2 vCPU, tránh RAM spike; cache làm version 2-3 gần free)
     const aiScenes = plan.scenes.filter(s => s.kind === 'ai');
@@ -541,7 +542,7 @@ export async function renderReelProject(projectId: string): Promise<void> {
     for (const scene of plan.scenes) {
       const segOut = path.join(work, `seg_${scene.blockId}.mp4`);
       if (scene.kind === 'endcard') {
-        await buildEndCard(brandId, plan.sku, plan.ctaText, scene.end - scene.start, work, segOut);
+        await buildEndCard(brandId, plan, plan.ctaText, scene.end - scene.start, work, segOut);
         segs.push({ file: segOut, dur: scene.end - scene.start, transitionOut: scene.transitionOut });
         log(`${scene.blockId}: end card composite (packshot thật)`);
       } else {
@@ -633,7 +634,7 @@ export async function renderReelProject(projectId: string): Promise<void> {
     db.prepare(`INSERT INTO posts
       (id, sku_id, caption, hashtags, platforms, status, brand_id, video_url, image_url, notes, review_status)
       VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(uuid(), sku?.productSlug ?? 'video', caption, hashtags, 'facebook,instagram',
+      .run(uuid(), prodSlug, caption, hashtags, 'facebook,instagram',
         'draft', brandId, outputUrl, thumbUrl,
         `🧊 Reel AI ${plan.versionLabel} — ${plan.template} SKU ${plan.sku} — project ${projectId}`, 'pending');
     // Chi phí THỰC của run này: từng call fal × đơn giá verified (cache hit = $0)
@@ -665,18 +666,20 @@ export async function renderReelProject(projectId: string): Promise<void> {
 
 /** Caption theo brand language + claim-safe (Phiếu D: tone modern peer, không salesy). */
 async function buildReelCaption(brandId: string, plan: ReelPlan): Promise<string> {
-  const sku = SKUS[plan.sku];
+  const prof = plan.profile || (SKUS[plan.sku] ? {
+    productName: SKUS[plan.sku].name, moment: SKUS[plan.sku].moment,
+  } : { productName: plan.sku, moment: '' });
   try {
     const { generateJSON } = await import('../gemini');
     const { resolveLangName } = await import('../brand-lang');
     const lang = resolveLangName(undefined, brandId);
     const r = await generateJSON<{ caption: string }>(
-      `Write ONE Instagram Reel caption in ${lang} for LoveinTea ${sku?.name} herbal tea (${sku?.moment}).
+      `Write ONE Instagram Reel caption in ${lang} for the beverage product "${prof.productName}" (${prof.moment}).
 Brief: ${plan.captionHint.slice(0, 250)}
 Tone: modern peer, warm, premium, NOT salesy, no urgency words, NO health claims (no cure/detox/weight-loss).
 2-3 short lines + soft ending "${plan.ctaText}". Return ONLY JSON {"caption":"..."}`
     );
     if (r.caption) return String(r.caption).slice(0, 900);
   } catch { /* fallback */ }
-  return `${sku?.name} iced. ${plan.ctaText} 🍃`;
+  return `${prof.productName} iced. ${plan.ctaText} 🍃`;
 }

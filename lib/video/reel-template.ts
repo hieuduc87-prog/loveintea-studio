@@ -226,3 +226,47 @@ export const FORBIDDEN_CLAIMS = [
 
 export const REEL_TEMPLATE_ID = 'iced_summer_v01';
 export const REEL_TOTAL_S = 10.0;
+
+// ═══ TEMPLATE REGISTRY — kiến trúc MỞ ═══════════════════════════════════
+// Template = DATA, không phải code: thêm template mới = thêm 1 entry/1 file JSON
+// trong BRAND_LIBRARY/TEMPLATES/reel_<id>.json (đúc từ brief bằng matcher).
+// Cả hệ (director/render) chỉ đọc qua getReelTemplate() — không import hằng lẻ.
+
+export interface ReelTemplateDef {
+  id: string;
+  name: string;
+  /** Mô tả để brief-matcher chấm điểm phù hợp. */
+  description: string;
+  totalS: number;
+  blocks: ReelBlock[];
+  videoTypeOrders: Record<string, string[]>;
+  /** Concept ly hero — dùng {heroSubject} từ product profile. */
+  heroConcept: string;
+  sceneCanvas: string;
+  gradeVf: string;
+  negativePrompt: string;
+  qualityBlock: string;
+  softCtas: string[];
+}
+
+export const ICED_SUMMER_TEMPLATE: ReelTemplateDef = {
+  id: REEL_TEMPLATE_ID,
+  name: 'Iced Summer Sensory Reel 10s',
+  description: 'Sensory ASMR reel 10s cho đồ uống lạnh: macro ingredient → ice impact → pour → drink beauty → CTA. Hợp iced tea/beverage mùa hè, nhịp cắt nhanh 1.0-1.4s/shot, không voiceover.',
+  totalS: REEL_TOTAL_S,
+  blocks: ICED_SUMMER_BLOCKS,
+  videoTypeOrders: VIDEO_TYPE_ORDERS,
+  heroConcept: 'a tall clear glass filled with {heroSubject}, realistic ice cubes, condensation drops on the glass, natural color, premium beverage beauty shot',
+  sceneCanvas: SCENE_CANVAS,
+  gradeVf: REEL_GRADE_VF,
+  negativePrompt: NEGATIVE_PROMPT,
+  qualityBlock: QUALITY_BLOCK,
+  softCtas: SOFT_CTAS,
+};
+
+/** Registry template trong repo (versioned). Template custom per-brand đọc thêm
+ *  từ BRAND_LIBRARY/TEMPLATES/reel_*.json trong getReelTemplate (brand-library.ts
+ *  cung cấp IO — tránh import vòng). */
+export const REEL_TEMPLATES: Record<string, ReelTemplateDef> = {
+  [ICED_SUMMER_TEMPLATE.id]: ICED_SUMMER_TEMPLATE,
+};

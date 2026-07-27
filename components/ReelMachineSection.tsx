@@ -11,9 +11,14 @@ import { useCallback, useEffect, useState } from 'react';
 interface ChecklistItem { key: string; label: string; ok: boolean; detail: string }
 interface ReelMeta {
   checklist: { ok: boolean; items: ChecklistItem[] };
+  products: Array<{ id: string; name: string; hasImage: boolean }>;
   skus: Array<{ code: string; name: string; moment: string }>;
   videoTypes: string[];
   falConfigured: boolean;
+}
+interface MatchResult {
+  ok?: boolean; error?: string; confidence?: number; reason?: string; missing?: string[];
+  match?: { templateId: string | null; productId: string | null; videoType: string; prompt: string; versions: number };
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -26,7 +31,11 @@ const TYPE_LABELS: Record<string, string> = {
 
 export function ReelMachineSection({ brandId }: { brandId: string }) {
   const [meta, setMeta] = useState<ReelMeta | null>(null);
+  const [productId, setProductId] = useState('');
   const [sku, setSku] = useState('HIB');
+  const [brief, setBrief] = useState('');
+  const [matching, setMatching] = useState(false);
+  const [matchNote, setMatchNote] = useState('');
   const [videoType, setVideoType] = useState('iced_summer');
   const [prompt, setPrompt] = useState('');
   const [versions, setVersions] = useState(1);
@@ -45,11 +54,12 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
 
   async function run() {
     if (!prompt.trim()) { setMsg('❌ Nhập prompt mô tả video muốn có (bắt buộc theo đề bài).'); return; }
+    if (meta?.products?.length && !productId) { setMsg('❌ Chọn sản phẩm trước.'); return; }
     setBusy(true); setMsg('');
     try {
       const r = await fetch(`/api/video/reel?brand=${brandId}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku, videoType, prompt, versions }),
+        body: JSON.stringify(productId ? { productId, videoType, prompt, versions } : { sku, videoType, prompt, versions }),
       });
       const d = await r.json() as { ok?: boolean; error?: string; projectIds?: string[] };
       if (!d.ok) setMsg('❌ ' + (d.error ?? 'Tạo reel thất bại'));
@@ -67,6 +77,28 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
       else { setMsg(`✅ Đã học motion grammar từ ${d.clips} video mẫu.`); await load(); }
     } catch (e) { setMsg('❌ ' + String(e)); }
     setAnalyzing(false);
+  }
+
+  async function matchBrief() {
+    if (!brief.trim()) { setMatchNote('❌ Dán brief vào ô trước.'); return; }
+    setMatching(true); setMatchNote('');
+    try {
+      const r = await fetch(`/api/video/reel/match?brand=${brandId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brief }),
+      });
+      const d = await r.json() as MatchResult;
+      if (!d.ok || !d.match) setMatchNote('❌ ' + (d.error ?? 'Không khớp được'));
+      else {
+        if (d.match.productId) setProductId(d.match.productId);
+        if (d.match.videoType) setVideoType(d.match.videoType);
+        if (d.match.prompt) setPrompt(d.match.prompt);
+        if (d.match.versions) setVersions(Math.min(3, Math.max(1, d.match.versions)));
+        setMatchNote(`✅ ${d.reason ?? 'Đã khớp'} (độ tin ${Math.round((d.confidence ?? 0) * 100)}%)` +
+          (d.missing?.length ? ` — ⚠️ brief còn thiếu: ${d.missing.join('; ')}` : ''));
+      }
+    } catch (e) { setMatchNote('❌ ' + String(e)); }
+    setMatching(false);
   }
 
   const cl = meta?.checklist;
@@ -103,12 +135,33 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
         <p className="text-[11px] text-amber-400">⚠️ FAL_KEY chưa cấu hình trên server — cần founder thêm key fal.ai trước khi chạy.</p>
       )}
 
+      <div className="rounded-lg bg-gray-800/40 p-2 space-y-2">
+        <textarea value={brief} onChange={e => setBrief(e.target.value)} rows={2}
+          placeholder="🎯 Dán brief/đề bài vào đây (tự do hoặc phiếu A-E) → hệ tự khớp sản phẩm + loại video + prompt"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-[11px] text-white placeholder-gray-500" />
+        <div className="flex items-center gap-2">
+          <button onClick={matchBrief} disabled={matching}
+            className="text-[11px] px-3 py-1.5 rounded-lg bg-purple-700/40 text-purple-200 hover:bg-purple-700/60 disabled:opacity-50">
+            {matching ? '⏳ Đang khớp…' : '🎯 Tự khớp brief'}
+          </button>
+          {matchNote && <span className={`text-[11px] ${matchNote.startsWith('✅') ? 'text-emerald-400' : 'text-red-400'}`}>{matchNote}</span>}
+        </div>
+      </div>
+
       <div className="grid sm:grid-cols-3 gap-2">
+        {meta?.products?.length ? (
+          <select value={productId} onChange={e => setProductId(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
+            <option value="">— Chọn sản phẩm —</option>
+            {meta.products.map(p => <option key={p.id} value={p.id}>{p.name}{p.hasImage ? '' : ' (chưa có ảnh)'}</option>)}
+          </select>
+        ) : (
         <select value={sku} onChange={e => setSku(e.target.value)}
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
           {(meta?.skus ?? [{ code: 'HIB', name: 'Hibiscus', moment: '' }]).map(s =>
             <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
         </select>
+        )}
         <select value={videoType} onChange={e => setVideoType(e.target.value)}
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
           {(meta?.videoTypes ?? ['iced_summer']).map(t =>
