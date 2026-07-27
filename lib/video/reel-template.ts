@@ -20,7 +20,19 @@ export interface ReelBlock {
    *  hướng chuyển động) | xfade 0.3s. Phiếu C: hard 70%, match 20%, xfade 10%. */
   transitionOut: 'hard' | 'match' | 'xfade';
   kind: 'ai' | 'endcard';
+  /** Lệnh FLUX Kontext EDIT từ ảnh HERO (giữ nguyên ly/mặt bàn/ánh sáng) —
+   *  continuity: 4 scene có ly phải là CÙNG MỘT cái ly. undefined = dùng thẳng
+   *  hero (DRINK_BEAUTY) hoặc t2i tự do (scene không dính ly). */
+  edit?: string;
+  /** Scene này có ly trong hình → phải qua consistency gate so với hero. */
+  hasGlass?: boolean;
 }
+
+/** Ảnh HERO — nguồn continuity duy nhất của cả video: ly thành phẩm + mặt bàn +
+ *  ánh sáng chuẩn. Mọi scene có ly đều Kontext-edit từ ảnh này. */
+export const HERO_CONCEPT =
+  'a tall clear glass filled with iced {liquidColor} herbal tea, realistic ice cubes, ' +
+  'condensation drops on the glass, natural color, premium beverage beauty shot';
 
 /** Timeline Iced Summer 10s — Phiếu C, đúng từng mốc giây. */
 export const ICED_SUMMER_BLOCKS: ReelBlock[] = [
@@ -30,44 +42,51 @@ export const ICED_SUMMER_BLOCKS: ReelBlock[] = [
     camera: 'slow push-in macro',
     sfx: 'gentle herb rustle and soft fingertip touch on fresh botanical, close ASMR texture sound',
     transitionOut: 'hard',
+    edit: 'Transform into an extreme close-up macro of {ingredient} resting on the same warm stone surface with the same soft morning daylight; the glass is out of frame. Keep the exact same color mood, surface texture and lighting.',
   },
   {
-    id: 'ICE_IMPACT', start: 1.2, end: 2.4, kind: 'ai',
+    id: 'ICE_IMPACT', start: 1.2, end: 2.4, kind: 'ai', hasGlass: true,
+    edit: 'Keep the EXACT same glass, same surface and same background. The glass is now only two-thirds full of the same {liquidColor} iced tea, with two clear ice cubes captured mid-air falling into it, a small natural splash. Do not change the glass shape, material, position or lighting.',
     concept: 'clear ice cubes dropping into a tall glass of {liquidColor} herbal iced tea, splash and bubbles rising, cold condensation on glass, natural look, not soda not cocktail',
     camera: 'locked static close shot',
     sfx: 'ice cubes clinking and dropping into a cold glass with a small liquid splash, crisp ASMR',
     transitionOut: 'hard',
   },
   {
-    id: 'INGREDIENT_ACTION', start: 2.4, end: 3.6, kind: 'ai',
+    id: 'INGREDIENT_ACTION', start: 2.4, end: 3.6, kind: 'ai', hasGlass: true,
+    edit: 'Keep the EXACT same glass, surface and lighting. Add a hand gently placing {ingredient} onto the stone surface beside the same glass, tactile and natural. Do not change the glass shape or position.',
     concept: 'hands gently placing or slicing {ingredient} on a bright warm stone surface, tactile real texture, quick natural action',
     camera: 'top-down static',
     sfx: 'soft knife slice and herb placement taps on a stone board, delicate ASMR',
     transitionOut: 'hard',
   },
   {
-    id: 'BREW_POUR', start: 3.6, end: 5.0, kind: 'ai',
+    id: 'BREW_POUR', start: 3.6, end: 5.0, kind: 'ai', hasGlass: true,
+    edit: 'Keep the EXACT same glass on the same surface with the same lighting. Show {liquidColor} tea being poured into this glass from above over ice, liquid captured mid-pour with gentle swirl. Do not change the glass shape, material or position.',
     concept: 'freshly brewed {liquidColor} herbal tea being poured over ice in a tall clear glass, liquid swirling and color blooming through the ice',
     camera: 'slow tilt down following the pour',
     sfx: 'tea pouring over ice with liquid swirl and gentle glass resonance, satisfying ASMR pour',
     transitionOut: 'match',
   },
   {
-    id: 'SUMMER_LIFT', start: 5.0, end: 6.3, kind: 'ai',
+    id: 'SUMMER_LIFT', start: 5.0, end: 6.3, kind: 'ai', hasGlass: true,
+    edit: 'Keep the EXACT same glass, tea, surface and lighting. Add {garnish} captured falling into the glass with a tiny splash and slight ice movement. Do not change anything else.',
     concept: 'a light garnish of {garnish} dropping softly into the iced tea, tiny splash, ice shifting, bright summer feel',
     camera: 'locked static macro',
     sfx: 'light garnish drop with tiny splash and ice movement in glass',
     transitionOut: 'hard',
   },
   {
-    id: 'DRINK_BEAUTY', start: 6.3, end: 7.8, kind: 'ai',
+    // DRINK_BEAUTY không có edit — nó dùng THẲNG ảnh hero (chính là hero shot)
+    id: 'DRINK_BEAUTY', start: 6.3, end: 7.8, kind: 'ai', hasGlass: true,
     concept: 'finished glass of iced {liquidColor} herbal tea, realistic ice, condensation drops sliding, natural color, premium beverage beauty shot',
     camera: 'very slow orbital arc',
     sfx: 'soft carbonation-free bubble settle, tiny ice crackle, cold condensation ambience',
     transitionOut: 'xfade',
   },
   {
-    id: 'RITUAL_PAYOFF', start: 7.8, end: 8.8, kind: 'ai',
+    id: 'RITUAL_PAYOFF', start: 7.8, end: 8.8, kind: 'ai', hasGlass: true,
+    edit: 'Keep the EXACT same glass, tea, surface and lighting. Add a hand gently reaching and holding the same glass as if about to lift it. Do not change the glass shape, fill level, material or the scene.',
     concept: 'a hand gently lifting the glass of iced herbal tea from a bright summer table, relaxed premium moment',
     camera: 'locked static medium shot',
     sfx: 'glass lifted from table with a soft slide and set-down, quiet room ambience',

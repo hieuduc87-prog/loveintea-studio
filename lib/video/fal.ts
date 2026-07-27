@@ -96,6 +96,19 @@ export async function falImageToVideo(imagePng: Buffer, prompt: string): Promise
   return download(url);
 }
 
+/** FLUX Kontext pro — EDIT ảnh theo lệnh, GIỮ NGUYÊN chủ thể (ly/mặt bàn/ánh sáng).
+ *  Xương sống của continuity: mọi scene có ly đều edit từ 1 ảnh hero duy nhất. */
+export async function falKontext(imagePng: Buffer, instruction: string): Promise<Buffer> {
+  const dataUri = `data:image/png;base64,${imagePng.toString('base64')}`;
+  const out = await falRun<{ images: Array<{ url: string }> }>('fal-ai/flux-pro/kontext', {
+    prompt: instruction, image_url: dataUri, output_format: 'png',
+  }, 180_000);
+  const url = out.images?.[0]?.url;
+  if (!url) throw new Error('fal kontext: không có ảnh trả về');
+  recordCost('flux-kontext', '1 edit', 0.04);
+  return download(url);
+}
+
 /** ElevenLabs sound-effects v2 — SFX/BGM ngắn. Trả MP3 buffer. */
 export async function falSfx(text: string, durationSeconds: number): Promise<Buffer> {
   const out = await falRun<{ audio: { url: string } }>('fal-ai/elevenlabs/sound-effects/v2', {

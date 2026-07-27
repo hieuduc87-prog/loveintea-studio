@@ -13,7 +13,7 @@ import { analyzeReferenceVideo, ReferenceAnalysis } from './analyze-reference';
 import { referencesRoot, readLibJson, writeLibJson, ensureBrandLibrary } from './brand-library';
 import {
   ICED_SUMMER_BLOCKS, SKUS, SkuInfo, NEGATIVE_PROMPT, QUALITY_BLOCK, SCENE_CANVAS,
-  VIDEO_TYPE_ORDERS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE,
+  VIDEO_TYPE_ORDERS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE, HERO_CONCEPT,
 } from './reel-template';
 
 export interface ReelSceneSpec {
@@ -24,6 +24,9 @@ export interface ReelSceneSpec {
   sfxPrompt: string;
   transitionOut: 'hard' | 'match' | 'xfade';
   kind: 'ai' | 'endcard';
+  /** Kontext edit từ hero (continuity). undefined + hasGlass → dùng thẳng hero. */
+  editInstruction?: string;
+  hasGlass?: boolean;
 }
 
 export interface ReelPlan {
@@ -32,6 +35,8 @@ export interface ReelPlan {
   videoType: string;
   userPrompt: string;
   scenes: ReelSceneSpec[];
+  /** Prompt ảnh HERO — nguồn continuity duy nhất (ly + mặt bàn + ánh sáng). */
+  heroPrompt?: string;
   totalS: number;
   ctaText: string;
   textOverlays: Array<{ blockId: string; text: string; role: 'hook' | 'micro' | 'cta' }>;
@@ -141,6 +146,10 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
       start: b.start, end: b.end,
       kind: b.kind,
       transitionOut: b.transitionOut,
+      hasGlass: b.hasGlass,
+      // Continuity: editInstruction lấy NGUYÊN VĂN template (không cho Gemini refine —
+      // refine tự do là nguồn "mỗi cảnh một cái ly" đã trả giá 27/07)
+      editInstruction: b.edit ? fillConcept(b.edit, sku) : undefined,
       imagePrompt: b.kind === 'ai'
         ? `${concept}. ${SCENE_CANVAS}. ${QUALITY_BLOCK}. ${NEGATIVE_PROMPT}`
         : '',
@@ -157,6 +166,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
     videoType: opts.videoType,
     userPrompt: opts.userPrompt,
     scenes,
+    heroPrompt: `${fillConcept(HERO_CONCEPT, sku)}. ${SCENE_CANVAS}. ${QUALITY_BLOCK}. ${NEGATIVE_PROMPT}`,
     totalS: Math.round(cursor * 10) / 10,
     ctaText,
     textOverlays: [...overlays, { blockId: 'PRODUCT_CTA', text: ctaText, role: 'cta' }],
