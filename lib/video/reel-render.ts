@@ -69,13 +69,31 @@ async function visionGate(framePath: string, scene: ReelSceneSpec, skuName: stri
   }
 }
 
+/** Frozen check TINH cho clip AI: pixel-diff 64×64 gray giữa các frame — cảnh
+ *  ASMR chuyển động nhỏ (garnish rơi) làm dhash 8×8 báo oan "đứng hình". */
+async function reelFrozenCheck(frames: string[]): Promise<boolean> {
+  if (frames.length < 2) return false;
+  const sharp = (await import('sharp')).default;
+  const grays: Buffer[] = [];
+  for (const f of frames) {
+    grays.push(await sharp(f).resize(64, 64, { fit: 'fill' }).grayscale().raw().toBuffer());
+  }
+  let maxDiff = 0;
+  for (let i = 1; i < grays.length; i++) {
+    let sum = 0;
+    for (let p = 0; p < grays[i].length; p++) sum += Math.abs(grays[i][p] - grays[0][p]);
+    maxDiff = Math.max(maxDiff, sum / grays[i].length);
+  }
+  return maxDiff < 1.5; // mọi frame gần như y hệt frame đầu = đứng hình thật
+}
+
 async function qaClip(file: string, scene: ReelSceneSpec, skuName: string, work: string): Promise<ClipQa> {
   const meta = await probe(file);
   if (meta.duration < 4.0) return { ok: false, reason: `clip ngắn ${meta.duration.toFixed(1)}s (<4s)` };
   const frames = await extractFrames(file, path.join(work, `qa_${scene.blockId}`), 3);
   const px = await pixelFrameCheck(frames);
   if (!px.ok) return { ok: false, reason: `frame hỏng: ${px.bad.map(b => b.reason).join(',')}` };
-  if (await frozenCheck(frames)) return { ok: false, reason: 'clip đứng hình' };
+  if (await reelFrozenCheck(frames)) return { ok: false, reason: 'clip đứng hình' };
   return visionGate(frames[1], scene, skuName);
 }
 
@@ -229,7 +247,8 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
     logJob(jobId, `${scene.blockId}: image→video (${ve})${attempt ? ' — retry' : ''}…`);
     let video: Buffer;
     try {
-      video = await falImageToVideo(img.buf, scene.prompt + strengthen);
+      // Ép motion rõ — i2v từ ảnh tĩnh đẹp dễ ra clip gần như đứng hình
+      video = await falImageToVideo(img.buf, scene.prompt + strengthen + ' Clear continuous visible motion throughout the whole clip, never a static freeze-frame.');
     } catch (e) {
       logJob(jobId, `${scene.blockId}: fal lỗi — ${friendlyFalError(e)}`);
       if (attempt === 1) throw e;
