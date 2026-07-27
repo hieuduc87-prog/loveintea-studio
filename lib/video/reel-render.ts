@@ -19,7 +19,7 @@ import {
   ffmpeg, probe, probeFull, extractFrames, pixelFrameCheck, frozenCheck,
   measureLufs, maxBlackSpan, IMAGES_DIR, TMP_DIR,
 } from './ffmpeg';
-import { falImage, falImageToVideo, falSfx, friendlyFalError } from './fal';
+import { falImage, falImageToVideo, falSfx, friendlyFalError, resetFalCostLog, getFalCostLog } from './fal';
 import { ReelPlan, ReelSceneSpec } from './reel-director';
 import { SKUS, PALETTE, REEL_GRADE_VF, SAFE } from './reel-template';
 import { ensureBrandLibrary, brandLibRoot, clipCacheRoot, resolvePackshot, resolveLogo, resolveFonts } from './brand-library';
@@ -376,6 +376,7 @@ export async function renderReelProject(projectId: string): Promise<void> {
 
   try {
     ensureBrandLibrary(brandId);
+    resetFalCostLog(); // chi phí THỰC: đếm từng call fal của run này
     const plan = JSON.parse(String(project.script_json || '{}')) as ReelPlan;
     if (!plan.scenes?.length) throw new Error('ReelPlan trống — tạo lại từ API /api/video/reel');
     const sku = SKUS[plan.sku];
@@ -483,10 +484,25 @@ export async function renderReelProject(projectId: string): Promise<void> {
       .run(uuid(), sku?.productSlug ?? 'video', caption, hashtags, 'facebook,instagram',
         'draft', brandId, outputUrl, thumbUrl,
         `🧊 Reel AI ${plan.versionLabel} — ${plan.template} SKU ${plan.sku} — project ${projectId}`, 'pending');
+    // Chi phí THỰC của run này: từng call fal × đơn giá verified (cache hit = $0)
+    const cost = getFalCostLog();
+    const byModel = cost.items.reduce<Record<string, { n: number; usd: number }>>((a, c) => {
+      a[c.model] = { n: (a[c.model]?.n ?? 0) + 1, usd: Math.round(((a[c.model]?.usd ?? 0) + c.usd) * 10000) / 10000 };
+      return a;
+    }, {});
+    log(`💰 CHI PHÍ THỰC run này: $${cost.totalUsd} — ${Object.entries(byModel).map(([m, v]) => `${m}×${v.n}=$${v.usd}`).join(', ') || 'cache 100% ($0)'}`);
+    try {
+      db.prepare(`UPDATE jobs SET result_json=? WHERE id=?`).run(
+        JSON.stringify({ output_url: outputUrl, cost_usd: cost.totalUsd, cost_breakdown: byModel }), jobId);
+      db.prepare(`UPDATE video_projects SET grade_json=? WHERE id=?`).run(
+        JSON.stringify({ cost_usd: cost.totalUsd, cost_items: cost.items }), projectId);
+    } catch { /* cost tracking là phụ trợ */ }
     log(`published: ${outputUrl} + thumbnail + post draft (Review & Queue)`);
     saveLog('done', { output_url: outputUrl });
     progressJob(jobId, 100);
   } catch (e) {
+    const cost = getFalCostLog();
+    log(`💰 CHI PHÍ THỰC đã tiêu trước khi fail: $${cost.totalUsd} (${cost.items.length} call fal — clip đã cache sẽ tái dùng khi retry)`);
     log(`FAILED: ${e}`);
     saveLog('failed', { error: String(e).slice(0, 500) });
     throw e;
