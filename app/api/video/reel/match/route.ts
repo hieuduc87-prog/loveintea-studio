@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
 
   const templates = listReelTemplates(brandId);
   const products = getDb().prepare(
-    'SELECT id, name, slug, description FROM products WHERE brand_id=? ORDER BY sort_order, name LIMIT 100'
-  ).all(brandId) as Array<{ id: string; name: string; slug: string; description?: string }>;
+    'SELECT id, name, slug, pitch FROM products WHERE brand_id=? ORDER BY sort_order, name LIMIT 100'
+  ).all(brandId) as Array<{ id: string; name: string; slug: string; pitch?: string }>;
 
   try {
     const r = await generateJSON<{
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       `You are the intake matcher of an automated video production line. Match this BRIEF to the available TEMPLATES and PRODUCTS.
 BRIEF (Vietnamese possible): """${brief}"""
 TEMPLATES: ${JSON.stringify(templates)}
-PRODUCTS of this brand: ${JSON.stringify(products.map(p => ({ id: p.id, name: p.name, desc: String(p.description || '').slice(0, 100) })))}
+PRODUCTS of this brand: ${JSON.stringify(products.map(p => ({ id: p.id, name: p.name, desc: String(p.pitch || '').slice(0, 100) })))}
 VIDEO TYPES: ${JSON.stringify(Object.keys(VIDEO_TYPE_ORDERS))}
 Return ONLY JSON:
 {"match":{"templateId":"<best template id or null if NONE fits>","productId":"<best product id or null>","videoType":"<one of video types>","prompt":"<clean 1-2 sentence creative prompt in Vietnamese distilled from the brief>","versions":<1-3>},

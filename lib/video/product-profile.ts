@@ -33,8 +33,12 @@ export async function getProductProfile(brandId: string, productId: string): Pro
   if (cached?.heroSubject) return cached;
 
   const db = getDb();
-  const p = db.prepare('SELECT id, name, slug, description, knowledge_json FROM products WHERE id=? AND brand_id=?')
-    .get(productId, brandId) as { id: string; name: string; slug: string; description?: string; knowledge_json?: string } | undefined;
+  const p = db.prepare(
+    'SELECT id, name, slug, ingredients, pitch, theme, best_moment, color_name, knowledge_json FROM products WHERE id=? AND brand_id=?'
+  ).get(productId, brandId) as {
+    id: string; name: string; slug: string; ingredients?: string; pitch?: string;
+    theme?: string; best_moment?: string; color_name?: string; knowledge_json?: string;
+  } | undefined;
   if (!p) throw new Error(`Sản phẩm ${productId} không thuộc brand ${brandId}`);
 
   // Legacy nhanh: bảng SKU LoveinTea đã tinh chỉnh tay — dùng nếu khớp slug
@@ -52,7 +56,9 @@ export async function getProductProfile(brandId: string, productId: string): Pro
     try { knowledge = JSON.stringify(JSON.parse(p.knowledge_json || '{}')).slice(0, 2500); } catch { /* */ }
     const r = await generateJSON<Omit<ProductProfile, 'productId' | 'productName' | 'productSlug'>>(
       `You are preparing a SENSORY VISUAL PROFILE for an AI-generated beverage reel of the product "${p.name}".
-Product description: ${String(p.description || '').slice(0, 500)}
+Ingredients: ${String(p.ingredients || '').slice(0, 300)}
+Pitch: ${String(p.pitch || '').slice(0, 200)}
+Theme: ${String(p.theme || '').slice(0, 120)} | Color: ${String(p.color_name || '').slice(0, 60)} | Best moment: ${String(p.best_moment || '').slice(0, 120)}
 Product knowledge: ${knowledge}
 Return ONLY JSON (all values in vivid ENGLISH, photography-ready):
 {"ingredient":"the real hero ingredient(s) with texture words (e.g. 'dried hibiscus petals, deep ruby, translucent')",
