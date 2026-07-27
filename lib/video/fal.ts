@@ -87,17 +87,39 @@ export async function falImage(prompt: string, width = 768, height = 1344): Prom
   return download(url);
 }
 
-/** Hailuo 02 standard i2v — 6s 768P từ 1 frame gốc. Ảnh gửi dạng data URI. */
-export async function falImageToVideo(imagePng: Buffer, prompt: string): Promise<Buffer> {
+/** Engine image-to-video — verified fal.ai 27/07/2026:
+ *  hailuo:   $0.27/clip 6s 768P — rẻ, ổn (default)
+ *  kling:    $0.35/clip 5s — motion realism đẹp nhất tầm giá
+ *  seedance: ~$0.30/clip 5s 720p (token pricing) — physics chất lỏng tốt */
+export type VideoEngine = 'hailuo' | 'kling' | 'seedance';
+
+export function videoEngine(): VideoEngine {
+  const v = (process.env.REEL_VIDEO_ENGINE || 'hailuo').toLowerCase();
+  return v === 'kling' || v === 'seedance' ? v : 'hailuo';
+}
+
+/** i2v theo engine — 12 phút timeout (giờ cao điểm queue lâu, thực tế 27/07). */
+export async function falImageToVideo(imagePng: Buffer, prompt: string, engine: VideoEngine = videoEngine()): Promise<Buffer> {
   const dataUri = `data:image/png;base64,${imagePng.toString('base64')}`;
-  // 12 phút: Hailuo giờ cao điểm có thể xếp hàng lâu (thực tế 27/07: >6 phút)
-  const out = await falRun<{ video: { url: string } }>('fal-ai/minimax/hailuo-02/standard/image-to-video', {
-    prompt, image_url: dataUri, duration: '6', resolution: '768P', prompt_optimizer: true,
-  }, 720_000);
+  let out: { video?: { url?: string } };
+  if (engine === 'kling') {
+    out = await falRun('fal-ai/kling-video/v2.5-turbo/pro/image-to-video', {
+      prompt, image_url: dataUri, duration: '5',
+    }, 720_000);
+    recordCost('kling-2.5/i2v', '5s', 0.35);
+  } else if (engine === 'seedance') {
+    out = await falRun('fal-ai/bytedance/seedance/v1/pro/image-to-video', {
+      prompt, image_url: dataUri, duration: '5', resolution: '720p',
+    }, 720_000);
+    recordCost('seedance-pro/i2v', '5s 720p', 0.30);
+  } else {
+    out = await falRun('fal-ai/minimax/hailuo-02/standard/image-to-video', {
+      prompt, image_url: dataUri, duration: '6', resolution: '768P', prompt_optimizer: true,
+    }, 720_000);
+    recordCost('hailuo-02/i2v', '6s 768P', 0.045 * 6);
+  }
   const url = out.video?.url;
-  if (!url) throw new Error('fal hailuo: không có video trả về');
-  // Hailuo-02 standard 768P: $0.045/s × 6s = $0.27/clip (fal pricing)
-  recordCost('hailuo-02/i2v', '6s 768P', 0.045 * 6);
+  if (!url) throw new Error(`fal ${engine}: không có video trả về`);
   return download(url);
 }
 

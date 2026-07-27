@@ -19,7 +19,7 @@ import {
   ffmpeg, probe, probeFull, extractFrames, pixelFrameCheck, frozenCheck,
   measureLufs, maxBlackSpan, IMAGES_DIR, TMP_DIR,
 } from './ffmpeg';
-import { falImage, falImageToVideo, falKontext, falSfx, friendlyFalError, resetFalCostLog, getFalCostLog, recordExternalCost } from './fal';
+import { falImage, falImageToVideo, falKontext, falSfx, friendlyFalError, resetFalCostLog, getFalCostLog, recordExternalCost, videoEngine } from './fal';
 import { ReelPlan, ReelSceneSpec } from './reel-director';
 import { SKUS, PALETTE, REEL_GRADE_VF, SAFE } from './reel-template';
 import { ensureBrandLibrary, brandLibRoot, clipCacheRoot, resolvePackshot, resolveLogo, resolveFonts } from './brand-library';
@@ -219,13 +219,14 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
   for (let attempt = 0; attempt < 2; attempt++) {
     const strengthen = attempt === 1 ? ' STRICTLY: no letters of any kind, natural realistic beverage, physically correct.' : '';
     const img = await getSceneImage(scene, plan, work, jobId, strengthen, attempt === 1);
-    const key = sha(`hailuo02|${img.key}|${scene.prompt}`);
+    const ve = videoEngine();
+    const key = sha(`i2v|${ve}|${img.key}|${scene.prompt}`);
     const cached = path.join(cacheDir, `clip_${key}.mp4`);
     if (attempt === 0 && fs.existsSync(cached) && fs.statSync(cached).size > 100_000) {
       logJob(jobId, `${scene.blockId}: dùng cache ${key}`);
       return cached;
     }
-    logJob(jobId, `${scene.blockId}: image→video (Hailuo 6s)${attempt ? ' — retry' : ''}…`);
+    logJob(jobId, `${scene.blockId}: image→video (${ve})${attempt ? ' — retry' : ''}…`);
     let video: Buffer;
     try {
       video = await falImageToVideo(img.buf, scene.prompt + strengthen);
