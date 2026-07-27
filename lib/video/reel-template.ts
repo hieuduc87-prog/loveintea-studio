@@ -56,7 +56,7 @@ export const ICED_SUMMER_BLOCKS: ReelBlock[] = [
     id: 'INGREDIENT_ACTION', start: 2.4, end: 3.6, kind: 'ai', hasGlass: true,
     edit: 'Keep the EXACT same glass, surface and lighting. Add a hand gently placing {ingredient} onto the stone surface beside the same glass, tactile and natural. Do not change the glass shape or position.',
     concept: 'hands gently placing or slicing {ingredient} on a bright warm stone surface, tactile real texture, quick natural action',
-    camera: 'top-down static',
+    camera: 'locked static close shot',
     sfx: 'soft knife slice and herb placement taps on a stone board, delicate ASMR',
     transitionOut: 'hard',
   },

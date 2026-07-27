@@ -28,4 +28,5 @@ Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com**
 - Session song song `git add -A` có thể sweep file dở của nhau — check `git show HEAD:file` trước khi hoảng.
 
 ## Cập nhật gần nhất (phiên sau ghi đè, giữ ≤5 dòng)
-- [session 2026-07-27] 9 commit — docs(brief)+fix(reel) · fix(reel) · feat(reel) · test(security) · refactor(reel) · feat(video) · docs(video)
+
+- [session 2026-07-27] 10 commit — feat(reel) · docs(brief)+fix(reel) · fix(reel) · test(security) · refactor(reel) · feat(video) · docs(video)

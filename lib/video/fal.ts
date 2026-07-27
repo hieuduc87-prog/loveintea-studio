@@ -20,6 +20,11 @@ export function getFalCostLog(): { items: FalCost[]; totalUsd: number } {
 function recordCost(model: string, qty: string, usd: number): void {
   costLog.push({ model, qty, usd: Math.round(usd * 10000) / 10000, at: new Date().toISOString() });
 }
+/** Ghi cost của engine NGOÀI fal (vd gpt-image-2) vào cùng ledger — số ước theo
+ *  bảng giá công bố, đối chiếu dashboard nhà cung cấp. */
+export function recordExternalCost(model: string, qty: string, usd: number): void {
+  recordCost(model, qty, usd);
+}
 
 function falKey(): string {
   const k = process.env.FAL_KEY;

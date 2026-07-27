@@ -19,7 +19,7 @@ import {
   ffmpeg, probe, probeFull, extractFrames, pixelFrameCheck, frozenCheck,
   measureLufs, maxBlackSpan, IMAGES_DIR, TMP_DIR,
 } from './ffmpeg';
-import { falImage, falImageToVideo, falKontext, falSfx, friendlyFalError, resetFalCostLog, getFalCostLog } from './fal';
+import { falImage, falImageToVideo, falKontext, falSfx, friendlyFalError, resetFalCostLog, getFalCostLog, recordExternalCost } from './fal';
 import { ReelPlan, ReelSceneSpec } from './reel-director';
 import { SKUS, PALETTE, REEL_GRADE_VF, SAFE } from './reel-template';
 import { ensureBrandLibrary, brandLibRoot, clipCacheRoot, resolvePackshot, resolveLogo, resolveFonts } from './brand-library';
@@ -79,16 +79,63 @@ async function qaClip(file: string, scene: ReelSceneSpec, skuName: string, work:
   return visionGate(frames[1], scene, skuName);
 }
 
+/** Engine ảnh: 'openai' (gpt-image-2 — bám prompt ổn định hơn, CẦN billing OpenAI
+ *  còn hạn mức) | 'fal' (FLUX/Kontext, mặc định). OpenAI lỗi → tự fallback fal. */
+function imageEngine(): 'openai' | 'fal' {
+  return (process.env.REEL_IMAGE_ENGINE || 'fal').toLowerCase() === 'openai' ? 'openai' : 'fal';
+}
+
+function dataUrlToBuf(dataUrl: string): Buffer {
+  return Buffer.from(dataUrl.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+}
+
+/** t2i theo engine. OpenAI fail (billing/quota) → log + fallback FLUX. */
+async function engineT2I(prompt: string, jobId: string, label: string): Promise<Buffer> {
+  if (imageEngine() === 'openai') {
+    try {
+      const { generateImage } = await import('../openai-image');
+      const dataUrl = await generateImage({ prompt, size: '1024x1536', quality: 'medium' });
+      recordExternalCost('gpt-image-2/t2i', '1024x1536 medium', 0.06);
+      return dataUrlToBuf(dataUrl);
+    } catch (e) {
+      logJob(jobId, `${label}: OpenAI gen lỗi (${String(e).slice(0, 90)}) → fallback FLUX`);
+    }
+  }
+  return falImage(prompt);
+}
+
+/** Edit-giữ-chủ-thể theo engine: gpt-image-2 images/edit hoặc FLUX Kontext. */
+async function engineEdit(heroBuf: Buffer, instruction: string, work: string, jobId: string, label: string): Promise<Buffer> {
+  if (imageEngine() === 'openai') {
+    try {
+      const { editProductImage } = await import('../openai-image');
+      const tmp = path.join(work, `hero_for_edit.png`);
+      if (!fs.existsSync(tmp)) fs.writeFileSync(tmp, heroBuf);
+      const dataUrl = await editProductImage({ productImagePath: tmp, prompt: instruction, size: '1024x1536', quality: 'medium' });
+      recordExternalCost('gpt-image-2/edit', '1024x1536 medium', 0.06);
+      return dataUrlToBuf(dataUrl);
+    } catch (e) {
+      logJob(jobId, `${label}: OpenAI edit lỗi (${String(e).slice(0, 90)}) → fallback Kontext`);
+    }
+  }
+  return falKontext(heroBuf, instruction);
+}
+
 /** Ảnh HERO của video — nguồn continuity duy nhất. Cache theo (sku, heroPrompt). */
 async function getHeroImage(plan: ReelPlan, jobId: string): Promise<{ buf: Buffer; key: string }> {
-  const key = sha(`hero|${plan.sku}|${plan.heroPrompt}`);
+  const key = sha(`hero|${imageEngine()}|${plan.sku}|${plan.heroPrompt}`);
   const cached = path.join(clipCacheRoot(), `img_hero_${key}.png`);
   if (fs.existsSync(cached)) return { buf: fs.readFileSync(cached), key };
-  logJob(jobId, `HERO: tạo ảnh gốc continuity (FLUX)…`);
-  const buf = await falImage(plan.heroPrompt || '');
+  logJob(jobId, `HERO: tạo ảnh gốc continuity (${imageEngine()})…`);
+  const buf = await engineT2I(plan.heroPrompt || '', jobId, 'HERO');
   fs.writeFileSync(cached, buf);
   return { buf, key };
 }
+
+/** Cảnh ly-là-chủ-thể (khung hình gần giống hero) → gate nghiêm: cùng ly + cùng
+ *  bối cảnh. Cảnh cutaway (INGREDIENT_ACTION tay/nguyên liệu — khung tự nhiên
+ *  khác) → chỉ bắt buộc đúng ly, lệch bối cảnh chỉ warn. */
+const GATE_STRICT = new Set(['ICE_IMPACT', 'BREW_POUR', 'SUMMER_LIFT', 'RITUAL_PAYOFF']);
 
 /** Consistency gate: ghép hero + frame scene cạnh nhau → Gemini trả lời CÙNG MỘT
  *  cái ly/mặt bàn/ánh sáng không. CODE quyết verdict (VERIFY-GATE law). */
@@ -113,7 +160,14 @@ Judge ONLY physical continuity of the setting. Answer ONLY JSON:
  "note":"short"}`);
     const m = raw.match(/\{[\s\S]*\}/);
     const v = JSON.parse(m ? m[0] : raw) as { same_glass?: boolean; same_setting?: boolean; note?: string };
-    return { ok: Boolean(v.same_glass) && Boolean(v.same_setting), note: v.note || '' };
+    const strict = GATE_STRICT.has(blockId);
+    const ok = strict
+      ? Boolean(v.same_glass) && Boolean(v.same_setting)
+      : Boolean(v.same_glass); // cutaway: khung hình được phép khác, ly phải đúng
+    if (ok && strict === false && !v.same_setting) {
+      console.warn(`[reel] ${blockId}: setting lệch nhẹ (cutaway, cho qua): ${v.note}`);
+    }
+    return { ok, note: v.note || '' };
   } catch (e) {
     console.warn('[reel] consistency gate lỗi, cho qua:', String(e).slice(0, 120));
     return { ok: true, note: 'gate-skipped' };
@@ -124,21 +178,21 @@ Judge ONLY physical continuity of the setting. Answer ONLY JSON:
  *  - hasGlass + editInstruction → FLUX Kontext EDIT từ hero (giữ nguyên ly) + consistency gate
  *  - hasGlass, không edit (DRINK_BEAUTY) → dùng THẲNG hero
  *  - còn lại (không ly) → t2i tự do như cũ */
-async function getSceneImage(scene: ReelSceneSpec, plan: ReelPlan, jobId: string, strengthen: string, forceNew: boolean): Promise<{ buf: Buffer; key: string }> {
+async function getSceneImage(scene: ReelSceneSpec, plan: ReelPlan, work: string, jobId: string, strengthen: string, forceNew: boolean): Promise<{ buf: Buffer; key: string }> {
   const cacheDir = clipCacheRoot();
   if (plan.heroPrompt && scene.hasGlass) {
     const hero = await getHeroImage(plan, jobId);
     if (!scene.editInstruction) return hero; // DRINK_BEAUTY = hero
     const strict = forceNew ? 'IMPORTANT: the glass MUST stay IDENTICAL in shape, size and material. ' : '';
-    const key = sha(`kontext|${hero.key}|${scene.editInstruction}|${strict}`);
+    const key = sha(`edit|${imageEngine()}|${hero.key}|${scene.editInstruction}|${strict}`);
     const cached = path.join(cacheDir, `img_${key}.png`);
     if (!forceNew && fs.existsSync(cached)) return { buf: fs.readFileSync(cached), key };
-    logJob(jobId, `${scene.blockId}: Kontext edit từ hero (giữ nguyên ly)…`);
-    const buf = await falKontext(hero.buf, strict + scene.editInstruction);
+    logJob(jobId, `${scene.blockId}: edit từ hero giữ nguyên ly (${imageEngine()})…`);
+    const buf = await engineEdit(hero.buf, strict + scene.editInstruction, work, jobId, scene.blockId);
     const gate = await consistencyGate(hero.buf, buf, scene.blockId);
     if (!gate.ok) {
-      logJob(jobId, `${scene.blockId}: ⚠ consistency FAIL (${gate.note}) — Kontext lại với lệnh cứng hơn`);
-      const buf2 = await falKontext(hero.buf, 'IMPORTANT: the glass MUST stay IDENTICAL in shape, size, material and position. ' + scene.editInstruction);
+      logJob(jobId, `${scene.blockId}: ⚠ consistency FAIL (${gate.note}) — edit lại với lệnh cứng hơn`);
+      const buf2 = await engineEdit(hero.buf, 'IMPORTANT: the glass MUST stay IDENTICAL in shape, size, material and position. ' + scene.editInstruction, work, jobId, scene.blockId);
       const gate2 = await consistencyGate(hero.buf, buf2, scene.blockId);
       if (!gate2.ok) throw new Error(`${scene.blockId}: 2 lần edit vẫn lệch continuity (${gate2.note}) — chạy lại video hoặc đổi prompt`);
       fs.writeFileSync(cached, buf2);
@@ -148,11 +202,11 @@ async function getSceneImage(scene: ReelSceneSpec, plan: ReelPlan, jobId: string
     return { buf, key };
   }
   // scene không có ly → t2i tự do
-  const key = sha(`flux|${scene.imagePrompt}${strengthen}`);
+  const key = sha(`t2i|${imageEngine()}|${scene.imagePrompt}${strengthen}`);
   const cached = path.join(cacheDir, `img_${key}.png`);
   if (!forceNew && fs.existsSync(cached)) return { buf: fs.readFileSync(cached), key };
-  logJob(jobId, `${scene.blockId}: tạo frame gốc (FLUX)…`);
-  const buf = await falImage(scene.imagePrompt + strengthen);
+  logJob(jobId, `${scene.blockId}: tạo frame gốc (${imageEngine()})…`);
+  const buf = await engineT2I(scene.imagePrompt + strengthen, jobId, scene.blockId);
   fs.writeFileSync(cached, buf);
   return { buf, key };
 }
@@ -164,7 +218,7 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const strengthen = attempt === 1 ? ' STRICTLY: no letters of any kind, natural realistic beverage, physically correct.' : '';
-    const img = await getSceneImage(scene, plan, jobId, strengthen, attempt === 1);
+    const img = await getSceneImage(scene, plan, work, jobId, strengthen, attempt === 1);
     const key = sha(`hailuo02|${img.key}|${scene.prompt}`);
     const cached = path.join(cacheDir, `clip_${key}.mp4`);
     if (attempt === 0 && fs.existsSync(cached) && fs.statSync(cached).size > 100_000) {
