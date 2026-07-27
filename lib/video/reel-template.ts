@@ -154,7 +154,7 @@ export const SAFE = { top: 250, bottom: 450, side: 90, textZoneTop: 320, textZon
  *  chuyển đổi giữ đúng Ý ĐỒ: ấm nhẹ, mềm contrast, nâng shadow, hạ sat, nét macro.) */
 export const REEL_GRADE_VF =
   "eq=contrast=0.96:saturation=0.90:brightness=0.01," +
-  "colorbalance=rs=0.03:ms=0.02:bs=-0.03," +                 // ấm +: đẩy đỏ, rút xanh dương
+  "colorbalance=rs=0.03:rm=0.02:bs=-0.03," +                 // ấm +: đẩy đỏ shadow/midtone, rút xanh dương
   "curves=all='0/0.04 0.5/0.52 1/0.96'," +                    // shadows lift + highlights soften
   "unsharp=5:5:0.4:5:5:0.0," +                                // sharpen nhẹ cho macro
   "noise=alls=4:allf=t";                                      // grain rất nhẹ
