@@ -164,7 +164,9 @@ export const NEGATIVE_PROMPT =
   'no text, no letters, no words, no watermark, no logo, no subtitles, no captions, ' +
   'no readable packaging, no neon colors, no soda, no cocktail, no party scene, ' +
   'no syrup look, no oversaturation, no glitch, no flicker, no distorted hands, ' +
-  'no extra fingers, no warped glass, no unrealistic liquid physics, no dark apothecary mood';
+  'no extra fingers, no warped glass, no unrealistic liquid physics, no dark apothecary mood, ' +
+  // Đề bài (Reference-to-LoveinTea mapping): cấm fruit không thuộc SKU lọt vào từ thói quen model
+  'no raspberries, no cherries, no grapes, no strawberries, no lemon slices unless specified';
 
 /** Khối chất lượng + style chung — append vào MỌI prompt (video-ai skill: verbatim, không paraphrase). */
 export const QUALITY_BLOCK =
