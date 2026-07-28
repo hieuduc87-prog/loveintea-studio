@@ -184,8 +184,17 @@ export const NEGATIVE_PROMPT =
   'no readable packaging, no neon colors, no soda, no cocktail, no party scene, ' +
   'no syrup look, no oversaturation, no glitch, no flicker, no distorted hands, ' +
   'no extra fingers, no warped glass, no unrealistic liquid physics, no dark apothecary mood, ' +
+  'no impossible physics, no effects without a visible cause, no utensil hovering outside the glass while the liquid moves, ' +
   // Đề bài (Reference-to-LoveinTea mapping): cấm fruit không thuộc SKU lọt vào từ thói quen model
   'no raspberries, no cherries, no grapes, no strawberries, no lemon slices unless specified';
+
+/** Luật NHÂN-QUẢ VẬT LÝ — append vào MỌI prompt scene (bài học "thìa khuấy ngoài
+ *  cốc mà nước xoáy trong ly"): hiệu ứng phải có nguyên nhân thấy được. */
+export const PHYSICS_BLOCK =
+  'PHYSICAL COHERENCE: every visible effect must have a visible physical cause; ' +
+  'any utensil must be in direct contact with what it affects — a spoon stirring or muddling ' +
+  'must be INSIDE the glass with its bowl submerged in the liquid; nothing floats, pours or ' +
+  'swirls on its own; hands hold tools naturally with correct anatomy';
 
 /** Khối chất lượng + style chung — append vào MỌI prompt (video-ai skill: verbatim, không paraphrase). */
 export const QUALITY_BLOCK =

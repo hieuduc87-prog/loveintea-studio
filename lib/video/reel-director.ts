@@ -11,7 +11,7 @@ import path from 'path';
 import { generateJSON } from '../gemini';
 import { analyzeReferenceVideo, ReferenceAnalysis } from './analyze-reference';
 import { referencesRoot, readLibJson, writeLibJson, ensureBrandLibrary } from './brand-library';
-import { SKUS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE } from './reel-template';
+import { SKUS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE, PHYSICS_BLOCK } from './reel-template';
 import { getProductProfile, ProductProfile } from './product-profile';
 import { getReelTemplate } from './brand-library';
 import type { ReelTemplateDef } from './reel-template';
@@ -90,22 +90,28 @@ function fillConcept(tpl: string, prof: Pick<ProductProfile, 'ingredient' | 'gar
 }
 
 interface UserElement { element: string; scene: string; inDrink?: boolean }
+interface UserExtraction { elements: UserElement[]; constraints: string[] }
 
 /** Trích element user YÊU CẦU TƯỜNG MINH (túi trà, dâu, mật ong, thìa gỗ…) bằng
  *  call Gemini riêng — nhét chung vào refine bị bỏ qua (bài học card f30344e0). */
-async function extractUserElements(userPrompt: string, sceneIds: string[]): Promise<UserElement[]> {
-  if (userPrompt.trim().length < 20) return [];
+async function extractUserElements(userPrompt: string, sceneIds: string[]): Promise<UserExtraction> {
+  if (userPrompt.trim().length < 20) return { elements: [], constraints: [] };
   try {
-    const r = await generateJSON<{ elements: UserElement[] }>(
+    const r = await generateJSON<{ elements: UserElement[]; constraints?: string[] }>(
       `From this user brief, list ONLY the concrete VISUAL elements/props/actions the user EXPLICITLY requires to appear in the video (ignore mood/vibe words). Brief (Vietnamese possible): """${userPrompt.slice(0, 800)}"""
 Scene ids available: ${sceneIds.join(', ')}.
-Return ONLY JSON {"elements":[{"element":"short vivid English phrase; any bag/packaging/prop must be plain and unmarked with no printed text","scene":"<single best scene id>","inDrink":<true if the element ends up inside/on the finished drink itself, e.g. fruit slices in the glass>}]} — max 4, [] if none.`
+PHYSICALLY-GROUNDED RULE: describe every ACTION with its tool and contact point stated explicitly — e.g. 'a wooden spoon inserted INTO the glass, bowl submerged, gently muddling strawberry slices, liquid swirling around it' (NOT just 'muddling strawberries'). The cause must be visibly connected to its effect.
+Also list PROHIBITIONS the user states (e.g. 'no bare hands touching the drink — use the spoon') in "constraints" as short English imperative sentences.
+Return ONLY JSON {"elements":[{"element":"physically-grounded English phrase; any bag/prop plain and unmarked, no printed text","scene":"<single best scene id>","inDrink":<true if it ends up inside/on the finished drink>}],"constraints":["..."]} — max 4 elements, max 3 constraints, [] if none.`
     );
-    return (r.elements || [])
-      .filter(e => e && typeof e.element === 'string' && sceneIds.includes(String(e.scene)))
-      .slice(0, 4)
-      .map(e => ({ element: String(e.element).slice(0, 160), scene: String(e.scene), inDrink: Boolean(e.inDrink) }));
-  } catch { return []; }
+    return {
+      elements: (r.elements || [])
+        .filter(e => e && typeof e.element === 'string' && sceneIds.includes(String(e.scene)))
+        .slice(0, 4)
+        .map(e => ({ element: String(e.element).slice(0, 220), scene: String(e.scene), inDrink: Boolean(e.inDrink) })),
+      constraints: (r.constraints || []).filter(c => typeof c === 'string' && c.trim()).slice(0, 3).map(c => String(c).slice(0, 120)),
+    };
+  } catch { return { elements: [], constraints: [] }; }
 }
 
 function stripClaims(text: string): string {
@@ -195,7 +201,9 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
     }
   } catch { /* extras optional */ }
   // Trích element user bằng call riêng (đáng tin hơn) — merge đè/ghép vào extras
-  const userEls = await extractUserElements(opts.userPrompt, blocks.filter(b => b.kind === 'ai').map(b => b.id));
+  const extraction = await extractUserElements(opts.userPrompt, blocks.filter(b => b.kind === 'ai').map(b => b.id));
+  const userEls = extraction.elements;
+  const userConstraints = extraction.constraints.length ? ` USER RULES: ${extraction.constraints.join(' ')}` : '';
   for (const el of userEls) {
     extras[el.scene] = extras[el.scene] ? `${extras[el.scene]} ${el.element}.` : `${el.element}.`;
   }
@@ -233,10 +241,10 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
         ? fillConcept(b.edit, profile) + (extra ? ` Also add: ${extra} Keep everything else identical; any bag or prop must be plain and unmarked with no printed text.` : '')
         : undefined,
       imagePrompt: b.kind === 'ai'
-        ? adjustNeg(`${concept}.${sNote}${noVessel} ${canvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(extra))
+        ? adjustNeg(`${concept}.${sNote}${noVessel}${userConstraints} ${canvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}. ${T.negativePrompt}`, Boolean(extra))
         : '',
       prompt: b.kind === 'ai'
-        ? adjustNeg(`${motion} ${canvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(extra))
+        ? adjustNeg(`${motion}${userConstraints} ${canvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}. ${T.negativePrompt}`, Boolean(extra))
         : '',
       sfxPrompt: b.sfx,
     };
@@ -249,7 +257,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
     videoType: opts.videoType,
     userPrompt: opts.userPrompt,
     scenes,
-    heroPrompt: adjustNeg(`${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}${heroExtra ? `, with ${heroExtra} visible in the drink` : ''}.${serveNote} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(heroExtra)),
+    heroPrompt: adjustNeg(`${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}${heroExtra ? `, with ${heroExtra} visible in the drink` : ''}.${serveNote} ${T.sceneCanvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}. ${T.negativePrompt}`, Boolean(heroExtra)),
     gradeVf: T.gradeVf,
     totalS: Math.round(cursor * 10) / 10,
     ctaText,

@@ -53,13 +53,15 @@ async function visionGate(framePath: string, scene: ReelSceneSpec, skuName: stri
 {"has_text_or_logo":bool,          // any readable letters, words, watermark, logo
  "wrong_subject":bool,             // subject clearly NOT: ${scene.prompt.slice(0, 140)}
  "unnatural":bool,                 // melted/warped glass, deformed hands, impossible liquid
+ "implausible_physics":bool,       // effect WITHOUT visible cause: liquid stirring/swirling while the utensil is OUTSIDE the glass or absent; objects floating; pour with no source
  "neon_or_soda":bool,              // neon colors / soda-commercial / cocktail-party look
  "note":"short reason"}`);
     const m = raw.match(/\{[\s\S]*\}/);
-    const v = JSON.parse(m ? m[0] : raw) as { has_text_or_logo?: boolean; wrong_subject?: boolean; unnatural?: boolean; neon_or_soda?: boolean; note?: string };
+    const v = JSON.parse(m ? m[0] : raw) as { has_text_or_logo?: boolean; wrong_subject?: boolean; unnatural?: boolean; implausible_physics?: boolean; neon_or_soda?: boolean; note?: string };
     if (v.has_text_or_logo) return { ok: false, reason: `chữ/logo AI trong hình (${v.note})` };
     if (v.wrong_subject) return { ok: false, reason: `sai chủ thể (${v.note})` };
     if (v.unnatural) return { ok: false, reason: `AI lỗi vật lý (${v.note})` };
+    if (v.implausible_physics) return { ok: false, reason: `phi vật lý — hiệu ứng không nguyên nhân (${v.note})` };
     if (v.neon_or_soda) return { ok: false, reason: `neon/soda look (${v.note})` };
     return { ok: true };
   } catch (e) {
