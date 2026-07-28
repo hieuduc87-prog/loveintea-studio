@@ -236,12 +236,14 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
   const cacheDir = clipCacheRoot();
   const skuName = plan.profile?.productName || SKUS[plan.sku]?.name || plan.sku;
 
+  let baseClipPath = '';
   for (let attempt = 0; attempt < 2; attempt++) {
     const strengthen = attempt === 1 ? ' STRICTLY: no letters of any kind, natural realistic beverage, physically correct.' : '';
     const img = await getSceneImage(scene, plan, work, jobId, strengthen, attempt === 1);
     const ve = videoEngine();
     const key = sha(`i2v|${ve}|${img.key}|${scene.prompt}`);
     const cached = path.join(cacheDir, `clip_${key}.mp4`);
+    if (attempt === 0) baseClipPath = cached; // alias đích khi retry pass — rerun sau hit cache attempt-0
     if (attempt === 0 && fs.existsSync(cached) && fs.statSync(cached).size > 100_000) {
       logJob(jobId, `${scene.blockId}: dùng cache ${key}`);
       return cached;
@@ -261,6 +263,9 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
     const qa = await qaClip(tmp, scene, skuName, work);
     if (qa.ok) {
       fs.copyFileSync(tmp, cached);
+      // Lỗ hổng đã trả giá 28/07: clip pass ở vòng retry cache theo key strengthen,
+      // rerun sau attempt-0 miss → regen tốn tiền. Alias về key gốc.
+      if (attempt === 1 && baseClipPath && baseClipPath !== cached) fs.copyFileSync(tmp, baseClipPath);
       logJob(jobId, `${scene.blockId}: QA pass${qa.reason === 'gate-skipped' ? ' (vision gate offline)' : ''}`);
       return cached;
     }
