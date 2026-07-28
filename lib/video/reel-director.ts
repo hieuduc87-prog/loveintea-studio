@@ -89,6 +89,25 @@ function fillConcept(tpl: string, prof: Pick<ProductProfile, 'ingredient' | 'gar
     .replaceAll('{liquidColor}', prof.liquidColor);
 }
 
+interface UserElement { element: string; scene: string; inDrink?: boolean }
+
+/** Trích element user YÊU CẦU TƯỜNG MINH (túi trà, dâu, mật ong, thìa gỗ…) bằng
+ *  call Gemini riêng — nhét chung vào refine bị bỏ qua (bài học card f30344e0). */
+async function extractUserElements(userPrompt: string, sceneIds: string[]): Promise<UserElement[]> {
+  if (userPrompt.trim().length < 20) return [];
+  try {
+    const r = await generateJSON<{ elements: UserElement[] }>(
+      `From this user brief, list ONLY the concrete VISUAL elements/props/actions the user EXPLICITLY requires to appear in the video (ignore mood/vibe words). Brief (Vietnamese possible): """${userPrompt.slice(0, 800)}"""
+Scene ids available: ${sceneIds.join(', ')}.
+Return ONLY JSON {"elements":[{"element":"short vivid English phrase; any bag/packaging/prop must be plain and unmarked with no printed text","scene":"<single best scene id>","inDrink":<true if the element ends up inside/on the finished drink itself, e.g. fruit slices in the glass>}]} — max 4, [] if none.`
+    );
+    return (r.elements || [])
+      .filter(e => e && typeof e.element === 'string' && sceneIds.includes(String(e.scene)))
+      .slice(0, 4)
+      .map(e => ({ element: String(e.element).slice(0, 160), scene: String(e.scene), inDrink: Boolean(e.inDrink) }));
+  } catch { return []; }
+}
+
 function stripClaims(text: string): string {
   let out = text;
   for (const c of FORBIDDEN_CLAIMS) out = out.replace(new RegExp(`\\b${c}\\b`, 'gi'), '').replace(/\s{2,}/g, ' ').trim();
@@ -171,10 +190,22 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
       : '';
   const extras: Record<string, string> = {};
   try {
-    for (const [k, v] of Object.entries((refined && (refinedExtras || {})) as Record<string, string>)) {
+    for (const [k, v] of Object.entries((refinedExtras || {}) as Record<string, string>)) {
       if (blocks.some(b => b.id === k) && typeof v === 'string' && v.trim()) extras[k] = stripClaims(v).slice(0, 220);
     }
   } catch { /* extras optional */ }
+  // Trích element user bằng call riêng (đáng tin hơn) — merge đè/ghép vào extras
+  const userEls = await extractUserElements(opts.userPrompt, blocks.filter(b => b.kind === 'ai').map(b => b.id));
+  for (const el of userEls) {
+    extras[el.scene] = extras[el.scene] ? `${extras[el.scene]} ${el.element}.` : `${el.element}.`;
+  }
+  // Element nằm TRONG ly → bơm vào HERO để mọi cảnh neo hero đều có (continuity)
+  const heroExtra = userEls.filter(e => e.inDrink).map(e => e.element).join('; ');
+  // User chỉ định fruit → gỡ lệnh cấm fruit khỏi các prompt liên quan
+  const FRUIT_BAN = 'no raspberries, no cherries, no grapes, no strawberries, no lemon slices unless specified';
+  const FRUIT_OK = 'only the fruits explicitly specified, no other fruits';
+  const userWantsFruit = userEls.some(e => /berr|strawberr|fruit|lemon|cherry|grape|citrus|dâu|chanh/i.test(e.element));
+  const adjustNeg = (txt: string, hasExtra: boolean) => (hasExtra && userWantsFruit) ? txt.split(FRUIT_BAN).join(FRUIT_OK) : txt;
   const scenes: ReelSceneSpec[] = blocks.map(b => {
     const extra = extras[b.id];
     const concept = (refined[b.id] || fillConcept(b.concept, profile)) + (extra ? ` ${extra}` : '');
@@ -197,10 +228,10 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
         ? fillConcept(b.edit, profile) + (extra ? ` Also add: ${extra} Keep everything else identical; any bag or prop must be plain and unmarked with no printed text.` : '')
         : undefined,
       imagePrompt: b.kind === 'ai'
-        ? `${concept}.${sNote}${noVessel} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
+        ? adjustNeg(`${concept}.${sNote}${noVessel} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(extra))
         : '',
       prompt: b.kind === 'ai'
-        ? `${motion} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
+        ? adjustNeg(`${motion} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(extra))
         : '',
       sfxPrompt: b.sfx,
     };
@@ -213,7 +244,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
     videoType: opts.videoType,
     userPrompt: opts.userPrompt,
     scenes,
-    heroPrompt: `${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}.${serveNote} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`,
+    heroPrompt: adjustNeg(`${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}${heroExtra ? `, with ${heroExtra} visible in the drink` : ''}.${serveNote} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(heroExtra)),
     gradeVf: T.gradeVf,
     totalS: Math.round(cursor * 10) / 10,
     ctaText,
