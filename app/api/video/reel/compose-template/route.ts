@@ -55,17 +55,23 @@ function normalizeTemplate(raw: {
       if (b.hasGlass && b.edit && !/exact|same|identical|keep/i.test(String(b.edit)))
         errors.push(`block ${blockId} edit phải là lệnh GIỮ NGUYÊN chủ thể (Keep the EXACT same…)`);
     }
+    // Props dễ sinh chữ AI (túi trà/tag/nhãn/bao bì) → ép mô tả "trơn không chữ"
+    // ngay trong concept — bài học DROP_TEA_BAG 28/07: tag túi trà luôn ra chữ.
+    const textyProp = /tea bag|teabag|sachet|label|tag|package|packaging|box|wrapper/i;
+    const plainify = (txt: string) => textyProp.test(txt)
+      ? `${txt} (all props plain and unmarked, blank tags, absolutely no printed text or logos)`
+      : txt;
     const out: ReelBlock = {
       id: blockId,
       start: Math.round(cursor * 10) / 10,
       end: Math.round((cursor + durS) * 10) / 10,
-      concept: String(b.concept || '').slice(0, 400),
+      concept: plainify(String(b.concept || '').slice(0, 400)),
       camera: String(b.camera || 'locked static shot').slice(0, 120),
       sfx: String(b.sfx || 'soft ambient room tone').slice(0, 200),
       transitionOut: (['hard', 'match', 'xfade'].includes(String(b.transitionOut)) ? b.transitionOut : 'hard') as ReelBlock['transitionOut'],
       kind,
       hasGlass: Boolean(b.hasGlass),
-      edit: b.edit ? String(b.edit).slice(0, 500) : undefined,
+      edit: b.edit ? plainify(String(b.edit).slice(0, 500)) : undefined,
     };
     cursor += durS;
     return out;
