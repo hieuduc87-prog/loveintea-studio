@@ -135,23 +135,26 @@ export async function buildReelPlan(opts: {
 
   // Gemini tinh chỉnh concept theo user prompt (bám sản phẩm + chủ đề, không đổi khung)
   let refined: Record<string, string> = {};
+  let refinedExtras: Record<string, string> = {};
   let overlays: ReelPlan['textOverlays'] = [];
   const ctas = T.softCtas?.length ? T.softCtas : SOFT_CTAS;
   let ctaText = ctas[vIdx % ctas.length];
   try {
     const aiBlocks = blocks.filter(b => b.kind === 'ai');
-    const r = await generateJSON<{ scenes: Record<string, string>; overlays: Array<{ blockId: string; text: string; role: string }>; cta: string }>(
+    const r = await generateJSON<{ scenes: Record<string, string>; extras?: Record<string, string>; overlays: Array<{ blockId: string; text: string; role: string }>; cta: string }>(
       `You are the scene director for a 10s premium vertical reel for the beverage product "${profile.productName}".
 User's creative brief (Vietnamese possible): "${opts.userPrompt.slice(0, 500)}"
 Video type: ${opts.videoType}. Version index: ${vIdx} (vary wording slightly per version).
 Motion grammar learned from references (abstract only): ${JSON.stringify(motionDict ?? {}).slice(0, 3000)}
 
-For each scene id, refine the base concept into ONE vivid English sentence (subject + ONE action) staying 100% true to THIS product: ingredient = ${profile.ingredient}; garnish = ${profile.garnish}; liquid color = ${profile.liquidColor}. NEVER mention any text, logo, packaging, brand names, or competitor elements. NEVER change camera or timing.
+For each scene id, refine the base concept into ONE vivid English sentence (subject + ONE action) staying 100% true to THIS product: ingredient = ${profile.ingredient}; garnish = ${profile.garnish}; liquid color = ${profile.liquidColor}. NEVER mention any text, logo, brand names, or competitor elements. NEVER change camera or timing.
+CRITICAL — USER-REQUESTED ELEMENTS: if the user's brief EXPLICITLY requests specific visual elements or recipe steps (e.g. a pyramid tea bag steeping, sliced strawberries, honey drizzle, muddling with a wooden spoon), you MUST include them: assign EACH requested element to the SINGLE most fitting scene id via "extras" (max 3 entries), one short English sentence each describing the element being added to that scene. Any bag/packaging/prop must be plain and unmarked with absolutely no printed text. Do NOT invent elements the user did not ask for.
 Also propose AT MOST ${SAFE.maxTexts - 1} short text overlays (≤6 words each, sentence case, English) + 1 soft CTA (no "Buy now"/"Hurry"/urgency; no health claims like ${FORBIDDEN_CLAIMS.slice(0, 6).join(', ')}).
 Base concepts: ${JSON.stringify(Object.fromEntries(aiBlocks.map(b => [b.id, fillConcept(b.concept, profile)])))}
-Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"blockId":"...","text":"...","role":"hook|micro"}],"cta":"..."}`
+Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId>":"user-requested element sentence"},"overlays":[{"blockId":"...","text":"...","role":"hook|micro"}],"cta":"..."}`
     );
     refined = r.scenes || {};
+    refinedExtras = r.extras || {};
     overlays = (r.overlays || []).slice(0, SAFE.maxTexts - 1)
       .filter(o => blocks.some(b => b.id === o.blockId))
       .map(o => ({ blockId: o.blockId, text: stripClaims(String(o.text).slice(0, 48)), role: (o.role === 'hook' ? 'hook' : 'micro') as 'hook' | 'micro' }));
@@ -166,8 +169,15 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
     : T.serve === 'iced'
       ? ' The drink is served ICED: ice cubes, condensation, NO steam.'
       : '';
+  const extras: Record<string, string> = {};
+  try {
+    for (const [k, v] of Object.entries((refined && (refinedExtras || {})) as Record<string, string>)) {
+      if (blocks.some(b => b.id === k) && typeof v === 'string' && v.trim()) extras[k] = stripClaims(v).slice(0, 220);
+    }
+  } catch { /* extras optional */ }
   const scenes: ReelSceneSpec[] = blocks.map(b => {
-    const concept = refined[b.id] || fillConcept(b.concept, profile);
+    const extra = extras[b.id];
+    const concept = (refined[b.id] || fillConcept(b.concept, profile)) + (extra ? ` ${extra}` : '');
     const noVessel = b.kind === 'ai' && !b.hasGlass
       ? ' No cups, mugs, glasses or any drink vessels anywhere in this shot.'
       : '';
@@ -183,7 +193,9 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
       hasGlass: b.hasGlass,
       // Continuity: editInstruction lấy NGUYÊN VĂN template (không cho Gemini refine —
       // refine tự do là nguồn "mỗi cảnh một cái ly" đã trả giá 27/07)
-      editInstruction: b.edit ? fillConcept(b.edit, profile) : undefined,
+      editInstruction: b.edit
+        ? fillConcept(b.edit, profile) + (extra ? ` Also add: ${extra} Keep everything else identical; any bag or prop must be plain and unmarked with no printed text.` : '')
+        : undefined,
       imagePrompt: b.kind === 'ai'
         ? `${concept}.${sNote}${noVessel} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
         : '',
