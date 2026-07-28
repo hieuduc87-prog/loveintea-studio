@@ -903,6 +903,9 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN batch_id TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN dish_name TEXT`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN version_label TEXT`); } catch { /* already exists */ }
+  // Mã video (Reel Machine) — nhân viên claim lỗi qua kanban theo mã này
+  try { db.exec(`ALTER TABLE video_projects ADD COLUMN video_code TEXT`); } catch { /* already exists */ }
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_video_projects_code ON video_projects(video_code)`); } catch { /* */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN grade_json TEXT`); } catch { /* already exists */ }
   // ── Unified Job Queue — mọi nút "Tạo" (ảnh/content/carousel/plan/video) ghi 1 job để theo dõi ──
   try {

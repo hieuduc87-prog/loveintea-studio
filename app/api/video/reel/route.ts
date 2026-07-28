@@ -18,6 +18,18 @@ import { buildReelPlan } from '@/lib/video/reel-director';
 import { SKUS, VIDEO_TYPE_ORDERS } from '@/lib/video/reel-template';
 import { libraryChecklist, listReelTemplates } from '@/lib/video/brand-library';
 
+/** Mã video để nhân viên claim/feedback qua kanban: RM-<PROD>-<DDMM>-<n>.
+ *  Grep mã trong video_projects.video_code là ra project + plan + render_log. */
+function nextVideoCode(db: ReturnType<typeof getDb>, brandId: string, prodSlug: string): string {
+  const d = new Date();
+  const dm = String(d.getUTCDate()).padStart(2, '0') + String(d.getUTCMonth() + 1).padStart(2, '0');
+  const prod = prodSlug.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 4) || 'PROD';
+  const prefix = `RM-${prod}-${dm}`;
+  const row = db.prepare('SELECT COUNT(*) c FROM video_projects WHERE brand_id=? AND video_code LIKE ?')
+    .get(brandId, `${prefix}-%`) as { c: number };
+  return `${prefix}-${row.c + 1}`;
+}
+
 export async function GET(req: NextRequest) {
   const brandId = getBrandId(req);
   const skuCodes = Object.keys(SKUS);
@@ -74,21 +86,25 @@ export async function POST(req: NextRequest) {
 
   try {
     const projectIds: string[] = [];
+    const videoCodes: string[] = [];
     for (let v = 0; v < versions; v++) {
       logJob(jobId, `Dựng plan ${v + 1}/${versions} (Gemini)…`);
       const plan = await buildReelPlan({ brandId, sku, productId, videoType, userPrompt, templateId, versionIndex: v });
       const id = uuid();
+      const videoCode = nextVideoCode(db, brandId, plan.profile?.productSlug || sku || 'prod');
       db.prepare(`INSERT INTO video_projects
         (id, brand_id, title, purpose, product_id, platform, aspect, target_duration_s,
-         script_json, status, template, batch_id, version_label)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-        .run(id, brandId, `🧊 ${displayName} Reel ${plan.versionLabel}`, videoType,
+         script_json, status, template, batch_id, version_label, video_code)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(id, brandId, `🧊 [${videoCode}] ${displayName} ${plan.versionLabel}`, videoType,
           productId || plan.profile?.productId || null, 'reels', '9:16', Math.round(plan.totalS),
-          JSON.stringify(plan), 'queued', 'ai_reel', jobId, plan.versionLabel);
+          JSON.stringify(plan), 'queued', 'ai_reel', jobId, plan.versionLabel, videoCode);
+      logJob(jobId, `Mã video: ${videoCode}`);
       projectIds.push(id);
+      videoCodes.push(videoCode);
     }
     logJob(jobId, `${versions} bản đã vào hàng render (scheduler xử lý lần lượt, ~3-8 phút/bản).`);
-    return NextResponse.json({ ok: true, jobId, projectIds });
+    return NextResponse.json({ ok: true, jobId, projectIds, videoCodes });
   } catch (e) {
     failJob(jobId, e);
     return NextResponse.json({ error: String(e instanceof Error ? e.message : e).slice(0, 400) }, { status: 500 });

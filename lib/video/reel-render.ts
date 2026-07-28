@@ -615,12 +615,14 @@ export async function renderReelProject(projectId: string): Promise<void> {
     // Thumbnail: frame đẹp nhất từ DRINK_BEAUTY (giữa block) — Phiếu A yêu cầu kèm thumbnail
     const beauty = plan.scenes.find(s => s.blockId === 'DRINK_BEAUTY') || plan.scenes[plan.scenes.length - 2];
     const thumbT = beauty ? (beauty.start + beauty.end) / 2 : durS * 0.7;
-    const thumbName = `reelthumb_${projectId}_${crypto.randomBytes(4).toString('hex')}.jpg`;
+    const thumbName = `reelthumb_${String(project.video_code || projectId.slice(0, 8)).replace(/[^A-Za-z0-9-]/g, '')}_${crypto.randomBytes(4).toString('hex')}.jpg`;
     await ffmpeg(['-ss', thumbT.toFixed(2), '-i', final, '-vframes', '1', '-q:v', '2', path.join(IMAGES_DIR, thumbName)]);
     const thumbUrl = `/api/images/${thumbName}`;
 
     // Publish: video vào assets + post draft ở Review & Queue (Phiếu A: hàng chờ duyệt)
-    const outName = `reel_${projectId}_${crypto.randomBytes(4).toString('hex')}.mp4`;
+    const videoCode = String(project.video_code || projectId.slice(0, 8));
+    const codeSlug = videoCode.replace(/[^A-Za-z0-9-]/g, '');
+    const outName = `reel_${codeSlug}_${crypto.randomBytes(4).toString('hex')}.mp4`;
     fs.copyFileSync(final, path.join(IMAGES_DIR, outName));
     const outputUrl = `/api/images/${outName}`;
     db.prepare(`INSERT OR IGNORE INTO assets (id, brand_id, url, filename, file_type, status, source, created_at, updated_at)
@@ -636,7 +638,7 @@ export async function renderReelProject(projectId: string): Promise<void> {
       VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
       .run(uuid(), prodSlug, caption, hashtags, 'facebook,instagram',
         'draft', brandId, outputUrl, thumbUrl,
-        `🧊 Reel AI ${plan.versionLabel} — ${plan.template} SKU ${plan.sku} — project ${projectId}`, 'pending');
+        `🎬 Mã video: ${videoCode} | template ${plan.template} | ${prodName} ${plan.versionLabel} | project ${projectId} — feedback: tạo card kanban ghi mã ${videoCode}`, 'pending');
     // Chi phí THỰC của run này: từng call fal × đơn giá verified (cache hit = $0)
     const cost = getFalCostLog();
     const byModel = cost.items.reduce<Record<string, { n: number; usd: number }>>((a, c) => {

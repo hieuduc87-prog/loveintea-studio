@@ -35,6 +35,5 @@ Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com**
 
 
 
-- **2026-07-28 [LIT-VID-0728A]** (LIVE+verified CẢ CHUỖI): **Template Composer** — (1) brief → compose-template → Gemini sinh ReelTemplateDef → CODE validate 12 luật → lưu TEMPLATES/reel_<id>.json (verified: brief trà đêm nóng → `tra_dem_am_cung_v01` 6 block/11s); (2) template+SKU → auto video (director đọc registry, NN → video 11s $1.35). Gotcha: props túi trà/tag → composer plainify() ép "plain unmarked" (AI luôn vẽ chữ lên tag); heroSubject bỏ hardcode "iced". Tổng 4 video thật (HIB×2/PEP/NN), 4 draft chờ duyệt Review & Queue. Chi tiết: memory/reel-machine.md + docs/video-auto-reel-master-plan.md.
-- [session 2026-07-28] 3 commit — fix(reel) · feat(reel)
+- [session 2026-07-28] 5 commit — docs(brief) · fix(reel) · feat(reel)
 - [session 2026-07-27] 16 commit — docs(brief) · fix(reel) · feat(reel) · docs(brief)+fix(reel) · test(security) · refactor(reel) · feat(video) · docs(video)
