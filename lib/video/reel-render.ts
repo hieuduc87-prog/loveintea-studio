@@ -271,13 +271,13 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
 // ── M3: encode + assembly ──────────────────────────────────────────────
 
 /** Cắt đoạn đẹp từ clip 6s + encode uniform 1080×1920@30 với grade template. */
-async function encodeSceneSegment(src: string, scene: ReelSceneSpec, out: string): Promise<number> {
+async function encodeSceneSegment(src: string, scene: ReelSceneSpec, out: string, gradeVf?: string): Promise<number> {
   const need = Math.round(((scene.end - scene.start) + (scene.transitionOut === 'xfade' ? XF : 0)) * 10) / 10;
   const meta = await probe(src);
   const start = Math.min(CLIP_SKIP_S, Math.max(0, meta.duration - need - 0.1));
   await ffmpeg([
     '-ss', start.toFixed(2), '-t', need.toFixed(3), '-i', src,
-    '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${FPS},${REEL_GRADE_VF}`,
+    '-vf', `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${FPS},${gradeVf || REEL_GRADE_VF}`,
     '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', out,
   ]);
   return need;
@@ -552,7 +552,7 @@ export async function renderReelProject(projectId: string): Promise<void> {
         } catch (e) {
           throw new Error(`${scene.blockId}: ${friendlyFalError(e)}`);
         }
-        const dur = await encodeSceneSegment(src, scene, segOut);
+        const dur = await encodeSceneSegment(src, scene, segOut, plan.gradeVf);
         segs.push({ file: segOut, dur, transitionOut: scene.transitionOut });
         log(`${scene.blockId}: clip ok (${dur}s)`);
       }

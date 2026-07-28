@@ -11,11 +11,10 @@ import path from 'path';
 import { generateJSON } from '../gemini';
 import { analyzeReferenceVideo, ReferenceAnalysis } from './analyze-reference';
 import { referencesRoot, readLibJson, writeLibJson, ensureBrandLibrary } from './brand-library';
-import {
-  ICED_SUMMER_BLOCKS, SKUS, NEGATIVE_PROMPT, QUALITY_BLOCK, SCENE_CANVAS,
-  VIDEO_TYPE_ORDERS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE,
-} from './reel-template';
+import { SKUS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE } from './reel-template';
 import { getProductProfile, ProductProfile } from './product-profile';
+import { getReelTemplate } from './brand-library';
+import type { ReelTemplateDef } from './reel-template';
 
 export interface ReelSceneSpec {
   blockId: string;
@@ -41,6 +40,8 @@ export interface ReelPlan {
   scenes: ReelSceneSpec[];
   /** Prompt ảnh HERO — nguồn continuity duy nhất (ly + mặt bàn + ánh sáng). */
   heroPrompt?: string;
+  /** Grade ffmpeg snapshot từ template (custom template có grade riêng). */
+  gradeVf?: string;
   totalS: number;
   ctaText: string;
   textOverlays: Array<{ blockId: string; text: string; role: 'hook' | 'micro' | 'cta' }>;
@@ -99,8 +100,10 @@ function stripClaims(text: string): string {
  *  sku code là đường legacy LoveinTea. */
 export async function buildReelPlan(opts: {
   brandId: string; sku?: string; productId?: string; videoType: string; userPrompt: string;
-  versionIndex?: number; language?: string;
+  templateId?: string; versionIndex?: number; language?: string;
 }): Promise<ReelPlan> {
+  // Template từ REGISTRY (builtin + custom JSON per-brand) — hết hardcode
+  const T: ReelTemplateDef = getReelTemplate(opts.brandId, opts.templateId);
   let profile: ProductProfile;
   if (opts.productId) {
     profile = await getProductProfile(opts.brandId, opts.productId);
@@ -115,16 +118,16 @@ export async function buildReelPlan(opts: {
   }
   const skuCode = Object.values(SKUS).find(s => s.productSlug === profile.productSlug)?.code
     || profile.productSlug.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 4) || 'PROD';
-  const order = VIDEO_TYPE_ORDERS[opts.videoType] || VIDEO_TYPE_ORDERS.iced_summer;
+  const order = T.videoTypeOrders[opts.videoType] || Object.values(T.videoTypeOrders)[0] || T.blocks.map(b => b.id);
   const motionDict = loadMotionDictionary(opts.brandId);
   const vIdx = opts.versionIndex ?? 0;
 
-  // Khung block theo order của loại video, timeline scale lại về tổng 10s giữ tỉ lệ
-  const chosen = order.map(id => ICED_SUMMER_BLOCKS.find(b => b.id === id)!).filter(Boolean);
+  // Khung block theo order của loại video, timeline scale lại về tổng T.totalS giữ tỉ lệ
+  const chosen = order.map(id => T.blocks.find(b => b.id === id)!).filter(Boolean);
   const spanTotal = chosen.reduce((a, b) => a + (b.end - b.start), 0);
   let cursor = 0;
   const blocks = chosen.map(b => {
-    const dur = Math.round(((b.end - b.start) / spanTotal) * 10 * 10) / 10;
+    const dur = Math.round(((b.end - b.start) / spanTotal) * (T.totalS || 10) * 10) / 10;
     const out = { ...b, start: Math.round(cursor * 10) / 10, end: Math.round((cursor + dur) * 10) / 10 };
     cursor += dur;
     return out;
@@ -133,7 +136,8 @@ export async function buildReelPlan(opts: {
   // Gemini tinh chỉnh concept theo user prompt (bám sản phẩm + chủ đề, không đổi khung)
   let refined: Record<string, string> = {};
   let overlays: ReelPlan['textOverlays'] = [];
-  let ctaText = SOFT_CTAS[vIdx % SOFT_CTAS.length];
+  const ctas = T.softCtas?.length ? T.softCtas : SOFT_CTAS;
+  let ctaText = ctas[vIdx % ctas.length];
   try {
     const aiBlocks = blocks.filter(b => b.kind === 'ai');
     const r = await generateJSON<{ scenes: Record<string, string>; overlays: Array<{ blockId: string; text: string; role: string }>; cta: string }>(
@@ -169,23 +173,24 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
       // refine tự do là nguồn "mỗi cảnh một cái ly" đã trả giá 27/07)
       editInstruction: b.edit ? fillConcept(b.edit, profile) : undefined,
       imagePrompt: b.kind === 'ai'
-        ? `${concept}. ${SCENE_CANVAS}. ${QUALITY_BLOCK}. ${NEGATIVE_PROMPT}`
+        ? `${concept}. ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
         : '',
       prompt: b.kind === 'ai'
-        ? `${motion} ${SCENE_CANVAS}. ${QUALITY_BLOCK}. ${NEGATIVE_PROMPT}`
+        ? `${motion} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
         : '',
       sfxPrompt: b.sfx,
     };
   });
 
   return {
-    template: REEL_TEMPLATE_ID,
+    template: T.id,
     sku: skuCode,
     profile,
     videoType: opts.videoType,
     userPrompt: opts.userPrompt,
     scenes,
-    heroPrompt: `a tall clear glass filled with ${profile.heroSubject}, realistic ice cubes, condensation drops on the glass, natural color, premium beverage beauty shot. ${SCENE_CANVAS}. ${QUALITY_BLOCK}. ${NEGATIVE_PROMPT}`,
+    heroPrompt: `${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}. ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`,
+    gradeVf: T.gradeVf,
     totalS: Math.round(cursor * 10) / 10,
     ctaText,
     textOverlays: [...overlays, { blockId: 'PRODUCT_CTA', text: ctaText, role: 'cta' }],

@@ -12,6 +12,7 @@ interface ChecklistItem { key: string; label: string; ok: boolean; detail: strin
 interface ReelMeta {
   checklist: { ok: boolean; items: ChecklistItem[] };
   products: Array<{ id: string; name: string; hasImage: boolean }>;
+  templates: Array<{ id: string; name: string; description: string; source: string }>;
   skus: Array<{ code: string; name: string; moment: string }>;
   videoTypes: string[];
   falConfigured: boolean;
@@ -34,6 +35,8 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
   const [productId, setProductId] = useState('');
   const [sku, setSku] = useState('HIB');
   const [brief, setBrief] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  const [composing, setComposing] = useState(false);
   const [matching, setMatching] = useState(false);
   const [matchNote, setMatchNote] = useState('');
   const [videoType, setVideoType] = useState('iced_summer');
@@ -59,7 +62,7 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
     try {
       const r = await fetch(`/api/video/reel?brand=${brandId}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(productId ? { productId, videoType, prompt, versions } : { sku, videoType, prompt, versions }),
+        body: JSON.stringify({ ...(productId ? { productId } : { sku }), videoType, prompt, versions, ...(templateId ? { templateId } : {}) }),
       });
       const d = await r.json() as { ok?: boolean; error?: string; projectIds?: string[] };
       if (!d.ok) setMsg('❌ ' + (d.error ?? 'Tạo reel thất bại'));
@@ -99,6 +102,25 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
       }
     } catch (e) { setMatchNote('❌ ' + String(e)); }
     setMatching(false);
+  }
+
+  async function composeTemplate() {
+    if (!brief.trim()) { setMatchNote('❌ Dán brief vào ô trước rồi mới đúc template.'); return; }
+    setComposing(true); setMatchNote('');
+    try {
+      const r = await fetch(`/api/video/reel/compose-template?brand=${brandId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brief }),
+      });
+      const d = await r.json() as { ok?: boolean; error?: string; template?: { id: string; name: string } };
+      if (!d.ok || !d.template) setMatchNote('❌ ' + (d.error ?? 'Đúc template thất bại'));
+      else {
+        setMatchNote(`✅ Đã đúc template mới "${d.template.name}" (${d.template.id}) — đã chọn sẵn để chạy.`);
+        setTemplateId(d.template.id);
+        await load();
+      }
+    } catch (e) { setMatchNote('❌ ' + String(e)); }
+    setComposing(false);
   }
 
   const cl = meta?.checklist;
@@ -144,9 +166,24 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
             className="text-[11px] px-3 py-1.5 rounded-lg bg-purple-700/40 text-purple-200 hover:bg-purple-700/60 disabled:opacity-50">
             {matching ? '⏳ Đang khớp…' : '🎯 Tự khớp brief'}
           </button>
+          <button onClick={composeTemplate} disabled={composing}
+            className="text-[11px] px-3 py-1.5 rounded-lg bg-amber-700/40 text-amber-200 hover:bg-amber-700/60 disabled:opacity-50">
+            {composing ? '⏳ Đang đúc…' : '🧬 Đúc template mới từ brief'}
+          </button>
           {matchNote && <span className={`text-[11px] ${matchNote.startsWith('✅') ? 'text-emerald-400' : 'text-red-400'}`}>{matchNote}</span>}
         </div>
       </div>
+
+      {(meta?.templates?.length ?? 0) > 1 && (
+        <select value={templateId} onChange={e => setTemplateId(e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
+          {meta!.templates.map(t => (
+            <option key={t.id} value={t.id === 'iced_summer_v01' ? '' : t.id}>
+              {t.source === 'custom' ? '🧬 ' : '📐 '}{t.name}
+            </option>
+          ))}
+        </select>
+      )}
 
       <div className="grid sm:grid-cols-3 gap-2">
         {meta?.products?.length ? (

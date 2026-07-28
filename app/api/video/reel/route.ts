@@ -16,7 +16,7 @@ import { enforceRateLimit } from '@/lib/rate-limit';
 import { createJob, logJob, failJob } from '@/lib/jobs';
 import { buildReelPlan } from '@/lib/video/reel-director';
 import { SKUS, VIDEO_TYPE_ORDERS } from '@/lib/video/reel-template';
-import { libraryChecklist } from '@/lib/video/brand-library';
+import { libraryChecklist, listReelTemplates } from '@/lib/video/brand-library';
 
 export async function GET(req: NextRequest) {
   const brandId = getBrandId(req);
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     checklist,
     products: products.map(p => ({ id: p.id, name: p.name, hasImage: Boolean(p.image_url) })),
     skus: skuCodes.map(k => ({ code: k, name: SKUS[k].name, moment: SKUS[k].moment })),
+    templates: listReelTemplates(brandId),
     videoTypes: Object.keys(VIDEO_TYPE_ORDERS),
     falConfigured: Boolean(process.env.FAL_KEY),
   });
@@ -44,8 +45,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'FAL_KEY chưa cấu hình — founder thêm key fal.ai vào .env server rồi restart.' }, { status: 400 });
   }
   const body = await req.json().catch(() => ({})) as {
-    sku?: string; productId?: string; videoType?: string; prompt?: string; versions?: number;
+    sku?: string; productId?: string; videoType?: string; prompt?: string; versions?: number; templateId?: string;
   };
+  const templateId = String(body.templateId || '').replace(/[^a-z0-9_]/g, '').slice(0, 40) || undefined;
   const db = getDb();
   // KHÁI QUÁT: productId của brand là đường chính; sku code là legacy LoveinTea
   let productId = String(body.productId || '').trim() || undefined;
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
     const projectIds: string[] = [];
     for (let v = 0; v < versions; v++) {
       logJob(jobId, `Dựng plan ${v + 1}/${versions} (Gemini)…`);
-      const plan = await buildReelPlan({ brandId, sku, productId, videoType, userPrompt, versionIndex: v });
+      const plan = await buildReelPlan({ brandId, sku, productId, videoType, userPrompt, templateId, versionIndex: v });
       const id = uuid();
       db.prepare(`INSERT INTO video_projects
         (id, brand_id, title, purpose, product_id, platform, aspect, target_duration_s,
