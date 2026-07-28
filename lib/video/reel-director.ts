@@ -206,8 +206,13 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
   const FRUIT_OK = 'only the fruits explicitly specified, no other fruits';
   const userWantsFruit = userEls.some(e => /berr|strawberr|fruit|lemon|cherry|grape|citrus|dâu|chanh/i.test(e.element));
   const adjustNeg = (txt: string, hasExtra: boolean) => (hasExtra && userWantsFruit) ? txt.split(FRUIT_BAN).join(FRUIT_OK) : txt;
+  // Canvas cho cảnh no-vessel: lột mệnh đề ly khỏi SCENE_CANVAS (canvas verbatim
+  // chứa "the same tall clear glass…" đánh nhau với "No cups/glasses" — MACRO_HOOK
+  // RM-HIBI-2807-5 fail 2 lần vì model vẽ ly theo canvas rồi gate bắt).
+  const canvasNoVessel = T.sceneCanvas.replace(/the same[^,]*?(glass|mug|cup|vessel|tumbler)[^,]*?on\s+(a|an|the)\s+/i, 'the same ');
   const scenes: ReelSceneSpec[] = blocks.map(b => {
     const extra = extras[b.id];
+    const canvas = (b.kind === 'ai' && !b.hasGlass) ? canvasNoVessel : T.sceneCanvas;
     const concept = (refined[b.id] || fillConcept(b.concept, profile)) + (extra ? ` ${extra}` : '');
     const noVessel = b.kind === 'ai' && !b.hasGlass
       ? ' No cups, mugs, glasses or any drink vessels anywhere in this shot.'
@@ -228,10 +233,10 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
         ? fillConcept(b.edit, profile) + (extra ? ` Also add: ${extra} Keep everything else identical; any bag or prop must be plain and unmarked with no printed text.` : '')
         : undefined,
       imagePrompt: b.kind === 'ai'
-        ? adjustNeg(`${concept}.${sNote}${noVessel} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(extra))
+        ? adjustNeg(`${concept}.${sNote}${noVessel} ${canvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(extra))
         : '',
       prompt: b.kind === 'ai'
-        ? adjustNeg(`${motion} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(extra))
+        ? adjustNeg(`${motion} ${canvas}. ${T.qualityBlock}. ${T.negativePrompt}`, Boolean(extra))
         : '',
       sfxPrompt: b.sfx,
     };
