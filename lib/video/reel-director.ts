@@ -113,7 +113,7 @@ export async function buildReelPlan(opts: {
     profile = {
       productId: `prod-${legacy.productSlug}`, productName: legacy.name, productSlug: legacy.productSlug,
       ingredient: legacy.ingredient, garnish: legacy.garnish, liquidColor: legacy.liquidColor,
-      moment: legacy.moment, heroSubject: `iced ${legacy.liquidColor} herbal tea`,
+      moment: legacy.moment, heroSubject: `${legacy.liquidColor} herbal tea`,
     };
   }
   const skuCode = Object.values(SKUS).find(s => s.productSlug === profile.productSlug)?.code

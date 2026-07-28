@@ -49,7 +49,7 @@ export async function getProductProfile(brandId: string, productId: string): Pro
       productId: p.id, productName: p.name, productSlug: p.slug,
       ingredient: legacy.ingredient, garnish: legacy.garnish,
       liquidColor: legacy.liquidColor, moment: legacy.moment,
-      heroSubject: `iced ${legacy.liquidColor} herbal tea`,
+      heroSubject: `${legacy.liquidColor} herbal tea`,
     };
   } else {
     let knowledge = '';
