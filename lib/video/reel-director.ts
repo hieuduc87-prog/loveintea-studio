@@ -160,9 +160,18 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
     console.warn('[reel-director] Gemini refine failed — dùng concept template:', String(e).slice(0, 150));
   }
 
+  // Nhất quán NÓNG/LẠNH (template quyết) + cấm model tự bịa cốc ở cảnh không neo hero
+  const serveNote = T.serve === 'hot'
+    ? ' The drink is served HOT: gentle steam, warm tones, NO ice.'
+    : T.serve === 'iced'
+      ? ' The drink is served ICED: ice cubes, condensation, NO steam.'
+      : '';
   const scenes: ReelSceneSpec[] = blocks.map(b => {
     const concept = refined[b.id] || fillConcept(b.concept, profile);
-    const motion = `${concept}. Camera: ${b.camera}, single continuous move.`;
+    const noVessel = b.kind === 'ai' && !b.hasGlass
+      ? ' No cups, mugs, glasses or any drink vessels anywhere in this shot.'
+      : '';
+    const motion = `${concept}.${serveNote}${noVessel} Camera: ${b.camera}, single continuous move.`;
     return {
       blockId: b.id,
       start: b.start, end: b.end,
@@ -173,7 +182,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
       // refine tự do là nguồn "mỗi cảnh một cái ly" đã trả giá 27/07)
       editInstruction: b.edit ? fillConcept(b.edit, profile) : undefined,
       imagePrompt: b.kind === 'ai'
-        ? `${concept}. ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
+        ? `${concept}.${serveNote}${noVessel} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
         : '',
       prompt: b.kind === 'ai'
         ? `${motion} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
@@ -189,7 +198,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
     videoType: opts.videoType,
     userPrompt: opts.userPrompt,
     scenes,
-    heroPrompt: `${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}. ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`,
+    heroPrompt: `${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}.${serveNote} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`,
     gradeVf: T.gradeVf,
     totalS: Math.round(cursor * 10) / 10,
     ctaText,

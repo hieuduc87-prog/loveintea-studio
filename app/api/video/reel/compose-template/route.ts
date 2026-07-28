@@ -17,6 +17,7 @@ import {
   NEGATIVE_PROMPT, QUALITY_BLOCK, REEL_GRADE_VF,
 } from '@/lib/video/reel-template';
 
+interface RawTemplateExtra { serve?: string }
 interface RawBlock {
   id?: string; durS?: number; concept?: string; camera?: string; sfx?: string;
   transitionOut?: string; kind?: string; hasGlass?: boolean; edit?: string;
@@ -25,7 +26,7 @@ interface RawBlock {
 /** Validate + chuẩn hoá bằng CODE — mọi luật cứng của pipeline phải được đảm bảo
  *  trước khi template được phép lưu. Trả lỗi cụ thể để Gemini/người sửa. */
 function normalizeTemplate(raw: {
-  id?: string; name?: string; description?: string; totalS?: number;
+  id?: string; name?: string; description?: string; totalS?: number; serve?: string;
   heroConcept?: string; sceneCanvas?: string; blocks?: RawBlock[]; softCtas?: string[];
 }): { def?: ReelTemplateDef; errors: string[] } {
   const errors: string[] = [];
@@ -48,6 +49,13 @@ function normalizeTemplate(raw: {
     const isLast = i === blocksIn.length - 1;
     const blockId = String(b.id || `BLOCK_${i}`).toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30);
     const kind = (isLast || b.kind === 'endcard') ? 'endcard' as const : 'ai' as const;
+    // LUẬT CONTINUITY (bài học RM-NIGH-2807-1: cảnh nhắc cốc mà hasGlass=false →
+    // t2i tự do → mỗi cảnh một cái cốc): concept/edit nhắc vessel ⇒ ÉP hasGlass.
+    const vessel = /mug|cup|glass|teacup|tumbler|vessel|pitcher|bowl|ly |cốc|tách/i;
+    if (kind === 'ai' && !b.hasGlass && vessel.test(String(b.concept || '') + String(b.edit || ''))) {
+      b.hasGlass = true;
+      if (!b.edit) b.edit = `Keep the EXACT same drink vessel, surface and lighting. ${String(b.concept || '').slice(0, 200)}`;
+    }
     if (kind === 'ai') {
       if (!b.concept) errors.push(`block ${blockId} thiếu concept`);
       if (!b.sfx) errors.push(`block ${blockId} thiếu sfx`);
@@ -88,6 +96,7 @@ function normalizeTemplate(raw: {
       id, name: String(raw.name).slice(0, 80),
       description: String(raw.description || '').slice(0, 400),
       totalS,
+      serve: (['hot', 'iced', 'any'].includes(String(raw.serve)) ? raw.serve : 'any') as 'hot' | 'iced' | 'any',
       blocks,
       videoTypeOrders: { default: blocks.map(b => b.id) },
       heroConcept: String(raw.heroConcept).slice(0, 400),
@@ -119,6 +128,7 @@ ${attempt ? `Your previous output failed CODE VALIDATION with these errors — f
 Return ONLY JSON:
 {"id":"snake_case_v01","name":"...","description":"1-2 câu tiếng Việt: template này cho loại video gì, hợp sản phẩm nào",
  "totalS":<8-30 seconds>,
+ "serve":"hot|iced|any — the drink temperature this template commits to (consistency rule)",
  "heroConcept":"the single HERO image concept that anchors visual continuity, MUST contain the placeholder {heroSubject} for the product, English",
  "sceneCanvas":"shared environment description pasted verbatim into every scene prompt (surface, light, mood), English",
  "blocks":[{"id":"BLOCK_ID","durS":<seconds>,"concept":"what happens, English, may use {ingredient}/{garnish}/{liquidColor}/{heroSubject}","camera":"ONE camera move only","sfx":"ASMR/sound cue for this block","transitionOut":"hard|match|xfade","hasGlass":<true if the hero product vessel is visible — these scenes get edited FROM the hero image for continuity>,"edit":"IF hasGlass: instruction starting with 'Keep the EXACT same …' describing how to edit the hero image into this scene"}],

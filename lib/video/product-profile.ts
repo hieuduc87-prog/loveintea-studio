@@ -21,8 +21,10 @@ export interface ProductProfile {
   liquidColor: string;
   /** Hoàn cảnh sử dụng (caption). */
   moment: string;
-  /** Chủ thể ly hero, vd "iced ruby-red hibiscus herbal tea". */
+  /** Chủ thể ly hero — TRUNG TÍNH nóng/lạnh (template quyết), vd "ruby-red hibiscus herbal tea". */
   heroSubject: string;
+  /** Sản phẩm hợp phục vụ nóng/lạnh/cả hai — matcher dùng để chọn template hợp. */
+  serveStyle?: 'hot' | 'iced' | 'both';
 }
 
 /** Profile theo productId (brand-scoped — cách ly tenant). Cache vĩnh viễn trong
@@ -50,6 +52,7 @@ export async function getProductProfile(brandId: string, productId: string): Pro
       ingredient: legacy.ingredient, garnish: legacy.garnish,
       liquidColor: legacy.liquidColor, moment: legacy.moment,
       heroSubject: `${legacy.liquidColor} herbal tea`,
+      serveStyle: ({ 'nighty-night': 'hot', hibiscus: 'iced', peppermint: 'iced' } as Record<string, 'hot' | 'iced'>)[p.slug] || 'both',
     };
   } else {
     let knowledge = '';
@@ -65,7 +68,8 @@ Return ONLY JSON (all values in vivid ENGLISH, photography-ready):
  "garnish":"one safe garnish that does NOT misrepresent ingredients",
  "liquidColor":"natural liquid color description (no neon)",
  "moment":"when/why people drink it (one short phrase)",
- "heroSubject":"what fills the hero glass, e.g. 'iced golden ginger herbal tea'"}
+ "heroSubject":"what fills the hero vessel — NEUTRAL wording, NO hot/iced words (template decides temperature), e.g. 'golden ginger herbal tea'",
+ "serveStyle":"hot|iced|both — how this product is best served"}
 RULES: only ingredients that truly belong to this product; never invent fruits/berries not in it; natural, premium, no soda/cocktail vibes.`
     );
     profile = {
@@ -74,7 +78,8 @@ RULES: only ingredients that truly belong to this product; never invent fruits/b
       garnish: String(r.garnish || 'a small fresh herb sprig').slice(0, 120),
       liquidColor: String(r.liquidColor || 'natural warm amber').slice(0, 80),
       moment: String(r.moment || '').slice(0, 120),
-      heroSubject: String(r.heroSubject || `iced ${p.name} beverage`).slice(0, 120),
+      heroSubject: String(r.heroSubject || `${p.name} beverage`).replace(/\b(iced|hot|steaming)\b/gi, '').replace(/\s+/g, ' ').trim().slice(0, 120),
+      serveStyle: (['hot', 'iced', 'both'].includes(String((r as { serveStyle?: string }).serveStyle)) ? (r as { serveStyle?: string }).serveStyle : 'both') as 'hot' | 'iced' | 'both',
     };
   }
   writeLibJson(brandId, rel, profile);

@@ -238,6 +238,8 @@ export interface ReelTemplateDef {
   /** Mô tả để brief-matcher chấm điểm phù hợp. */
   description: string;
   totalS: number;
+  /** Đồ uống phục vụ NÓNG hay LẠNH — chốt 1 lần ở template để mọi scene nhất quán. */
+  serve?: 'hot' | 'iced' | 'any';
   blocks: ReelBlock[];
   videoTypeOrders: Record<string, string[]>;
   /** Concept ly hero — dùng {heroSubject} từ product profile. */
@@ -254,6 +256,7 @@ export const ICED_SUMMER_TEMPLATE: ReelTemplateDef = {
   name: 'Iced Summer Sensory Reel 10s',
   description: 'Sensory ASMR reel 10s cho đồ uống lạnh: macro ingredient → ice impact → pour → drink beauty → CTA. Hợp iced tea/beverage mùa hè, nhịp cắt nhanh 1.0-1.4s/shot, không voiceover.',
   totalS: REEL_TOTAL_S,
+  serve: 'iced',
   blocks: ICED_SUMMER_BLOCKS,
   videoTypeOrders: VIDEO_TYPE_ORDERS,
   heroConcept: 'a tall clear glass filled with {heroSubject}, realistic ice cubes, condensation drops on the glass, natural color, premium beverage beauty shot',
