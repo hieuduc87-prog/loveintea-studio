@@ -26,6 +26,7 @@ import { ensureBrandLibrary, brandLibRoot, clipCacheRoot, resolvePackshot, resol
 import { renderOverlayFramesHtml } from './render';
 import { analyzeImage } from '../gemini';
 import { logJob, progressJob } from '../jobs';
+import { learnFromFailure } from './learned-rules';
 
 const FPS = 30;
 const W = 1080, H = 1920;
@@ -232,7 +233,7 @@ async function getSceneImage(scene: ReelSceneSpec, plan: ReelPlan, work: string,
 }
 
 /** Gen 1 scene clip (cache theo hash prompt + ẢNH GỐC — đổi ảnh là clip mới). */
-async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: string, jobId: string): Promise<string> {
+async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: string, jobId: string, brandId: string): Promise<string> {
   const cacheDir = clipCacheRoot();
   const skuName = plan.profile?.productName || SKUS[plan.sku]?.name || plan.sku;
 
@@ -270,6 +271,8 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
       return cached;
     }
     logJob(jobId, `${scene.blockId}: QA FAIL — ${qa.reason}`);
+    // RUN→LEARN→FIX→LOOP tự động: mỗi fail đúc thành luật, áp mọi video sau
+    learnFromFailure(brandId, scene.blockId, scene.prompt, qa.reason || '').catch(() => {});
     if (attempt === 1) throw new Error(`${scene.blockId}: clip AI fail QA 2 lần (${qa.reason})`);
   }
   throw new Error('unreachable');
@@ -555,7 +558,7 @@ export async function renderReelProject(projectId: string): Promise<void> {
       } else {
         let src: string;
         try {
-          src = await generateSceneClip(scene, plan, work, jobId);
+          src = await generateSceneClip(scene, plan, work, jobId, brandId);
         } catch (e) {
           throw new Error(`${scene.blockId}: ${friendlyFalError(e)}`);
         }

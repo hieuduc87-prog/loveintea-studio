@@ -43,5 +43,6 @@ Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com**
 
 
 
-- [session 2026-07-28] 13 commit — feat(reel) · fix(reel) · feat(autofix) · docs(brief)
+
+- [session 2026-07-28] 14 commit — fix(reel) · feat(reel) · feat(autofix) · docs(brief)
 - [session 2026-07-27] 16 commit — docs(brief) · fix(reel) · feat(reel) · docs(brief)+fix(reel) · test(security) · refactor(reel) · feat(video) · docs(video)

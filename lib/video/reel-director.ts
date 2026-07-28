@@ -13,6 +13,7 @@ import { analyzeReferenceVideo, ReferenceAnalysis } from './analyze-reference';
 import { referencesRoot, readLibJson, writeLibJson, ensureBrandLibrary } from './brand-library';
 import { SKUS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE, PHYSICS_BLOCK } from './reel-template';
 import { getProductProfile, ProductProfile } from './product-profile';
+import { learnedRulesBlock } from './learned-rules';
 import { getReelTemplate } from './brand-library';
 import type { ReelTemplateDef } from './reel-template';
 
@@ -201,6 +202,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
     }
   } catch { /* extras optional */ }
   // Trích element user bằng call riêng (đáng tin hơn) — merge đè/ghép vào extras
+  const learnedBlock = learnedRulesBlock(opts.brandId); // luật tự học từ fail cũ
   const extraction = await extractUserElements(opts.userPrompt, blocks.filter(b => b.kind === 'ai').map(b => b.id));
   const userEls = extraction.elements;
   const userConstraints = extraction.constraints.length ? ` USER RULES: ${extraction.constraints.join(' ')}` : '';
@@ -241,10 +243,10 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
         ? fillConcept(b.edit, profile) + (extra ? ` Also add: ${extra} Keep everything else identical; any bag or prop must be plain and unmarked with no printed text.` : '')
         : undefined,
       imagePrompt: b.kind === 'ai'
-        ? adjustNeg(`${concept}.${sNote}${noVessel}${userConstraints} ${canvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}. ${T.negativePrompt}`, Boolean(extra))
+        ? adjustNeg(`${concept}.${sNote}${noVessel}${userConstraints} ${canvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}.${learnedBlock} ${T.negativePrompt}`, Boolean(extra))
         : '',
       prompt: b.kind === 'ai'
-        ? adjustNeg(`${motion}${userConstraints} ${canvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}. ${T.negativePrompt}`, Boolean(extra))
+        ? adjustNeg(`${motion}${userConstraints} ${canvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}.${learnedBlock} ${T.negativePrompt}`, Boolean(extra))
         : '',
       sfxPrompt: b.sfx,
     };
@@ -257,7 +259,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
     videoType: opts.videoType,
     userPrompt: opts.userPrompt,
     scenes,
-    heroPrompt: adjustNeg(`${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}${heroExtra ? `, with ${heroExtra} visible in the drink` : ''}.${serveNote} ${T.sceneCanvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}. ${T.negativePrompt}`, Boolean(heroExtra)),
+    heroPrompt: adjustNeg(`${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}${heroExtra ? `, with ${heroExtra} visible in the drink` : ''}.${serveNote} ${T.sceneCanvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}.${learnedBlock} ${T.negativePrompt}`, Boolean(heroExtra)),
     gradeVf: T.gradeVf,
     totalS: Math.round(cursor * 10) / 10,
     ctaText,
