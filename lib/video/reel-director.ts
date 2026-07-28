@@ -171,7 +171,10 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
     const noVessel = b.kind === 'ai' && !b.hasGlass
       ? ' No cups, mugs, glasses or any drink vessels anywhere in this shot.'
       : '';
-    const motion = `${concept}.${serveNote}${noVessel} Camera: ${b.camera}, single continuous move.`;
+    // serveNote CHỈ cho cảnh có cốc — cảnh không cốc mà nói "drink served HOT"
+    // là mâu thuẫn với noVessel, model loạn (bài học ESTABLISH_COZY 28/07)
+    const sNote = b.hasGlass ? serveNote : '';
+    const motion = `${concept}.${sNote}${noVessel} Camera: ${b.camera}, single continuous move.`;
     return {
       blockId: b.id,
       start: b.start, end: b.end,
@@ -182,7 +185,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"overlays":[{"block
       // refine tự do là nguồn "mỗi cảnh một cái ly" đã trả giá 27/07)
       editInstruction: b.edit ? fillConcept(b.edit, profile) : undefined,
       imagePrompt: b.kind === 'ai'
-        ? `${concept}.${serveNote}${noVessel} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
+        ? `${concept}.${sNote}${noVessel} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`
         : '',
       prompt: b.kind === 'ai'
         ? `${motion} ${T.sceneCanvas}. ${T.qualityBlock}. ${T.negativePrompt}`

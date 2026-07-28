@@ -65,7 +65,7 @@ function normalizeTemplate(raw: {
     }
     // Props dễ sinh chữ AI (túi trà/tag/nhãn/bao bì) → ép mô tả "trơn không chữ"
     // ngay trong concept — bài học DROP_TEA_BAG 28/07: tag túi trà luôn ra chữ.
-    const textyProp = /tea bag|teabag|sachet|label|tag|package|packaging|box|wrapper/i;
+    const textyProp = /tea bag|teabag|sachet|label|tag|package|packaging|box|wrapper|book|journal|notebook|magazine|newspaper/i;
     const plainify = (txt: string) => textyProp.test(txt)
       ? `${txt} (all props plain and unmarked, blank tags, absolutely no printed text or logos)`
       : txt;
