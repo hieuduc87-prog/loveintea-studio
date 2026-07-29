@@ -17,7 +17,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     name: string; slug?: string; display_name?: string; theme?: string;
     color?: string; color_name?: string; pitch?: string; image_url?: string;
   };
-  if (!body.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
+  if (!body.name?.trim()) return NextResponse.json({ error: 'Cần tên sản phẩm' }, { status: 400 });
+  // Ảnh BẮT BUỘC (fail-loud): sản phẩm không ảnh làm hỏng trang danh sách + mọi
+  // pipeline gen ảnh/video đều cần ảnh thật. Card gossby 28/07.
+  if (!body.image_url?.trim()) return NextResponse.json({ error: 'Cần ảnh sản phẩm (dán URL hoặc tải lên)' }, { status: 400 });
 
   const slug = body.slug?.trim() ||
     body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -40,7 +43,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       body.image_url || '', maxOrder + 1
     );
     return NextResponse.json({ ok: true, id, slug });
-  } catch {
-    return NextResponse.json({ error: 'Product slug already exists for this brand' }, { status: 400 });
+  } catch (e) {
+    // Trước đây MỌI lỗi INSERT đều báo "slug đã tồn tại" → user không hiểu gì.
+    const msg = String((e as Error)?.message || '');
+    if (msg.includes('UNIQUE')) return NextResponse.json({ error: 'Slug sản phẩm đã tồn tại trong brand này' }, { status: 400 });
+    console.error('[products POST]', e);
+    return NextResponse.json({ error: 'Không tạo được sản phẩm: ' + msg.slice(0, 120) }, { status: 500 });
   }
 }

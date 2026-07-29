@@ -94,6 +94,7 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProduct, setNewProduct]   = useState(EMPTY_NEW);
   const [adding, setAdding]           = useState(false);
+  const [uploadingNew, setUploadingNew] = useState(false);
   const [addMsg, setAddMsg]           = useState('');
 
   const loadProducts = useCallback(async () => {
@@ -156,7 +157,10 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
   }
 
   async function addProduct() {
-    if (!newProduct.name.trim()) return;
+    if (!newProduct.name.trim()) { setAddMsg('✗ Cần tên sản phẩm'); return; }
+    // Ảnh BẮT BUỘC: pipeline gen ảnh/video đều cần ảnh sản phẩm thật; thiếu ảnh
+    // trước đây tạo ra SP "rỗng" làm hỏng trang danh sách (card gossby 28/07).
+    if (!newProduct.image_url.trim()) { setAddMsg('✗ Cần ảnh sản phẩm (dán URL hoặc tải lên)'); return; }
     setAdding(true); setAddMsg('');
     const r = await fetch(`/api/brands/${brandId}/products`, {
       method: 'POST',
@@ -199,7 +203,7 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
               ['theme',        'Theme',          'text', 'e.g. Daily refresh ritual'],
               ['color_name',   'Color Name',     'text', 'e.g. Emerald Green'],
               ['pitch',        'Pitch',          'text', 'One-line pitch'],
-              ['image_url',    'Image URL',      'text', '/brand/products/XX.png'],
+              ['image_url',    'Ảnh sản phẩm * (URL hoặc tải lên bên dưới)', 'text', '/brand/products/XX.png'],
             ] as [keyof typeof EMPTY_NEW, string, string, string][]).map(([key, label, type, placeholder]) => (
               <div key={key} className={key === 'pitch' || key === 'image_url' ? 'col-span-2' : ''}>
                 <label className="block text-xs text-gray-400 mb-1">{label}</label>
@@ -209,6 +213,28 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-brand-500" />
               </div>
             ))}
+            <div className="col-span-2">
+              <label className="block text-xs text-gray-400 mb-1">Hoặc tải ảnh lên máy</label>
+              <div className="flex items-center gap-2">
+                <label className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 cursor-pointer">
+                  {uploadingNew ? '⟳ Đang tải…' : '📷 Chọn ảnh'}
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={async e => {
+                      const f = e.target.files?.[0]; if (!f) return;
+                      setUploadingNew(true); setAddMsg('');
+                      try {
+                        const fd = new FormData(); fd.append('file', f);
+                        const r = await fetch(`/api/products/upload-temp?brand=${brandId}`, { method: 'POST', body: fd });
+                        const d = await r.json() as { url?: string; error?: string };
+                        if (d.url) setNewProduct(p => ({ ...p, image_url: d.url! }));
+                        else setAddMsg('✗ ' + (d.error || 'Tải ảnh thất bại'));
+                      } catch { setAddMsg('✗ Tải ảnh thất bại'); }
+                      setUploadingNew(false);
+                    }} />
+                </label>
+                {newProduct.image_url && <span className="text-xs text-emerald-400 truncate">✓ {newProduct.image_url}</span>}
+              </div>
+            </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1">Color</label>
               <div className="flex items-center gap-2">
@@ -220,10 +246,12 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
             </div>
           </div>
           <div className="flex items-center gap-3 mt-4">
-            <button onClick={addProduct} disabled={adding || !newProduct.name.trim()}
+            <button onClick={addProduct} disabled={adding || uploadingNew || !newProduct.name.trim() || !newProduct.image_url.trim()}
+              title={!newProduct.image_url.trim() ? 'Cần ảnh sản phẩm trước khi tạo' : ''}
               className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors">
               {adding ? '⟳ Adding…' : 'Add Product'}
             </button>
+            {!newProduct.image_url.trim() && <span className="text-xs text-amber-400">⚠ Cần ảnh sản phẩm (dán URL hoặc tải lên) mới tạo được</span>}
             {addMsg && <span className="text-xs text-red-400">{addMsg}</span>}
           </div>
         </div>
@@ -245,7 +273,13 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
                   }`}
                 >
                   <div className="w-12 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-800">
-                    <Image src={p.image_url} alt={p.name} width={48} height={64} className="object-cover w-full h-full" />
+                    {p.image_url ? (
+                      <Image src={p.image_url} alt={p.name} width={48} height={64} className="object-cover w-full h-full" />
+                    ) : (
+                      // Sản phẩm mới chưa có ảnh: <Image src=""> của Next NÉM LỖI làm
+                      // trắng cả trang (brand mới luôn dính) → placeholder chữ cái đầu.
+                      <div className="w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-lg font-bold">{p.name?.[0] ?? '?'}</div>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
@@ -277,7 +311,11 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                 <div className="flex items-start gap-4">
                   <div className="w-20 h-28 rounded-xl overflow-hidden flex-shrink-0 bg-gray-800">
-                    <Image src={selected.image_url} alt={selected.name} width={80} height={112} className="object-cover w-full h-full" />
+                    {selected.image_url ? (
+                      <Image src={selected.image_url} alt={selected.name} width={80} height={112} className="object-cover w-full h-full" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-2xl font-bold">{selected.name?.[0] ?? '?'}</div>
+                    )}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
