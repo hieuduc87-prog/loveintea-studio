@@ -798,6 +798,7 @@ function initSchema(db: Database.Database) {
     db.exec(`UPDATE publish_log SET brand_id = COALESCE((SELECT p.brand_id FROM posts p WHERE p.id = publish_log.post_id), 'loveintea') WHERE brand_id=''`);
   } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE subscriptions ADD COLUMN brand_id TEXT DEFAULT ''`); } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE bank_transfers ADD COLUMN brand_id TEXT DEFAULT ''`); } catch { /* already exists */ }
   // TENANT ISOLATION: image_library + blog_posts là feature loveintea-legacy chưa
   // có cột brand — thêm để scope theo brand (dòng cũ backfill về 'loveintea').
   try { db.exec(`ALTER TABLE image_library ADD COLUMN brand_id TEXT DEFAULT 'loveintea'`); } catch { /* already exists */ }

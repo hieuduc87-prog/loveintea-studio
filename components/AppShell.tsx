@@ -103,6 +103,19 @@ const TAB_LABELS: Record<TabId, string> = Object.fromEntries(TABS.map(t => [t.id
  *  do server quyết: chỉ khôi phục nếu id có trong danh sách /api/brands trả về. */
 const ACTIVE_BRAND_KEY = 'ech.activeBrand';
 
+/** Domain riêng từng store: <slug>.easycreativehub.com. Trên host store, brand
+ *  KHOÁ theo host (middleware pin server-side, đây chỉ là mặt UI) và đổi store
+ *  nghĩa là đổi domain — một hành động có ý thức, không phải cú click nhầm. */
+const STORE_BASE_DOMAIN = 'easycreativehub.com';
+const RESERVED_SUBS = new Set(['app', 'admin', 'crm', 'www', 'autocontent', 'landing', 'api', 'mail']);
+function storeHostSlug(): string {
+  if (typeof window === 'undefined') return '';
+  const host = window.location.hostname.toLowerCase();
+  if (!host.endsWith('.' + STORE_BASE_DOMAIN)) return '';
+  const label = host.slice(0, -(STORE_BASE_DOMAIN.length + 1));
+  return label && !label.includes('.') && !RESERVED_SUBS.has(label) ? label : '';
+}
+
 // ─── Brand Dropdown ────────────────────────────────────────────────────────────
 
 function BrandDropdown({
@@ -358,11 +371,15 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
         // sách, mà vẫn tưởng đang ở store cũ → có ngày đăng nhầm store.
         // Nhớ lựa chọn ở localStorage; `find` trong danh sách trả về đã đảm bảo
         // chỉ khôi phục store người đó THỰC SỰ có quyền.
+        // HOST THẮNG TẤT CẢ: trên <slug>.easycreativehub.com store là cái ghi
+        // trong URL — localStorage/tab khác không đổi được (server cũng đã pin).
+        const pinned = storeHostSlug();
         let saved = '';
         try { saved = localStorage.getItem(ACTIVE_BRAND_KEY) || ''; } catch { /* private mode */ }
         setActiveBrand(prev =>
-          d.brands.find(b => b.id === saved)
-          || d.brands.find(b => b.id === prev.id)
+          d.brands.find(b => b.id === pinned || b.slug === pinned)
+          || (!pinned && d.brands.find(b => b.id === saved))
+          || (!pinned && d.brands.find(b => b.id === prev.id))
           || d.brands[0]);
       }
     } catch { /* ignore */ }
@@ -428,7 +445,15 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
   const sidebarProps = {
     tab, changeTab, userRole, pendingCount,
     brands, activeBrand,
-    onBrandSwitch: (b: BrandSummary) => setActiveBrand(b),
+    onBrandSwitch: (b: BrandSummary) => {
+      // Trên domain store: đổi store = SANG DOMAIN của store đó (điều hướng
+      // thật, có ý thức) — không đổi state tại chỗ để URL và dữ liệu luôn khớp.
+      if (storeHostSlug()) {
+        window.location.href = `${window.location.protocol}//${b.slug || b.id}.${STORE_BASE_DOMAIN}/`;
+        return;
+      }
+      setActiveBrand(b);
+    },
   };
 
   return (

@@ -53,7 +53,9 @@ export function getBankInfo() {
 }
 
 // ── Create order ──────────────────────────────────────────────────────────────
-export function createOrder(userId: string, planId: string) {
+// brandId: gói bán theo STORE (một store nhiều nhân viên dùng chung hạn mức) —
+// user_id giữ lại để biết AI mua, brand_id quyết định AI được hưởng.
+export function createOrder(userId: string, planId: string, brandId = '') {
   const db = getDb();
   const plan = db.prepare('SELECT * FROM payment_plans WHERE id = ? AND is_active = 1').get(planId) as Record<string, unknown> | undefined;
   if (!plan) return null;
@@ -62,9 +64,9 @@ export function createOrder(userId: string, planId: string) {
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 min
 
   db.prepare(`
-    INSERT INTO bank_transfers (id, order_id, user_id, plan_id, amount, status, expires_at, created_at)
-    VALUES (?, ?, ?, ?, ?, 'pending', ?, datetime('now'))
-  `).run(orderId, orderId, userId, planId, plan.price, expiresAt);
+    INSERT INTO bank_transfers (id, order_id, user_id, plan_id, amount, status, expires_at, brand_id, created_at)
+    VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'))
+  `).run(orderId, orderId, userId, planId, plan.price, expiresAt, brandId);
 
   return {
     orderId,
@@ -107,13 +109,16 @@ export function fulfillOrder(
     );
 
     const userId  = order.user_id as string;
+    const brandId = (order.brand_id as string) || '';
     const planType = plan.type as string;
 
     if (planType === 'subscription_monthly') {
       // Extend or create subscription (30-day rolling)
-      const existing = db.prepare(
-        "SELECT * FROM subscriptions WHERE user_id = ? AND status = 'active'"
-      ).get(userId) as Record<string, unknown> | undefined;
+      // Tìm theo STORE trước (mô hình bán theo store); fallback user cho sub cũ.
+      const existing = (brandId
+        ? db.prepare("SELECT * FROM subscriptions WHERE brand_id = ? AND status = 'active'").get(brandId)
+        : db.prepare("SELECT * FROM subscriptions WHERE user_id = ? AND status = 'active'").get(userId)
+      ) as Record<string, unknown> | undefined;
 
       if (existing) {
         // Extend current period by 30 days from current end
@@ -128,17 +133,17 @@ export function fulfillOrder(
         const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
         db.prepare(`
           INSERT INTO subscriptions
-            (id, user_id, plan_id, status, started_at, current_period_end, payment_method, payment_reference, created_at, updated_at)
-          VALUES (?, ?, ?, 'active', datetime('now'), ?, 'bank_transfer', ?, datetime('now'), datetime('now'))
-        `).run(crypto.randomUUID(), userId, order.plan_id, periodEnd.toISOString(), orderId);
+            (id, user_id, brand_id, plan_id, status, started_at, current_period_end, payment_method, payment_reference, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 'active', datetime('now'), ?, 'bank_transfer', ?, datetime('now'), datetime('now'))
+        `).run(crypto.randomUUID(), userId, brandId, order.plan_id, periodEnd.toISOString(), orderId);
       }
     } else {
       // setup_once — just create a one-time subscription record marking as lifetime/setup
       db.prepare(`
         INSERT OR IGNORE INTO subscriptions
-          (id, user_id, plan_id, status, started_at, current_period_end, payment_method, payment_reference, created_at, updated_at)
-        VALUES (?, ?, ?, 'active', datetime('now'), '2099-12-31T00:00:00.000Z', 'bank_transfer', ?, datetime('now'), datetime('now'))
-      `).run(crypto.randomUUID(), userId, order.plan_id, orderId);
+          (id, user_id, brand_id, plan_id, status, started_at, current_period_end, payment_method, payment_reference, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'active', datetime('now'), '2099-12-31T00:00:00.000Z', 'bank_transfer', ?, datetime('now'), datetime('now'))
+      `).run(crypto.randomUUID(), userId, brandId, order.plan_id, orderId);
     }
   });
 

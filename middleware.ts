@@ -41,6 +41,17 @@ export default withAuth(
     const appHost = host.startsWith('app.') || host.startsWith('autocontent.');
     const baseDomain = host.replace(/^[^.]+\./, '');
     const proto = req.nextUrl.protocol;
+
+    // ── DOMAIN RIÊNG TỪNG STORE: <slug>.easycreativehub.com ────────────────
+    // Store nằm trong URL = không còn "đứng nhầm nhà": mở link nào là ở store
+    // đó, F5 vẫn thế, hai tab hai store không đá nhau. Host do TLS/tunnel xác
+    // thực nên đáng tin hơn mọi state phía client.
+    // Ràng buộc: subdomain label == brand id (createStore đặt id=slug).
+    const RESERVED_SUBS = new Set(['app', 'admin', 'crm', 'www', 'autocontent', 'landing', 'api', 'mail']);
+    const hostLabel = host.endsWith('.easycreativehub.com')
+      ? host.slice(0, -'.easycreativehub.com'.length) : '';
+    const storeHost = hostLabel && !hostLabel.includes('.') && !RESERVED_SUBS.has(hostLabel)
+      ? hostLabel : '';
     const isBypass = pathname.startsWith('/api') || pathname.startsWith('/login') || pathname.startsWith('/_next');
     // The platform surface = the explicit /platform route OR anything on the crm host.
     const isPlatformSurface = pathname.startsWith('/platform') || (crmHost && !isBypass);
@@ -75,15 +86,32 @@ export default withAuth(
       return NextResponse.rewrite(new URL('/platform', req.url));
     }
 
+    const allBrands = Boolean(token?.allBrands) || isAdmin;
+    const allowed = token?.brands ?? [];
+
+    // Trên host store: người không có quyền store đó KHÔNG được vào trang —
+    // đuổi về app. (chọn store của mình) thay vì hiện UI trống gây hiểu lầm.
+    if (storeHost && !isApi && !isBypass && !allBrands && !allowed.includes(storeHost)) {
+      return NextResponse.redirect(`${proto}//app.${baseDomain}/`);
+    }
+
     if (!isApi) return NextResponse.next();
 
     // ---- Brand tenant guard (API only) ----
-    const allBrands = Boolean(token?.allBrands) || isAdmin;
-    const allowed = token?.brands ?? [];
-    const requested =
+    const queryBrand =
       req.nextUrl.searchParams.get('brand') ||
       req.nextUrl.searchParams.get('brandId') ||
       '';
+    // HOST THẮNG QUERY: trên host store, ?brand= khác host là mâu thuẫn — chặn
+    // thẳng thay vì im lặng chọn một bên (đó là cách sự cố "đứng nhầm nhà" cũ
+    // lách vào). Cùng giá trị hoặc thiếu query → pin theo host.
+    if (storeHost && queryBrand && queryBrand !== storeHost) {
+      return NextResponse.json(
+        { error: `Mâu thuẫn store: đang ở ${storeHost} nhưng yêu cầu ${queryBrand}. Tải lại trang.` },
+        { status: 409 }
+      );
+    }
+    const requested = storeHost || queryBrand;
 
     // Reject explicit cross-tenant access for non-super-admins.
     if (!allBrands && requested && !allowed.includes(requested)) {

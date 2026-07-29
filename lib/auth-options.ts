@@ -77,6 +77,19 @@ export const authOptions: NextAuthOptions = {
     error: '/login',
   },
   callbacks: {
+    // Domain riêng từng store: sau đăng nhập cho phép quay về BẤT KỲ subdomain
+    // *.easycreativehub.com (mặc định NextAuth chỉ cho same-origin với
+    // NEXTAUTH_URL → login từ gossby.… bị đá về app.… mất chỗ đang đứng).
+    async redirect({ url, baseUrl }) {
+      try {
+        const u = new URL(url, baseUrl);
+        const okHost = u.hostname === 'easycreativehub.com' || u.hostname.endsWith('.easycreativehub.com');
+        if (u.protocol === 'https:' && okHost) return u.toString();
+        if (u.origin === baseUrl) return u.toString();
+      } catch { /* url tương đối lỗi → về base */ }
+      return baseUrl;
+    },
+
     async signIn({ user, account }) {
       if (account?.provider !== 'google') return true;
 

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { createOrder } from '@/lib/payment';
+import { getBrandId } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
   const { planId } = await req.json() as { planId: string };
   if (!planId) return NextResponse.json({ error: 'planId required' }, { status: 400 });
 
-  const order = createOrder(userId, planId);
+  const order = createOrder(userId, planId, getBrandId(req));
   if (!order) return NextResponse.json({ error: 'Plan not found or inactive' }, { status: 404 });
 
   return NextResponse.json(order);
