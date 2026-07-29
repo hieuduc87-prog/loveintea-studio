@@ -40,6 +40,15 @@ export async function POST(req: NextRequest) {
       : undefined;
     const rules = (db.prepare(`SELECT rule_text FROM content_rules WHERE (brand_id=? OR scope='platform') AND status='active' ORDER BY created_at DESC LIMIT 15`).all(brandId) as Array<{ rule_text: string }>).map(r => r.rule_text);
 
+    // File brand voice của CHÍNH brand này (Brand DNA → Upload Custom File).
+    // Trước 29/07 file upload lên chỉ nằm im trong settings, không vào prompt →
+    // nhân viên tưởng hệ "chưa ghi nhận". Giờ file OVERRIDE giọng mặc định.
+    const voiceRow = db.prepare('SELECT value FROM settings WHERE key=?')
+      .get(`brand_voice:${brandId}`) as { value?: string } | undefined;
+    const voiceBlock = voiceRow?.value
+      ? `\n📢 FILE GIỌNG THƯƠNG HIỆU (do brand upload — ƯU TIÊN CAO NHẤT, đè lên Voice mặc định ở Brand DNA):\n${voiceRow.value.slice(0, 6000)}\n`
+      : '';
+
     // Picked template → follow its analysed structure/skeleton for THIS product
     let templateBlock = '';
     if (body.templateId) {
@@ -65,6 +74,7 @@ BRAND DNA (auto-detect, tuân thủ):
 - COMPLIANCE: ${dna?.compliance_json ?? '{}'}
 ${dna?.brand_rules ? `- RULE BRAND: ${dna.brand_rules}` : ''}
 ${rules.length ? `ACTIVE RULES:\n${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}` : ''}
+${voiceBlock}
 ${getExpertKnowledgeBlock(brandId)}
 ${templateBlock}
 

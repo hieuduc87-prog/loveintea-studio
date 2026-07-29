@@ -59,6 +59,13 @@ function getKnowledgeContext(brandId: string): string {
       if (strat.length) sections.push(`[BRAND STRATEGY]\n${strat.join('\n')}`);
     }
 
+    // File giọng thương hiệu brand tự upload (Brand DNA → Upload Custom File).
+    // ƯU TIÊN CAO NHẤT: đè lên voice mặc định. Trước 29/07 file này không được
+    // nạp vào bất kỳ prompt nào (card 2b3d5193).
+    const voice = db.prepare('SELECT value FROM settings WHERE key=?')
+      .get(`brand_voice:${brandId}`) as { value?: string } | undefined;
+    if (voice?.value) sections.push(`[BRAND VOICE FILE — HIGHEST PRIORITY, overrides default voice]\n${voice.value.slice(0, 6000)}`);
+
     // Get playbook excerpts (compliance, voice, content rules)
     const docs = db.prepare(
       `SELECT type, title, content FROM knowledge_docs

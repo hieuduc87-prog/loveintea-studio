@@ -49,6 +49,8 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
 
   const voiceRef = useRef<HTMLInputElement>(null);
   const [voiceContent, setVoiceContent] = useState('');
+  const [voiceFull, setVoiceFull]       = useState(false);
+  const [voiceInfo, setVoiceInfo]       = useState<{ length: number; updatedAt: string | null }>({ length: 0, updatedAt: null });
   const [voiceMsg, setVoiceMsg]         = useState('');
   const [voiceUploading, setVoiceUploading] = useState(false);
 
@@ -73,6 +75,7 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
       });
       setStratDirty(false);
       if (bv.content) setVoiceContent(bv.content);
+      setVoiceInfo({ length: bv.length ?? (bv.content?.length ?? 0), updatedAt: bv.updatedAt ?? null });
       setLoading(false);
     });
   }, [bid]);
@@ -173,7 +176,10 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
     const d = await r.json() as { ok?: boolean; length?: number; error?: string };
     if (d.ok) {
       setVoiceMsg(`✓ Saved (${d.length?.toLocaleString()} chars)`);
-      fetch('/api/brand-voice').then(r2 => r2.json()).then(d2 => setVoiceContent(d2.content || ''));
+      fetch('/api/brand-voice').then(r2 => r2.json()).then((d2: { content?: string; length?: number; updatedAt?: string | null }) => {
+        setVoiceContent(d2.content || '');
+        setVoiceInfo({ length: d2.length ?? (d2.content?.length ?? 0), updatedAt: d2.updatedAt ?? null });
+      });
     } else {
       setVoiceMsg('✗ ' + d.error);
     }
@@ -450,11 +456,33 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
                 Upload .txt, .md, hoặc .docx để override brand voice mặc định khi generate content.
               </p>
               {voiceContent ? (
-                <div className="bg-gray-800/50 rounded-lg p-3 max-h-32 overflow-y-auto">
-                  <p className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">
-                    {voiceContent.slice(0, 600)}{voiceContent.length > 600 ? '…' : ''}
-                  </p>
-                </div>
+                <>
+                  <div className={`bg-gray-800/50 rounded-lg p-3 overflow-y-auto ${voiceFull ? 'max-h-96' : 'max-h-32'}`}>
+                    <p className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">
+                      {voiceFull ? voiceContent : voiceContent.slice(0, 600) + (voiceContent.length > 600 ? '…' : '')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                    {/* Nhân viên hỏi "tool ghi nhận đủ chưa" — nói rõ đã lưu bao nhiêu, lúc nào, cho brand nào */}
+                    <span className="text-[11px] text-emerald-400">
+                      ✓ Đã lưu đủ {(voiceInfo.length || voiceContent.length).toLocaleString()} ký tự cho brand này
+                      {voiceInfo.updatedAt ? ` · ${voiceInfo.updatedAt}` : ''}
+                    </span>
+                    {voiceContent.length > 600 && (
+                      <button onClick={() => setVoiceFull(v => !v)} className="text-[11px] text-brand-400 hover:text-brand-300">
+                        {voiceFull ? '▲ Thu gọn' : '▼ Xem toàn bộ nội dung'}
+                      </button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Xoá file giọng thương hiệu của brand này?')) return;
+                        await fetch('/api/brand-voice', { method: 'DELETE' });
+                        setVoiceContent(''); setVoiceInfo({ length: 0, updatedAt: null }); setVoiceMsg('✓ Đã xoá');
+                      }}
+                      className="text-[11px] text-red-500 hover:text-red-400"
+                    >🗑 Xoá file</button>
+                  </div>
+                </>
               ) : (
                 <p className="text-xs text-gray-600 italic">Chưa có brand voice file — đang dùng default</p>
               )}
