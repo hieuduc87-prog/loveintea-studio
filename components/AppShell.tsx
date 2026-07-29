@@ -116,6 +116,22 @@ function storeHostSlug(): string {
   return label && !label.includes('.') && !RESERVED_SUBS.has(label) ? label : '';
 }
 
+/** Đang đứng trên hệ domain easycreativehub (app. hoặc store)? Localhost/domain
+ *  legacy không có wildcard DNS → giữ chuyển store tại chỗ như cũ. */
+function onEchDomain(): boolean {
+  if (typeof window === 'undefined') return false;
+  const h = window.location.hostname.toLowerCase();
+  return h === STORE_BASE_DOMAIN || h.endsWith('.' + STORE_BASE_DOMAIN);
+}
+
+/** Chọn store ⇒ SANG DOMAIN của store đó. app. chỉ còn là sảnh chọn store —
+ *  làm việc thật luôn diễn ra trên domain riêng, URL và dữ liệu không thể lệch nhau. */
+function gotoStoreDomain(b: BrandSummary): boolean {
+  if (!onEchDomain()) return false;
+  window.location.href = `${window.location.protocol}//${b.slug || b.id}.${STORE_BASE_DOMAIN}/`;
+  return true;
+}
+
 // ─── Brand Dropdown ────────────────────────────────────────────────────────────
 
 function BrandDropdown({
@@ -446,12 +462,10 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
     tab, changeTab, userRole, pendingCount,
     brands, activeBrand,
     onBrandSwitch: (b: BrandSummary) => {
-      // Trên domain store: đổi store = SANG DOMAIN của store đó (điều hướng
-      // thật, có ý thức) — không đổi state tại chỗ để URL và dữ liệu luôn khớp.
-      if (storeHostSlug()) {
-        window.location.href = `${window.location.protocol}//${b.slug || b.id}.${STORE_BASE_DOMAIN}/`;
-        return;
-      }
+      // Trên hệ easycreativehub (cả app. lẫn store): chọn store = SANG DOMAIN
+      // store đó — URL và dữ liệu không thể lệch nhau. Ngoài hệ (localhost,
+      // domain legacy) mới đổi state tại chỗ.
+      if (gotoStoreDomain(b)) return;
       setActiveBrand(b);
     },
   };
@@ -539,7 +553,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
             return (
               <div key={id} className={`absolute inset-0 overflow-auto ${isActive ? '' : 'hidden'}`}>
                 {id === 'dashboard'        && <DashboardView brandId={bid} onNavigate={t => changeTab(t as TabId)} />}
-                {id === 'brands'           && <BrandsView onSelectBrand={bId => { const b = brands.find(x => x.id === bId); if (b) setActiveBrand(b); changeTab('products'); }} />}
+                {id === 'brands'           && <BrandsView onSelectBrand={bId => { const b = brands.find(x => x.id === bId); if (!b) return; if (gotoStoreDomain(b)) return; setActiveBrand(b); changeTab('products'); }} />}
                 {id === 'content_templates' && <ContentTemplatesView brandId={bid} />}
                 {id === 'scoreboard'       && <ScoreboardView brandId={bid} />}
                 {id === 'brand_dna'        && <BrandDnaView brandId={bid} />}
