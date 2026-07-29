@@ -93,6 +93,25 @@ export default withAuth(
       );
     }
 
+    // ── NT2: KHÔNG CÓ TENANT MẶC ĐỊNH ────────────────────────────────────
+    // Thao tác GHI mà không xác định được chủ thì TỪ CHỐI, không đoán hộ.
+    // (Gốc của 4/6 sự cố tenant tháng 7: admin ghi không kèm ?brand= → hệ rơi
+    //  về 'loveintea' → dữ liệu khách này ghi sang khách khác.)
+    // Route PLATFORM (không thuộc brand nào) được miễn.
+    const PLATFORM_PATHS = [
+      '/api/auth', '/api/admin', '/api/platform', '/api/kanban', '/api/autofix',
+      '/api/webhooks', '/api/payment', '/api/account', '/api/upload', '/api/brands',
+      '/api/fb-setup', '/api/settings', '/api/health', '/api/inbox',
+    ];
+    const isPlatformPath = PLATFORM_PATHS.some(p => pathname.startsWith(p));
+    if (isWrite && allBrands && !requested && !isPlatformPath) {
+      console.warn(`[tenant-guard] CHẶN ghi không rõ brand: ${req.method} ${pathname}`);
+      return NextResponse.json(
+        { error: 'Thiếu brand cho thao tác này — tải lại trang rồi thử lại (hệ thống không tự chọn brand thay bạn).' },
+        { status: 400 }
+      );
+    }
+
     // Resolve the effective, TRUSTED brand for this request.
     // Non-admins never fall back to a hardcoded default (no more 'loveintea' leak).
     const effective = allBrands

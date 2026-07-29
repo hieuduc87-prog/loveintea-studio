@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start -p 3202",
     "lint": "next lint",
-    "test:security": "node scripts/security/cross-tenant-test.mjs"
+    "test:security": "node scripts/security/cross-tenant-test.mjs",
+    "check:tenant": "node scripts/security/tenant-guard-check.mjs",
+    "tenant:export": "node scripts/tenant/tenant-db.mjs export-all"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
