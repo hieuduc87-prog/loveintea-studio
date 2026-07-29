@@ -12,7 +12,7 @@ interface PublishResult { fb?: { ok: boolean; postId?: string; error?: string };
 export function PublisherView({ fbSuccess, fbError, brandId }: { fbSuccess?: boolean; fbError?: string; brandId?: string } = {}) {
   const [tab, setTab] = useState<'setup' | 'post' | 'schedule'>('setup');
   const [status, setStatus] = useState<FbStatus | null>(null);
-  const bid = brandId || 'loveintea';
+  const bid = brandId;
 
   // OAuth connection state
   const [oauthPages, setOauthPages]   = useState<OAuthPage[]>([]);

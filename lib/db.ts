@@ -784,6 +784,20 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE auth_users ADD COLUMN must_change_password INTEGER DEFAULT 0`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN plan_id TEXT REFERENCES content_plans(id)`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE posts ADD COLUMN brand_id TEXT DEFAULT 'loveintea'`); } catch { /* already exists */ }
+  // 3 bảng cuối chưa có chủ (audit 29/07). DEFAULT '' chứ KHÔNG phải tên tenant:
+  // dòng CŨ (pre-multitenancy, đích thực của loveintea) được backfill MỘT LẦN ngay
+  // dưới; dòng MỚI mà thiếu brand sẽ mang '' → vô hình với mọi store (fail an
+  // toàn) thay vì âm thầm chui vào loveintea.
+  try {
+    db.exec(`ALTER TABLE image_jobs ADD COLUMN brand_id TEXT DEFAULT ''`);
+    db.exec(`UPDATE image_jobs SET brand_id='loveintea' WHERE brand_id=''`); // backfill 1 lần: bảng sinh trước multi-tenant
+  } catch { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE publish_log ADD COLUMN brand_id TEXT DEFAULT ''`);
+    // backfill từ chủ thật của post (log có thể thuộc nhiều brand)
+    db.exec(`UPDATE publish_log SET brand_id = COALESCE((SELECT p.brand_id FROM posts p WHERE p.id = publish_log.post_id), 'loveintea') WHERE brand_id=''`);
+  } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE subscriptions ADD COLUMN brand_id TEXT DEFAULT ''`); } catch { /* already exists */ }
   // TENANT ISOLATION: image_library + blog_posts là feature loveintea-legacy chưa
   // có cột brand — thêm để scope theo brand (dòng cũ backfill về 'loveintea').
   try { db.exec(`ALTER TABLE image_library ADD COLUMN brand_id TEXT DEFAULT 'loveintea'`); } catch { /* already exists */ }

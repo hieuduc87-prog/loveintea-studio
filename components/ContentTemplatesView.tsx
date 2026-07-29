@@ -72,7 +72,7 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
   const [newTplName, setNewTplName] = useState('');
   const [newTplType, setNewTplType] = useState<'single' | 'collection' | 'video'>('single');
 
-  const bid = brandId || 'loveintea';
+  const bid = brandId || ''; // rỗng = chưa chọn store → fetch trả rỗng, KHÔNG rơi về store nào
 
   const load = useCallback(async () => {
     setLoading(true);

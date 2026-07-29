@@ -22,7 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   if (!sets.length) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
   // TENANT ISOLATION: chỉ sửa ảnh của brand mình (WHERE …AND brand_id=?).
-  vals.push(params.id, getBrandId(req) || 'loveintea');
+  vals.push(params.id, getBrandId(req));
   const r = db.prepare(`UPDATE image_library SET ${sets.join(', ')} WHERE id = ? AND brand_id = ?`).run(...vals);
   if (r.changes === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({ ok: true });
@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const db = getDb();
   const r = db.prepare('DELETE FROM image_library WHERE id = ? AND brand_id = ?')
-    .run(params.id, getBrandId(req) || 'loveintea');
+    .run(params.id, getBrandId(req));
   if (r.changes === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

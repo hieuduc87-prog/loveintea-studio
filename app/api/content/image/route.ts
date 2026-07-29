@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const limited = enforceRateLimit(req, { scope: 'ai:image', limit: 20, windowMs: 60_000 });
   if (limited) return limited;
   const db = getDb();
-  const brandId = getBrandId(req) || 'loveintea';
+  const brandId = getBrandId(req);
   const { skuId, uspId, contextId, customPrompt, useEdit = true } = await req.json();
 
   const sku = SKUS.find(s => s.id === skuId);
@@ -34,9 +34,9 @@ export async function POST(req: NextRequest) {
 
   // Insert job as pending
   db.prepare(`
-    INSERT INTO image_jobs (id, sku_id, usp_id, context_id, prompt, use_edit, status, model)
-    VALUES (?, ?, ?, ?, ?, ?, 'running', 'gpt-image-2')
-  `).run(jobId, skuId, uspId ?? '', contextId ?? '', prompt, useEdit ? 1 : 0);
+    INSERT INTO image_jobs (id, brand_id, sku_id, usp_id, context_id, prompt, use_edit, status, model)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'running', 'gpt-image-2')
+  `).run(jobId, brandId, skuId, uspId ?? '', contextId ?? '', prompt, useEdit ? 1 : 0);
 
   try {
     let imageUrl: string;

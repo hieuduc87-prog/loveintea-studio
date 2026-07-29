@@ -18,6 +18,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const row = db.prepare('SELECT brand_id FROM posts WHERE id=?').get(params.id) as { brand_id: string } | undefined;
   if (row) { const denied = assertResourceBrand(req, row.brand_id); if (denied) return denied; }
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  setManualTags(params.id, row.brand_id || 'loveintea', tags ?? []);
+  setManualTags(params.id, row.brand_id || '', tags ?? []);
   return NextResponse.json({ ok: true, tags: getPostTags(params.id) });
 }

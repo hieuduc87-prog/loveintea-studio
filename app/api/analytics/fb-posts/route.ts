@@ -5,7 +5,7 @@ import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   try {
-    const brand = getBrandId(req) || 'loveintea';
+    const brand = getBrandId(req);
     const data = await getPagePosts(20, brand);
     return NextResponse.json(data);
   } catch (e) {

@@ -41,7 +41,7 @@ const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
 const firstDayOfMonth = (y: number, m: number) => new Date(y, m, 1).getDay();
 
 export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
-  const bid = brandId || 'loveintea';
+  const bid = brandId;
   const fileRef = useRef<HTMLInputElement>(null);
   const now = new Date();
 

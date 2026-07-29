@@ -5,7 +5,7 @@ import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   const db = getDb();
-  const brand = getBrandId(req) || 'loveintea';
+  const brand = getBrandId(req);
   const rows = db.prepare(`
     SELECT status, COUNT(*) as count
     FROM posts

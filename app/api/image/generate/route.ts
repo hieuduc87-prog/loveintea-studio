@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     if (bodyBrandId && !canAccessBrand(req, bodyBrandId)) {
       return NextResponse.json({ error: 'Forbidden — bạn không có quyền store này.' }, { status: 403 });
     }
-    const brandId = bodyBrandId || getBrandId(req) || 'loveintea';
+    const brandId = bodyBrandId || getBrandId(req);
     const overQuota = reserveQuota(brandId, 'image', 1);
     if (overQuota) return NextResponse.json({ error: overQuota.error }, { status: 429 });
     const db = getDb();

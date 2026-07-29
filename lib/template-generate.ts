@@ -52,7 +52,7 @@ export async function generateTemplateImages(opts: {
   onProgress?: (pct: number) => void;
 }): Promise<TemplateGenResult> {
   const { templateId, productId, customPrompt, onLog, onProgress } = opts;
-  const bid = opts.brandId || 'loveintea';
+  const bid = opts.brandId || '';
   const db = getDb();
 
   const tpl = db.prepare('SELECT name, image_url, slides_json, analysis, tags, color_palette FROM content_templates WHERE id=?')

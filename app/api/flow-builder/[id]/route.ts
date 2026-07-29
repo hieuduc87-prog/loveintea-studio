@@ -19,7 +19,7 @@ async function loadOwnedFlow(req: NextRequest, id: string): Promise<any | NextRe
   let flow: any;
   try { flow = JSON.parse(await fs.readFile(filePath(id), 'utf8')); }
   catch { return NextResponse.json({ error: 'Not found' }, { status: 404 }); }
-  if (!canAccessBrand(req, flow.brandId || 'loveintea')) {
+  if (!canAccessBrand(req, flow.brandId)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   return flow;
@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       ...existing,
       ...body,
       id: existing.id,                                  // never overwrite id
-      brandId: existing.brandId || 'loveintea',          // never re-tenant via body
+      brandId: existing.brandId,          // never re-tenant via body
       updatedAt: new Date().toISOString(),
     };
     await fs.writeFile(filePath(params.id), JSON.stringify(updated, null, 2));

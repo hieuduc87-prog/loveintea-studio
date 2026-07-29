@@ -102,7 +102,7 @@ export default function KanbanPage() {
       const saved = typeof window !== 'undefined' ? localStorage.getItem('kanban_brand') : null;
       const def = (saved && list.some(b => b.id === saved) ? saved : '')
         || list.find(b => b.id === 'loveintea')?.id
-        || list[0]?.id || 'loveintea';
+        || list[0]?.id || '';
       setBrand(prev => prev || def);
     }).catch(() => setBrand('loveintea'));
   }, []);

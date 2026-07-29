@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Carousel: dùng images_json (nhiều ảnh) nếu có, fallback ảnh đơn.
   let imageUrls: string[] = post.image_url ? [post.image_url] : [];
   try { const arr = JSON.parse(post.images_json || '[]') as string[]; if (arr.length) imageUrls = arr; } catch { /* */ }
-  const brandId   = post.brand_id || 'loveintea';
+  const brandId   = post.brand_id || '';
   // Column is `platforms`: 'facebook' | 'instagram' | 'facebook,instagram'
   const platforms = (post.platforms ?? 'facebook').split(',').map(p => p.trim());
 
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const logInsert = db.prepare(`
-    INSERT INTO publish_log (id, post_id, platform, action, status, result_id, error)
+    INSERT INTO publish_log (id, brand_id, post_id, platform, action, status, result_id, error)
     VALUES (?, ?, ?, 'publish_now', ?, ?, ?)
   `);
   const result: Record<string, PostResult> = {};
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (platforms.includes('facebook')) {
     const fb = await postToFacebook({ caption, imageUrls, brandId });
     result.fb = fb;
-    logInsert.run(uuid(), params.id, 'facebook', fb.ok ? 'ok' : 'failed', fb.postId ?? null, fb.error ?? null);
+    logInsert.run(uuid(), brandId, params.id, 'facebook', fb.ok ? 'ok' : 'failed', fb.postId ?? null, fb.error ?? null);
     if (fb.ok) {
       db.prepare("UPDATE posts SET fb_post_id = ?, status = 'published', published_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
         .run(fb.postId, params.id);
@@ -46,11 +46,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (platforms.includes('instagram')) {
     if (!hasIgCreds(brandId)) {
       skipped.push('instagram');
-      logInsert.run(uuid(), params.id, 'instagram', 'skipped', null, 'IG chưa kết nối — bỏ qua.');
+      logInsert.run(uuid(), brandId, params.id, 'instagram', 'skipped', null, 'IG chưa kết nối — bỏ qua.');
     } else {
       const ig = await postToInstagram({ caption, imageUrls, brandId });
       result.ig = ig;
-      logInsert.run(uuid(), params.id, 'instagram', ig.ok ? 'ok' : 'failed', ig.postId ?? null, ig.error ?? null);
+      logInsert.run(uuid(), brandId, params.id, 'instagram', ig.ok ? 'ok' : 'failed', ig.postId ?? null, ig.error ?? null);
       if (ig.ok) {
         db.prepare("UPDATE posts SET ig_post_id = ?, status = 'published', published_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
           .run(ig.postId, params.id);

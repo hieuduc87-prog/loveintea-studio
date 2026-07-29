@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     };
     if (!body.baseImageUrl) return NextResponse.json({ error: 'Thiếu ảnh nền' }, { status: 400 });
 
-    const brandId = getBrandId(req) || 'loveintea';
+    const brandId = getBrandId(req);
     const fields: OverlayFields = { headline: body.headline, sub: body.sub, cta: body.cta, badge: body.badge };
     const url = await renderOverlayToUrl({
       baseImageUrl: body.baseImageUrl, layout: body.layout || 'bottom-headline',

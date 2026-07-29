@@ -63,7 +63,7 @@ async function fetchPostInsights(postId: string, tok: string): Promise<Partial<P
 
 export async function GET(req: NextRequest) {
   const days = parseInt(req.nextUrl.searchParams.get('days') ?? '30');
-  const brand = getBrandId(req) || 'loveintea';
+  const brand = getBrandId(req);
   const tok = getChannelCreds(brand).pageToken;
   if (!tok) return NextResponse.json({ posts: [], rolling: [], error: 'Store chưa kết nối Facebook' });
 

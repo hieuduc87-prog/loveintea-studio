@@ -7,6 +7,9 @@
  *  1. Bảng mới thiếu `brand_id` mà không khai báo là PLATFORM  (image_library, blog_posts 21/07)
  *  2. Ghi `settings` bằng key toàn cục không mang brand         (brand voice 29/07)
  *  3. Ghi credential ngoài vào nơi dùng chung                   (token FB bị đè 29/07)
+ *  4. DEFAULT TENANT trong code (`|| 'loveintea'`)               (62 chỗ nhổ 29/07)
+ *     — gốc của chuỗi lộ chéo: thiếu brand thì âm thầm đọc/ghi vào loveintea.
+ *     Thiếu brand phải fail RỖNG hoặc 400, không bao giờ đoán hộ một tenant.
  */
 import fs from 'fs';
 import path from 'path';
@@ -18,8 +21,8 @@ const notes = [];
 /** Bảng CỐ Ý dùng chung toàn hệ — thêm vào đây phải có lý do rõ ràng. */
 const PLATFORM_TABLES = new Set([
   'auth_users', 'auth_accounts', 'auth_sessions', 'auth_verification_tokens',
-  'brands', 'settings', 'payment_plans', 'bank_transfers', 'subscriptions', 'momo_payments',
-  'fb_connections', 'fb_pages', 'batch_runs', 'image_jobs', 'inbox_messages', 'publish_log',
+  'brands', 'settings', 'payment_plans', 'bank_transfers', 'momo_payments', 'brand_quotas', 'usage_counters',
+  'fb_connections', 'fb_pages', 'batch_runs', 'inbox_messages',
   'asset_tags', 'content_log_assets', 'post_tags', 'knowledge_log', 'brand_settings',
 ]);
 
@@ -95,6 +98,40 @@ for (const f of files.filter(f => f.includes('/app/api/') && f.endsWith('route.t
   if (/getBrandId|canAccessBrand|assertResourceBrand|brand_id|brandId/.test(src)) continue;
   routesNoBrand++;
   notes.push(`[xem lại] ${path.relative(ROOT, f)}: route có thao tác GHI nhưng không nhắc gì tới brand`);
+}
+
+// ── 4. Cấm DEFAULT TENANT literal trong code (bài 29/07: 62 chỗ) ───────────
+// Bắt: || 'loveintea'   || "loveintea"   ?? 'loveintea'   = 'loveintea' làm fallback
+// Cho phép: chuỗi 'loveintea' trong so sánh/seed/migration (chỉ cấm dạng FALLBACK).
+const TENANT_SLUGS = ['loveintea']; // thêm slug store thật vào đây khi tạo store mới
+{
+  const dirs = ['app', 'lib', 'components'];
+  const walk = (d) => {
+    let out = [];
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const fp = path.join(d, e.name);
+      if (e.isDirectory()) out = out.concat(walk(fp));
+      else if (/\.(ts|tsx)$/.test(e.name)) out.push(fp);
+    }
+    return out;
+  };
+  for (const dir of dirs) {
+    if (!fs.existsSync(path.join(ROOT, dir))) continue;
+    for (const fp of walk(path.join(ROOT, dir))) {
+      const src = fs.readFileSync(fp, 'utf8');
+      for (const slug of TENANT_SLUGS) {
+        const re = new RegExp(`(\\|\\||\\?\\?)\\s*['"]${slug}['"]`, 'g');
+        let m;
+        while ((m = re.exec(src))) {
+          const line = src.slice(0, m.index).split('\n').length;
+          problems.push(
+            `[default-tenant] ${path.relative(ROOT, fp)}:${line} — fallback về '${slug}'.\n` +
+            `         → Thiếu brand phải fail RỖNG/400, không được đoán hộ tenant (NT1).`
+          );
+        }
+      }
+    }
+  }
 }
 
 // ── Kết quả ────────────────────────────────────────────────────────────────

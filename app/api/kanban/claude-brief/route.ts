@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
       if (!e.isDirectory()) continue;
       try {
         const c = JSON.parse(await fs.readFile(path.join(DATA_DIR, e.name, 'card.json'), 'utf8'));
-        c.brandId = c.brandId || 'loveintea';
+        c.brandId = c.brandId || '';
         if (c.status !== 'approved' && (!only || c.brandId === only)) cards.push(c);
       } catch {}
     }

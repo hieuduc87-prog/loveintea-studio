@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     // brand B chọn page là ĐÈ token brand A → A đăng bài lên page của B.
     // Giờ: lưu vào channels THEO BRAND (mã hoá), settings chỉ mirror cho loveintea.
     const pageToken = decrypt(page.page_token_enc, page.page_token_iv, page.page_token_tag);
-    const bid = getBrandId(req) || 'loveintea';
+    const bid = getBrandId(req);
     const enc = encrypt(pageToken);
     const credentials = JSON.stringify({
       page_id: page.page_id, page_name: page.page_name,

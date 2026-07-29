@@ -40,7 +40,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 }
 
 export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
-  const bid = brandId || 'loveintea';
+  const bid = brandId || ''; // rỗng = chưa chọn store → fetch trả rỗng, KHÔNG rơi về store nào
 
   const [brand, setBrand]     = useState<BrandRow | null>(null);
   const [dna, setDna]         = useState<BrandDna | null>(null);

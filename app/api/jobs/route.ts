@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     `SELECT id, brand_id, title, status, render_log, error, output_url, created_at, updated_at
      FROM video_projects ${brandId ? 'WHERE brand_id=?' : ''} ORDER BY created_at DESC LIMIT 100`
   ).all(...(brandId ? [brandId] : [])) as Array<Record<string, string | null>>).map(v => ({
-    id: String(v.id), brand_id: String(v.brand_id ?? 'loveintea'), kind: 'video',
+    id: String(v.id), brand_id: String(v.brand_id ?? ''), kind: 'video',
     title: v.title || 'Video render', source: 'Video Studio',
     status: VIDEO_STATUS[String(v.status)] ?? 'pending', progress: 0,
     log: v.render_log || '', error: v.error,

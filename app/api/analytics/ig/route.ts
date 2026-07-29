@@ -5,7 +5,7 @@ import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   try {
-    const brand = getBrandId(req) || 'loveintea';
+    const brand = getBrandId(req);
     const [insights, media] = await Promise.allSettled([getIgInsights(brand), getIgMedia(12, brand)]);
     return NextResponse.json({
       insights: insights.status === 'fulfilled' ? insights.value?.data : [],

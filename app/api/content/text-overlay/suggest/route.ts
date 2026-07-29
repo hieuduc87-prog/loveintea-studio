@@ -16,7 +16,7 @@ const LAYOUTS = ['bottom-headline', 'top-banner', 'center-quote', 'benefit-list'
 
 export async function POST(req: NextRequest) {
   try {
-    const brandId = getBrandId(req) || 'loveintea';
+    const brandId = getBrandId(req);
     const body = await req.json() as { productId?: string; templateId?: string; topic?: string; layout?: string };
     const db = getDb();
     const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;

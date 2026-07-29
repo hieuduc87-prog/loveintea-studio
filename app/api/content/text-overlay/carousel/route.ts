@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     const limited = enforceRateLimit(req, { scope: 'ai:overlay-carousel', limit: 6, windowMs: 60_000 });
     if (limited) return limited;
-    const brandId = getBrandId(req) || 'loveintea';
+    const brandId = getBrandId(req);
     const body = await req.json() as { imageUrls?: string[]; topic?: string; productId?: string; layout?: string; brandName?: string };
     const imageUrls = (body.imageUrls || []).filter(u => typeof u === 'string' && u.trim()).slice(0, 5);
     if (imageUrls.length < 2) return NextResponse.json({ error: 'Chọn ít nhất 2 ảnh (tối đa 5) cho carousel' }, { status: 400 });

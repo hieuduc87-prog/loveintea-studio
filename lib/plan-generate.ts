@@ -52,7 +52,7 @@ export function resolveProductImagePath(imageUrl: string | null | undefined): st
 
 export async function generateFromPlanItem(item: PlanItemRow, templateGuide?: { structure?: string; skeleton?: string }): Promise<GeneratedContent> {
   const db = getDb();
-  const brandId = item.brand_id || 'loveintea';
+  const brandId = item.brand_id || '';
   const dna = db.prepare('SELECT * FROM brand_dna WHERE brand_id=?').get(brandId) as Record<string, string> | undefined;
   const product = item.product_id
     ? db.prepare('SELECT * FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(item.product_id, brandId, item.product_id) as Record<string, string> | undefined

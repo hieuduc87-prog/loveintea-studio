@@ -5,9 +5,9 @@ import { v4 as uuid } from 'uuid';
 import { getBrandId, canAccessBrand } from '@/lib/brand-guard';
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'flows');
-// Legacy flows created before tenant scoping have no brandId — treat as the
-// default store so they stay visible to it (and to super-admins).
-const flowBrand = (w: { brandId?: string }) => w.brandId || 'loveintea';
+// Flow không brandId = dữ liệu mồ côi (đã backfill 29/07) — KHÔNG gán cho store
+// nào trong code; chỉ super-admin thấy để dọn.
+const flowBrand = (w: { brandId?: string }) => w.brandId || '';
 
 async function ensureDir() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -182,7 +182,8 @@ export async function GET(req: NextRequest) {
     if (jsonFiles.length === 0) {
       // Seed demo flow for the caller's brand
       const demo = makeDemoFlow() as any;
-      demo.brandId = brandId || 'loveintea';
+      if (!brandId) return NextResponse.json([]); // không brand → không seed demo cho ai
+      demo.brandId = brandId;
       await fs.writeFile(
         path.join(DATA_DIR, `${demo.id}.json`),
         JSON.stringify(demo, null, 2)
@@ -226,7 +227,7 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString();
   const workflow = {
     id,
-    brandId: getBrandId(req) || 'loveintea',
+    brandId: getBrandId(req),
     name: body.name || 'Untitled Workflow',
     description: body.description || '',
     category: body.category || 'general',

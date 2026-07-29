@@ -16,7 +16,7 @@ export function createJob(o: { brandId?: string; kind: JobKind; title: string; s
     getDb().prepare(
       `INSERT INTO jobs (id, brand_id, kind, title, source, meta_json, status, started_at)
        VALUES (?,?,?,?,?,?, 'running', datetime('now'))`
-    ).run(id, o.brandId || 'loveintea', o.kind, (o.title || o.kind).slice(0, 200), o.source ?? null, o.meta ? JSON.stringify(o.meta) : null);
+    ).run(id, o.brandId || '', o.kind, (o.title || o.kind).slice(0, 200), o.source ?? null, o.meta ? JSON.stringify(o.meta) : null);
   } catch { /* jobs là phụ trợ — không bao giờ chặn việc thật */ }
   return id;
 }

@@ -15,7 +15,7 @@ import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 const LAYOUTS = ['bottom-headline', 'top-banner', 'center-quote', 'benefit-list', 'promo-badge'];
 
 export async function GET(req: NextRequest) {
-  const brandId = getBrandId(req) || 'loveintea';
+  const brandId = getBrandId(req);
   const layout = req.nextUrl.searchParams.get('layout');
   const db = getDb();
   let sql = 'SELECT * FROM overlay_references WHERE brand_id=?';
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const brandId = getBrandId(req) || 'loveintea';
+    const brandId = getBrandId(req);
     const fd = await req.formData();
     const file = fd.get('file') as File | null;
     const layout = String(fd.get('layout') || '');

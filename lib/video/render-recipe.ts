@@ -70,7 +70,7 @@ export async function renderRecipeProject(projectId: string): Promise<void> {
   try {
     const board = JSON.parse(String(project.script_json || '{}')) as RecipeStoryboard;
     if (!board.segments?.length) throw new Error('Recipe storyboard empty');
-    const brandId = String(project.brand_id || 'loveintea');
+    const brandId = String(project.brand_id || '');
 
     let grade: GradeParams | null = null;
     try { grade = JSON.parse(String(project.grade_json || 'null')) as GradeParams | null; } catch { /* default */ }

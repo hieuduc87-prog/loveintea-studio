@@ -13,17 +13,28 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 
 /** The trusted brand id for this request (set by middleware). Falls back to the
- *  query param only for internal/server contexts that bypass middleware. */
+ *  query param only for internal/server contexts that bypass middleware.
+ *
+ *  KHÔNG CÓ DEFAULT TENANT (NT1). Bản cũ trả 'loveintea' cho admin thiếu brand
+ *  "để dashboard cũ chạy được" — chính dòng đó là gốc của chuỗi sự cố lộ chéo:
+ *  admin đứng ở store X, một call thiếu brand âm thầm đọc/ghi vào loveintea.
+ *  Nay thiếu brand → '' → mọi query WHERE brand_id=? trả RỖNG (fail an toàn,
+ *  không lộ), và route ghi phải tự chặn bằng requireBrand(). */
 export function getBrandId(req: NextRequest): string {
   const header = req.headers.get('x-brand-id');
   if (header) return header;
-  const q = req.nextUrl.searchParams.get('brand') || req.nextUrl.searchParams.get('brandId');
-  if (q) return q;
-  // Backward-compat: a super-admin (all-brands) with no explicit brand keeps the
-  // legacy 'loveintea' default so admin dashboards that omit ?brand keep working.
-  // Customers NEVER reach here — middleware always injects their x-brand-id header.
-  if (req.headers.get('x-brand-all') === '1') return 'loveintea';
-  return '';
+  return req.nextUrl.searchParams.get('brand') || req.nextUrl.searchParams.get('brandId') || '';
+}
+
+/** Cổng BẮT BUỘC cho route ghi/tốn tiền: thiếu brand → 400 ngay, không đoán hộ.
+ *  Usage:  const brandId = getBrandId(req);
+ *          const denied = requireBrand(brandId); if (denied) return denied; */
+export function requireBrand(brandId: string): NextResponse | null {
+  if (brandId) return null;
+  return NextResponse.json(
+    { error: 'Thiếu brand cho thao tác này — tải lại trang rồi thử lại (hệ thống không tự chọn store thay bạn).' },
+    { status: 400 }
+  );
 }
 
 export function isAllBrands(req: NextRequest): boolean {

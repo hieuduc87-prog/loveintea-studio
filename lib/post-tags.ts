@@ -48,7 +48,7 @@ export function autoTagPost(postId: string, extra: PostTag[] = []) {
     `SELECT brand_id, sku_id, segment_id, rtb_id, usp_id, narrative_id, context_id, template_id, platforms FROM posts WHERE id=?`
   ).get(postId) as Record<string, string> | undefined;
   if (!p) return;
-  const brandId = p.brand_id || 'loveintea';
+  const brandId = p.brand_id || '';
   const tags: PostTag[] = [];
   const push = (dimension: string, value?: string | null) => { if (value && String(value).trim()) tags.push({ dimension, value: String(value), source: 'auto' }); };
   push('product', p.sku_id);

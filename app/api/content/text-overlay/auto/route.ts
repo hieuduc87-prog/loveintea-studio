@@ -21,7 +21,7 @@ const LAYOUTS: OverlayLayout[] = ['bottom-headline', 'top-banner', 'center-quote
 
 export async function POST(req: NextRequest) {
   try {
-    const brandId = getBrandId(req) || 'loveintea';
+    const brandId = getBrandId(req);
     const body = await req.json() as { baseImageUrl?: string; productId?: string; referenceId?: string; layout?: string; brandName?: string };
     if (!body.baseImageUrl) return NextResponse.json({ error: 'Thiếu ảnh nền' }, { status: 400 });
     const db = getDb();

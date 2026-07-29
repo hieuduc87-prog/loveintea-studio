@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const id = uuid();
     // TENANT ISOLATION: brand comes from the middleware-validated header, never
     // from the request body (a customer could otherwise inject another store's id).
-    const trustedBrand = getBrandId(req) || 'loveintea';
+    const trustedBrand = getBrandId(req);
     db.prepare(`
       INSERT INTO posts (id, brand_id, sku_id, segment_id, rtb_id, usp_id, narrative_id, context_id, cta, cell_id, caption, hashtags, image_url, image_prompt, platforms, notes, brief_id, rule_version, plan_item_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     db.prepare(`
       INSERT INTO image_library (id, sku_id, image_url, model, prompt, brand_id)
       VALUES (?, ?, ?, 'upload', 'User uploaded image', ?)
-    `).run(id, skuId, imageUrl, getBrandId(req) || 'loveintea');
+    `).run(id, skuId, imageUrl, getBrandId(req));
 
     return NextResponse.json({ ok: true, id, imageUrl });
   } catch (e) {

@@ -524,7 +524,7 @@ export async function renderReelProject(projectId: string): Promise<void> {
   const log = (m: string) => { logs.push(`[${new Date().toISOString().slice(11, 19)}] ${m}`); console.log('[reel]', m); };
   const project = db.prepare('SELECT * FROM video_projects WHERE id=?').get(projectId) as Record<string, string | number | null> | undefined;
   if (!project) throw new Error('project not found');
-  const brandId = String(project.brand_id || 'loveintea');
+  const brandId = String(project.brand_id || '');
   const jobId = String(project.batch_id || '');   // batch_id giữ job id của Job Queue
 
   const saveLog = (status: string, extra: Record<string, string | null> = {}) => {

@@ -11,15 +11,16 @@ export async function GET(req: NextRequest) {
   try {
     // Trusted brand from middleware. Admin may request '__all__' for the aggregate
     // board (every brand's cards, each tagged). Legacy cards without brandId = loveintea.
-    const brand = getBrandId(req) || 'loveintea';
-    const aggregate = brand === '__all__' && isAllBrands(req);
+    const brand = getBrandId(req);
+    // Admin không chỉ định brand → bảng GỘP mọi store, KHÔNG rơi về store nào (NT1)
+    const aggregate = isAllBrands(req) && (brand === '__all__' || !brand);
     const entries = await fs.readdir(DATA_DIR, { withFileTypes: true });
     const cards = [];
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       try {
         const c = JSON.parse(await fs.readFile(path.join(DATA_DIR, e.name, 'card.json'), 'utf8'));
-        const cBrand = c.brandId || 'loveintea';
+        const cBrand = c.brandId || '';
         if (aggregate || cBrand === brand) cards.push({ ...c, brandId: cBrand });
       } catch {}
     }
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   await ensureDir();
   const body = await req.json();
   // Cards are always created under a concrete brand (never the '__all__' view).
-  let brand = getBrandId(req) || 'loveintea';
+  let brand = getBrandId(req);
   if (brand === '__all__') brand = 'loveintea';
   const id = crypto.randomUUID();
   const card = {

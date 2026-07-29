@@ -5,7 +5,7 @@ import { getBrandId } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest) {
   const db      = getDb();
-  const brandId = getBrandId(req) || 'loveintea';
+  const brandId = getBrandId(req);
   const skuId   = req.nextUrl.searchParams.get('sku');
   const uspId   = req.nextUrl.searchParams.get('usp');
   const fav     = req.nextUrl.searchParams.get('fav');

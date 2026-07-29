@@ -112,7 +112,7 @@ export function ContentPlansView({ brandId }: { brandId?: string } = {}) {
   const [detailTab, setDetailTab] = useState<'plan' | 'stories' | 'summary'>('plan');
 
   // ── Load plans list ─────────────────────────────────────────────
-  const bid = brandId || 'loveintea';
+  const bid = brandId;
 
   const loadPlans = useCallback(async () => {
     setLoading(true);

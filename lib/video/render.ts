@@ -180,7 +180,7 @@ export async function renderProject(projectId: string): Promise<void> {
   try {
     const board = JSON.parse(String(project.script_json || '{}')) as Storyboard;
     if (!board.segments?.length) throw new Error('Storyboard empty — generate it first');
-    const brandId = String(project.brand_id || 'loveintea');
+    const brandId = String(project.brand_id || '');
 
     // S3 — beat info (already snapped by director if bpm known; re-detect if missing)
     let bpm = project.bpm ? Number(project.bpm) : null;

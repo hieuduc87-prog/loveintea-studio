@@ -8,7 +8,7 @@ import { getBrandId } from '@/lib/brand-guard';
 export async function POST(req: NextRequest) {
   try {
     const { brandId } = await req.json() as { brandId?: string };
-    const bid = getBrandId(req) || brandId || 'loveintea';
+    const bid = getBrandId(req) || brandId || '';
     const db = getDb();
 
     // Gather post performance data with lineage

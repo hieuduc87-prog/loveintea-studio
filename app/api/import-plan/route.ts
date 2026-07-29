@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
     const minDate = dates.length ? dates.sort()[0] : null;
     const maxDate = dates.length ? dates.sort()[dates.length - 1] : null;
 
-    const brandId = getBrandId(req) || 'loveintea';
+    const brandId = getBrandId(req);
 
     db.prepare(`
       INSERT INTO content_plans (id, brand_id, title, stories_json, summary_json, source_file, cadence, created_at)

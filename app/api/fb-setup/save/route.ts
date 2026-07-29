@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     // NEVER trust body.brandId as the tenant key — a caller could write another
     // store's publishing credentials. Fall back to the trusted x-brand-id header,
     // then verify the caller is actually a member of that brand.
-    const bid = brandId || getBrandId(req) || 'loveintea';
+    const bid = brandId || getBrandId(req);
     const denied = assertResourceBrand(req, bid);
     if (denied) return denied;
 

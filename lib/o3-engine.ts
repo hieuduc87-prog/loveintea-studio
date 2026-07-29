@@ -173,7 +173,7 @@ export async function generateO3Content(config: O3Config): Promise<O3Result> {
     || CONTEXTS.find(c => sku.bestMoment && JSON.stringify(c).toLowerCase().includes(String(sku.bestMoment).toLowerCase())) || CONTEXTS[0];
   const context = context_!;
 
-  const brandId = config.brandId || 'loveintea';
+  const brandId = config.brandId || '';
   const knowledgeBlock = getKnowledgeContext(brandId);
   const { version: ruleVersion, rules } = getActiveRules(brandId);
   const scoreboardBlock = getScoreboardContext(brandId);

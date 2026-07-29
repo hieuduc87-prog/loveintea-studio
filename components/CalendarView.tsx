@@ -62,7 +62,7 @@ function getFirstDayOfMonth(year: number, month: number) {
 }
 
 export function CalendarView({ brandId }: { brandId?: string } = {}) {
-  const bid = brandId || 'loveintea';
+  const bid = brandId;
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());

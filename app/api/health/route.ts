@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     (db.prepare('SELECT value, updated_at FROM settings WHERE key=?').get(k) as { value: string; updated_at: string } | undefined);
 
   // Trusted brand (middleware-validated header). All per-brand stats below scope to it.
-  const brand = getBrandId(req) || 'loveintea';
+  const brand = getBrandId(req);
 
   // ── Facebook token health (cached by scheduler every 6h, or live) ──
   let fbToken: TokenHealth | null = null;

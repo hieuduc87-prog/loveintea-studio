@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const fp = path.join(DATA_DIR, id, 'card.json');
     const card = JSON.parse(await fs.readFile(fp, 'utf8'));
     // Cards are brand-scoped — guard read/write like the card PATCH/DELETE do.
-    if (!canAccessBrand(req, card.brandId || 'loveintea')) {
+    if (!canAccessBrand(req, card.brandId)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -50,7 +50,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const fp = path.join(DATA_DIR, id, 'card.json');
     const card = JSON.parse(await fs.readFile(fp, 'utf8'));
-    if (!canAccessBrand(req, card.brandId || 'loveintea')) {
+    if (!canAccessBrand(req, card.brandId)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     // Chỉ xoá file CÓ TRONG danh sách của card — không tin tên client gửi (traversal).

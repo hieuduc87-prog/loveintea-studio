@@ -21,7 +21,7 @@ function fontsDir(brandId: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const brandId = getBrandId(req) || 'loveintea';
+  const brandId = getBrandId(req);
   const rows = getDb().prepare('SELECT role, filename, original_name, created_at FROM brand_fonts WHERE brand_id=?')
     .all(brandId) as Array<{ role: string; filename: string; original_name: string; created_at: string }>;
   const fonts: Record<string, { filename: string; original_name: string; created_at: string }> = {};
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const brandId = getBrandId(req) || 'loveintea';
+    const brandId = getBrandId(req);
     const denied = assertResourceBrand(req, brandId);
     if (denied) return denied;
 
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const brandId = getBrandId(req) || 'loveintea';
+  const brandId = getBrandId(req);
   const denied = assertResourceBrand(req, brandId);
   if (denied) return denied;
   const role = req.nextUrl.searchParams.get('role') || '';

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   // TENANT ISOLATION: blog scope theo brand (trước dùng chung mọi brand).
   const posts = db.prepare('SELECT id, sku_id, topic, title, status, created_at FROM blog_posts WHERE brand_id=? ORDER BY created_at DESC')
-    .all(getBrandId(req) || 'loveintea');
+    .all(getBrandId(req));
   return NextResponse.json({ posts });
 }
 
@@ -58,7 +58,7 @@ Return as JSON:
     const id = uuid();
     db.prepare(
       'INSERT INTO blog_posts (id, sku_id, topic, title, slug, excerpt, content, status, brand_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, skuId ?? null, topic, parsed.title, parsed.slug, parsed.excerpt, sanitizeBlogHtml(parsed.content), 'draft', getBrandId(req) || 'loveintea');
+    ).run(id, skuId ?? null, topic, parsed.title, parsed.slug, parsed.excerpt, sanitizeBlogHtml(parsed.content), 'draft', getBrandId(req));
 
     return NextResponse.json({ id, title: parsed.title, ok: true });
   } catch (e) {
