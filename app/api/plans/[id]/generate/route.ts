@@ -20,6 +20,7 @@ import { pickProductRefUrl } from '@/lib/product-ref';
 import { autoTagPost, PostTag } from '@/lib/post-tags';
 import { createJob, logJob, progressJob, finishJob, failJob } from '@/lib/jobs';
 import { assertResourceBrand } from '@/lib/brand-guard';
+import { reserveQuota, refundQuota } from '@/lib/quota';
 
 function surfaceToFormat(surface: string): string | undefined {
   const s = (surface || '').toLowerCase();
@@ -50,6 +51,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       items = db.prepare(`SELECT * FROM plan_items WHERE plan_id=? AND id IN (${ph})`).all(planId, ...body.itemIds) as PlanItemRow[];
     } else {
       items = db.prepare('SELECT * FROM plan_items WHERE plan_id=? ORDER BY sort_order').all(planId) as PlanItemRow[];
+    }
+
+    // HẠN MỨC: một lượt "tạo bài từ plan" có thể sinh hàng chục bài + hàng chục ảnh.
+    // Đặt chỗ theo SỐ ITEM chứ không phải 1 lượt, nếu không đây là đường vòng để
+    // vượt hạn mức ảnh (chọn 50 item → 50 ảnh chỉ tốn 1 lượt).
+    const overContent = reserveQuota(plan.brand_id, 'content', items.length);
+    if (overContent) return NextResponse.json({ error: overContent.error }, { status: 429 });
+    if (withImage) {
+      const overImage = reserveQuota(plan.brand_id, 'image', items.length);
+      if (overImage) {
+        refundQuota(plan.brand_id, 'content', items.length);
+        return NextResponse.json({ error: overImage.error }, { status: 429 });
+      }
     }
 
     const created: Array<{ itemId: string; postId: string }> = [];
@@ -164,6 +178,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       logJob(jobId, `${processed}/${total} — ${created.length} tạo, ${skipped.length} bỏ qua, ${errors.length} lỗi`);
       }
 
+      // Trả lại hạn mức cho item KHÔNG tiêu tiền AI: đã có bài sẵn (skipped) hoặc lỗi.
+      const unused = skipped.length + errors.length;
+      if (unused > 0) {
+        refundQuota(plan.brand_id, 'content', unused);
+        if (withImage) refundQuota(plan.brand_id, 'image', unused);
+      }
       if (errors.length && !created.length) failJob(jobId, errors.map(e => e.error).join(' | '));
       else finishJob(jobId, { created: created.length, skipped: skipped.length, errors: errors.length });
      } catch (e) { console.error('[api] plan-generate bg', e); failJob(jobId, e); }

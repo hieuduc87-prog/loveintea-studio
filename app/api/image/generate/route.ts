@@ -13,6 +13,7 @@ import { resolveProductImagePath } from '@/lib/plan-generate';
 import { createJob, logJob, finishJob, failJob } from '@/lib/jobs';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { getBrandId, canAccessBrand } from '@/lib/brand-guard';
+import { reserveQuota } from '@/lib/quota';
 
 export async function POST(req: NextRequest) {
   const limited = enforceRateLimit(req, { scope: 'ai:image', limit: 20, windowMs: 60_000 });
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden — bạn không có quyền store này.' }, { status: 403 });
     }
     const brandId = bodyBrandId || getBrandId(req) || 'loveintea';
+    const overQuota = reserveQuota(brandId, 'image', 1);
+    if (overQuota) return NextResponse.json({ error: overQuota.error }, { status: 429 });
     const db = getDb();
     jobId = createJob({ brandId, kind: 'image', source: 'CreateLab', title: `Tạo ảnh: ${prompt.slice(0, 60)}`, meta: { productId, templateId, refImageUrl } });
 

@@ -53,6 +53,9 @@ Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com**
 
 
 
-- [session 2026-07-29] 11 commit — SEC(cost) · docs(arch) · feat(tenant) · SEC(fb) · fix(brand-voice) · fix(products) · fix(brand) · docs(claude) · docs
+
+
+
+- [session 2026-07-29] 14 commit — fix(orphan) · tools(disk) · SEC(cost) · docs(arch) · feat(tenant) · SEC(fb) · fix(brand-voice) · fix(products) · fix(brand)
 - [session 2026-07-28] 15 commit — feat(reel) · fix(reel) · feat(autofix) · docs(brief)
 - [session 2026-07-27] 16 commit — docs(brief) · fix(reel) · feat(reel) · docs(brief)+fix(reel) · test(security) · refactor(reel) · feat(video) · docs(video)

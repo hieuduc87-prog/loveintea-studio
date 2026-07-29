@@ -4,6 +4,7 @@ import path from 'path';
 import { v4 as uuid } from 'uuid';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
 import { enforceRateLimit } from '@/lib/rate-limit';
+import { reserveQuota } from '@/lib/quota';
 import { buildImageEditPrompt } from '@/lib/o3-engine';
 import { SKUS } from '@/lib/brand-dna';
 import { getDb } from '@/lib/db';
@@ -18,6 +19,9 @@ export async function POST(req: NextRequest) {
 
   const sku = SKUS.find(s => s.id === skuId);
   if (!sku) return NextResponse.json({ error: 'Invalid SKU' }, { status: 400 });
+
+  const overQuota = reserveQuota(brandId, 'image', 1);
+  if (overQuota) return NextResponse.json({ error: overQuota.error }, { status: 429 });
 
   const jobId  = uuid();
   let prompt: string;

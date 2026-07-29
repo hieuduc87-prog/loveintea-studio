@@ -13,6 +13,7 @@ import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
 import { getBrandId } from '@/lib/brand-guard';
 import { enforceRateLimit } from '@/lib/rate-limit';
+import { reserveQuota, refundQuota } from '@/lib/quota';
 import { createJob, logJob, failJob } from '@/lib/jobs';
 import { buildReelPlan } from '@/lib/video/reel-director';
 import { SKUS, VIDEO_TYPE_ORDERS } from '@/lib/video/reel-template';
@@ -78,6 +79,11 @@ export async function POST(req: NextRequest) {
   if (!userPrompt.trim()) return NextResponse.json({ error: 'Prompt là bắt buộc (Phiếu A).' }, { status: 400 });
   const versions = Math.min(3, Math.max(1, Number(body.versions) || 1));
 
+  // HẠN MỨC: đặt chỗ TRƯỚC khi chạy — render mất nhiều phút và tốn ~2,7 USD/video,
+  // đếm sau thì hàng chục request song song lọt hết. Hỏng ngay thì hoàn ở catch.
+  const overQuota = reserveQuota(brandId, 'video', versions);
+  if (overQuota) return NextResponse.json({ error: overQuota.error }, { status: 429 });
+
   const jobId = createJob({
     brandId, kind: 'video', source: 'ReelMachine',
     title: `🧊 Reel AI ${displayName} ×${versions}`,
@@ -106,6 +112,8 @@ export async function POST(req: NextRequest) {
     logJob(jobId, `${versions} bản đã vào hàng render (scheduler xử lý lần lượt, ~3-8 phút/bản).`);
     return NextResponse.json({ ok: true, jobId, projectIds, videoCodes });
   } catch (e) {
+    // Hỏng ở bước dựng plan = chưa render clip nào → trả lại hạn mức đã đặt chỗ.
+    refundQuota(brandId, 'video', versions);
     failJob(jobId, e);
     return NextResponse.json({ error: String(e instanceof Error ? e.message : e).slice(0, 400) }, { status: 500 });
   }

@@ -923,6 +923,32 @@ function initSchema(db: Database.Database) {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_cost_brand ON cost_ledger(brand_id, created_at)`);
   } catch { /* already exists */ }
 
+  // ── HẠN MỨC THEO KHÁCH ──────────────────────────────────────────────
+  // Vì sao: mọi call AI đi qua key của nền tảng. Không có hạn mức thì một khách
+  // render 100 video là nền tảng gánh ~270 USD trong một tháng, và không có gì
+  // báo động. Rate-limit 6 lượt/phút chỉ chặn bot, không chặn tiền.
+  // Hai lớp: (1) hạn mức ĐƠN VỊ khách hiểu được, (2) TRẦN CHI TIÊU làm lưới cuối
+  // — lớp 2 bắt được cả những đường tốn tiền chưa kịp gắn cổng.
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS brand_quotas (
+      brand_id   TEXT PRIMARY KEY,
+      plan       TEXT DEFAULT 'trial',
+      videos     INTEGER DEFAULT 4,     -- mỗi tháng; -1 = không giới hạn
+      images     INTEGER DEFAULT 40,
+      content    INTEGER DEFAULT 150,
+      cap_usd    REAL    DEFAULT 20,    -- trần giá vốn/tháng (lưới an toàn)
+      note       TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`);
+    db.exec(`CREATE TABLE IF NOT EXISTS usage_counters (
+      brand_id TEXT NOT NULL,
+      period   TEXT NOT NULL,           -- YYYY-MM (UTC, khớp container)
+      metric   TEXT NOT NULL,           -- video | image | content
+      used     INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (brand_id, period, metric)
+    )`);
+  } catch { /* already exists */ }
+
   // ── Unified Job Queue — mọi nút "Tạo" (ảnh/content/carousel/plan/video) ghi 1 job để theo dõi ──
   try {
     db.exec(`CREATE TABLE IF NOT EXISTS jobs (
