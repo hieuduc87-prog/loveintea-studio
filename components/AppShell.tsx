@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { KanbanSquare } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
+import { installBrandFetchGuard, setActiveBrandForFetch } from '@/lib/brand-fetch';
 import { BrandDnaView }       from './BrandDnaView';
 import { ProductsView }       from './ProductsView';
 import { CreateStudioView }   from './CreateStudioView';
@@ -315,6 +316,8 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
   const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set([validInitialTab || 'dashboard']));
 
   // Brand state
+  // Guard chống ghi-nhầm-brand: cài trước mọi fetch (xem lib/brand-fetch.ts)
+  if (typeof window !== 'undefined') installBrandFetchGuard();
   const [brands, setBrands]           = useState<BrandSummary[]>([]);
   const [brandsLoaded, setBrandsLoaded] = useState(false);
   const [activeBrand, setActiveBrand] = useState<BrandSummary>({
@@ -323,6 +326,9 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
     id: 'loveintea', name: '…', slug: 'loveintea',
     logo_url: null, domain: null, product_count: 0,
   });
+
+  // Brand đang xem → guard tự gắn vào mọi call /api/*
+  useEffect(() => { setActiveBrandForFetch(activeBrand.id); }, [activeBrand.id]);
 
   const { data: session } = useSession();
 

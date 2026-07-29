@@ -224,6 +224,16 @@ export default function KanbanPage() {
     } finally { setUploadingFor(null); }
   };
 
+  const deleteImage = async (cardId: string, name: string) => {
+    if (!confirm('Xoá ảnh này?')) return;
+    const res = await fetch(`/api/kanban/${cardId}/image?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
+    if (res.ok) {
+      const updated = await res.json();
+      setCards(prev => prev.map(c => c.id === updated.id ? updated : c));
+      setModalDraft(prev => ({ ...prev, images: updated.images }));
+    } else alert('Không xoá được ảnh');
+  };
+
   const colCards = (status: Status) => cards.filter(c => c.status === status);
   const fmtDur = (ms: number) => ms < 60000 ? `${Math.round(ms/1000)}s` : `${Math.round(ms/60000)}m`;
 
@@ -506,7 +516,15 @@ export default function KanbanPage() {
                 {(modalDraft.images || []).length > 0 && (
                   <div className="grid grid-cols-3 gap-2 mt-2">
                     {(modalDraft.images || []).map(img => (
-                      <img key={img} src={`/api/kanban/${modalCard.id}/image/${img}`} alt="" className="rounded-md object-cover w-full h-20" style={{ border: '1px solid var(--border)' }} />
+                      <div key={img} className="relative group">
+                        <img src={`/api/kanban/${modalCard.id}/image/${img}`} alt="" className="rounded-md object-cover w-full h-20" style={{ border: '1px solid var(--border)' }} />
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteImage(modalCard.id, img); }}
+                          title="Xoá ảnh"
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full text-white text-[11px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ backgroundColor: 'rgba(220,38,38,0.92)' }}
+                        >✕</button>
+                      </div>
                     ))}
                   </div>
                 )}

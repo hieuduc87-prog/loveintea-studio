@@ -40,3 +40,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json(card);
   } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
 }
+
+// DELETE /api/kanban/[id]/image?name=<filename> — xoá ảnh screenshot upload nhầm
+// (card 75256309: UI không có nút xoá). Tên file chỉ nhận từ danh sách card.images.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  if (!SAFE_ID.test(id)) return NextResponse.json({ error: 'Bad id' }, { status: 400 });
+  const name = req.nextUrl.searchParams.get('name') || '';
+  try {
+    const fp = path.join(DATA_DIR, id, 'card.json');
+    const card = JSON.parse(await fs.readFile(fp, 'utf8'));
+    if (!canAccessBrand(req, card.brandId || 'loveintea')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    // Chỉ xoá file CÓ TRONG danh sách của card — không tin tên client gửi (traversal).
+    if (!Array.isArray(card.images) || !card.images.includes(name)) {
+      return NextResponse.json({ error: 'Ảnh không thuộc card này' }, { status: 400 });
+    }
+    try { await fs.unlink(path.join(DATA_DIR, id, 'images', path.basename(name))); } catch { /* đã mất */ }
+    card.images = card.images.filter((x: string) => x !== name);
+    card.updatedAt = new Date().toISOString();
+    await fs.writeFile(fp, JSON.stringify(card, null, 2));
+    return NextResponse.json(card);
+  } catch {
+    return NextResponse.json({ error: 'Không xoá được ảnh' }, { status: 500 });
+  }
+}

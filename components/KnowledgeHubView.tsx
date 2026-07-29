@@ -301,6 +301,7 @@ function DocCard({
   id,
   isAdmin,
   onPromote,
+  onDelete,
 }: {
   doc: KnowledgeDoc;
   expanded: boolean;
@@ -309,6 +310,7 @@ function DocCard({
   id: string;
   isAdmin?: boolean;
   onPromote?: (id: string, to: 'platform' | 'brand') => void;
+  onDelete?: (id: string, title: string) => void;
 }) {
   const cfg = getTypeConfig(doc.type);
   const isPlatform = doc.scope === 'platform';
@@ -386,6 +388,13 @@ function DocCard({
             ) : (
               <button onClick={() => onPromote(doc.id, 'platform')} className="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium" title="Áp dụng cho MỌI brand">🌐 Promote toàn hệ</button>
             )
+          )}
+          {onDelete && (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(doc.id, doc.title); }}
+              className="text-[11px] text-red-500 hover:text-red-300"
+              title="Xoá tri thức này"
+            >🗑 Xoá</button>
           )}
           <span className="text-[11px] text-gray-700 ml-auto font-mono">
             {doc.id.slice(0, 8)}
@@ -601,6 +610,13 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scope: to }),
     });
+    await loadDocs();
+  }
+
+  async function removeDoc(id: string, title: string) {
+    if (!confirm(`Xoá tri thức "${title}"?`)) return;
+    const r = await fetch(`/api/knowledge/${id}`, { method: 'DELETE' });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Không xoá được'); return; }
     await loadDocs();
   }
 
@@ -874,6 +890,7 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
                   id={`doc-${doc.id}`}
                   isAdmin={isAdmin}
                   onPromote={promote}
+                  onDelete={removeDoc}
                 />
               ))}
             </div>
@@ -889,6 +906,7 @@ export function KnowledgeHubView({ brandId }: { brandId: string }) {
                   id={`doc-${doc.id}`}
                   isAdmin={isAdmin}
                   onPromote={promote}
+                  onDelete={removeDoc}
                 />
               ))}
             </div>

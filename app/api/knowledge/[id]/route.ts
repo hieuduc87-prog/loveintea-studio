@@ -38,3 +38,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
 }
+
+// DELETE /api/knowledge/[id] — xoá tri thức (card 3fa4e238: UI thiếu nút xoá).
+// Guard theo brand của chính doc; doc scope='platform' chỉ super-admin được xoá.
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const db = getDb();
+    const doc = db.prepare('SELECT brand_id, scope FROM knowledge_docs WHERE id=?')
+      .get(params.id) as { brand_id?: string; scope?: string } | undefined;
+    if (!doc) return NextResponse.json({ ok: true });
+    if (doc.scope === 'platform' && !isAllBrands(req)) {
+      return NextResponse.json({ error: 'Tri thức toàn hệ — chỉ super-admin được xoá' }, { status: 403 });
+    }
+    const denied = assertResourceBrand(req, doc.brand_id);
+    if (denied) return denied;
+    db.prepare('DELETE FROM knowledge_docs WHERE id=?').run(params.id);
+    try { db.prepare('DELETE FROM knowledge_log WHERE doc_id=?').run(params.id); } catch { /* bảng phụ */ }
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
+  }
+}
