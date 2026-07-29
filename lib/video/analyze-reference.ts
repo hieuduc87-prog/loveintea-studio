@@ -13,6 +13,12 @@ import { VideoRecipe } from './director';
 import { extractFrames, TMP_DIR } from './ffmpeg';
 import { analyzeImage } from '../gemini';
 
+// [cost 30/07] Tắt thinking: gemini-2.5-flash mặc định BẬT dynamic thinking, token thinking
+// tính giá OUTPUT ($2.50/M). SDK @google/generative-ai 0.21 (deprecated) chưa có thinkingConfig
+// trong type GenerationConfig, nhưng request builder Object.assign + JSON.stringify nên key được
+// forward nguyên vào REST → chạy đúng. Spread qua Record để không vướng excess-property check.
+const NO_THINK: Record<string, unknown> = { thinkingConfig: { thinkingBudget: 0 } };
+
 export interface ReferenceAnalysis {
   duration_s?: number;
   overall_mood?: string;
@@ -76,7 +82,7 @@ async function geminiVideoDeep(videoPath: string, mimeType: string): Promise<Ref
     if (file.state !== FileState.ACTIVE) { try { await fm.deleteFile(uploaded.file.name); } catch { /* */ } return null; }
 
     const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { /* cost 30/07: thinking OFF — task này không cần suy luận */ thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' } });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { ...NO_THINK, responseMimeType: 'application/json' } });
     const res = await model.generateContent([{ fileData: { mimeType, fileUri: file.uri } }, DEEP_PROMPT]);
     const raw = res.response.text().trim();
     try { await fm.deleteFile(uploaded.file.name); } catch { /* best effort */ }
