@@ -4,11 +4,12 @@
  * RULE: All content images MUST use gpt-image-2 edit mode with the product
  * image as reference to keep the packaging/product shape 100% intact.
  *
- * Quality: default quality='high' for photoreal ad output (skin/materials look
- * real, not plastic). Every prompt is enriched with withPhotoreal() (real-camera
- * direction + anti-"AI look" negatives). Video frames still pass quality='low'
- * explicitly to stay cheap. High-quality source is already crisp → NO upscale
- * (upscaling only softens + bloats; /api/images ?w= resizes per platform).
+ * Quality: default quality='medium' — [lệnh founder 30/07] KHÔNG dùng 'high' ở bất kỳ đâu
+ * trong mọi dự án ('high' đắt ~10x 'low'). 'medium' là mức được phép cho ảnh quảng cáo
+ * photoreal như ở đây (skin/materials còn thật, không nhựa). Every prompt is enriched with
+ * withPhotoreal() (real-camera direction + anti-"AI look" negatives). Video frames still pass
+ * quality='low' explicitly to stay cheap. NO upscale (upscaling only softens + bloats;
+ * /api/images ?w= resizes per platform).
  *
  * Only use generate (no reference) for backgrounds/scenes with no product.
  */
@@ -90,7 +91,7 @@ export async function editProductImage(opts: {
   quality?: ImageQuality;
   brandId?: string;
 }): Promise<string> {
-  const { productImagePath, prompt: rawPrompt, size = '1024x1536', quality = 'high', brandId } = opts;
+  const { productImagePath, prompt: rawPrompt, size = '1024x1536', quality = 'medium', brandId } = opts;
   const prompt = withPhotoreal(rawPrompt, getModelLook(brandId));
 
   if (!fs.existsSync(productImagePath)) {
@@ -137,7 +138,7 @@ export async function generateImage(opts: {
   quality?: ImageQuality;
   brandId?: string;
 }): Promise<string> {
-  const { prompt: rawPrompt, size = '1024x1536', quality = 'high', brandId } = opts;
+  const { prompt: rawPrompt, size = '1024x1536', quality = 'medium', brandId } = opts;
   const prompt = withPhotoreal(rawPrompt, getModelLook(brandId));
 
   const response = await withQuotaFallback(client => client.images.generate({
@@ -192,7 +193,7 @@ export async function saveImageToFile(
   } catch { /* giữ ảnh gốc nếu crop lỗi */ }
   fs.writeFileSync(filePath, outBuf);
 
-  // NO upscale: quality='high' output is already crisp at native res — upscaling
+  // NO upscale: quality='medium' output is already crisp at native res — upscaling
   // only softens + bloats the file. The /api/images ?w= endpoint resizes per platform.
   return `/api/images/${filename}`;
 }
