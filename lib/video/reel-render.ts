@@ -659,7 +659,10 @@ export async function renderReelProject(projectId: string): Promise<void> {
       a[c.model] = { n: (a[c.model]?.n ?? 0) + 1, usd: Math.round(((a[c.model]?.usd ?? 0) + c.usd) * 10000) / 10000 };
       return a;
     }, {});
-    log(`💰 CHI PHÍ THỰC run này: $${cost.totalUsd} — ${Object.entries(byModel).map(([m, v]) => `${m}×${v.n}=$${v.usd}`).join(', ') || 'cache 100% ($0)'}`);
+    // Giá vốn KHÔNG ghi vào log khách đọc được — chỉ vào console nội bộ +
+    // cost_ledger (chỉ super-admin xem). Khách chỉ thấy số lần gọi AI.
+    console.log(`[cost] ${brandId} ${plan.sku} $${cost.totalUsd} — ${Object.entries(byModel).map(([m, v]) => `${m}×${v.n}=$${v.usd}`).join(', ')}`);
+    log(`⚙️ Hoàn tất ${cost.items.length} lượt xử lý AI${cost.items.length === 0 ? ' (dùng lại hoàn toàn dữ liệu đã có)' : ''}`);
     try {
       db.prepare(`UPDATE jobs SET result_json=? WHERE id=?`).run(
         JSON.stringify({ output_url: outputUrl, cost_usd: cost.totalUsd, cost_breakdown: byModel }), jobId);
@@ -671,7 +674,8 @@ export async function renderReelProject(projectId: string): Promise<void> {
     progressJob(jobId, 100);
   } catch (e) {
     const cost = getFalCostLog();
-    log(`💰 CHI PHÍ THỰC đã tiêu trước khi fail: $${cost.totalUsd} (${cost.items.length} call fal — clip đã cache sẽ tái dùng khi retry)`);
+    console.log(`[cost] ${brandId} FAIL sau $${cost.totalUsd}`);
+    log(`⚙️ Đã dùng ${cost.items.length} lượt xử lý AI trước khi lỗi (phần đã xong được giữ lại, chạy lại không mất công)`);
     log(`FAILED: ${e}`);
     saveLog('failed', { error: String(e).slice(0, 500) });
     throw e;

@@ -128,6 +128,9 @@ export function ReelFactoryView({ brandId }: { brandId: string }) {
     setCreating(false);
   }
 
+  // Giá vốn chỉ hiện với nội bộ (API chỉ trả costUsd cho super-admin)
+  const showCost = videos.some(v => v.costUsd != null);
+
   const copy = (t: string) => { navigator.clipboard?.writeText(t); setMsg(`📋 Đã copy: ${t}`); };
   const statusBadge = (s: string) => ({
     queued: 'bg-sky-600/30 text-sky-300', rendering: 'bg-amber-600/30 text-amber-300 animate-pulse',
@@ -241,7 +244,7 @@ export function ReelFactoryView({ brandId }: { brandId: string }) {
           <table className="w-full text-[11px]">
             <thead><tr className="text-gray-500 text-left">
               <th className="py-1 pr-2">Mã video</th><th className="pr-2">Sản phẩm</th><th className="pr-2">Template</th>
-              <th className="pr-2">Trạng thái</th><th className="pr-2">Chi phí</th><th className="pr-2">Video</th><th>Lúc</th>
+              <th className="pr-2">Trạng thái</th>{showCost && <th className="pr-2">Giá vốn (nội bộ)</th>}<th className="pr-2">Video</th><th>Lúc</th>
             </tr></thead>
             <tbody>
               {videos.map(v => (
@@ -256,7 +259,7 @@ export function ReelFactoryView({ brandId }: { brandId: string }) {
                     <span className={`px-2 py-0.5 rounded ${statusBadge(v.status)}`}>{v.status}</span>
                     {v.error && <span className="text-red-400 ml-1" title={v.error}>⚠</span>}
                   </td>
-                  <td className="pr-2">{v.costUsd != null ? `$${v.costUsd}` : '—'}</td>
+                  {showCost && <td className="pr-2">${v.costUsd}</td>}
                   <td className="pr-2">{v.outputUrl ? <a href={v.outputUrl} target="_blank" className="text-cyan-400 hover:underline">▶ xem</a> : '—'}</td>
                   <td className="text-gray-500">{String(v.createdAt).slice(5, 16)}</td>
                 </tr>

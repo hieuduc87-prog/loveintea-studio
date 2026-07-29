@@ -328,7 +328,7 @@ export default function KanbanPage() {
                             <div className="mt-1.5 pt-1.5 border-t flex items-center gap-1.5 flex-wrap" style={{ borderColor: 'var(--border)' }}>
                               {card.fixResult.branch && <span className="text-[9px] px-1 py-0.5 rounded font-mono" style={{ backgroundColor: '#10b98122', color: '#10b981' }}>{card.fixResult.branch}</span>}
                               {card.fixResult.changedFiles?.length > 0 && <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>{card.fixResult.changedFiles.length} file</span>}
-                              {card.fixResult.costUsd != null && <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>${card.fixResult.costUsd.toFixed(3)}</span>}
+                              
                               {card.fixResult.durationMs != null && <span className="text-[9px]" style={{ color: 'var(--text-3)' }}>{fmtDur(card.fixResult.durationMs)}</span>}
                             </div>
                           )}
@@ -536,7 +536,7 @@ export default function KanbanPage() {
                   {modalDraft.fixResult.branch && (
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded" style={{ backgroundColor: '#10b98122', color: '#10b981' }}>{modalDraft.fixResult.branch}</span>
-                      {modalDraft.fixResult.costUsd != null && <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>Cost: ${modalDraft.fixResult.costUsd.toFixed(3)}</span>}
+                      
                       {modalDraft.fixResult.durationMs != null && <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDur(modalDraft.fixResult.durationMs)}</span>}
                     </div>
                   )}
