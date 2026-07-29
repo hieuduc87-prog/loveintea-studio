@@ -28,12 +28,23 @@ export const DEFAULT_KNOWLEDGE_FIELDS: KnowledgeField[] = [
 // ── Photo shot-list — required angles to brief a photographer ──
 export interface ShotReq { type: string; label: string; desc: string; min: number }
 
+/**
+ * Card 26c22e82 — "phân loại sai ảnh sản phẩm": danh sách này vốn viết cứng theo
+ * trà ("lá trà", "tách/thìa/hoa khô", "nước pha"). Với brand bán mũ cho chó thì
+ * vô nghĩa, và tệ hơn: khoá `photo` TRÙNG giá trị mặc định lúc upload, nên mọi
+ * ảnh CHƯA phân loại rơi hết vào ô "Nước pha thành phẩm" (7/2 ✅ trong khi thực
+ * tế chưa phân loại tấm nào).
+ * Nay: từ ngữ trung lập cho mọi ngành; khoá cuối đổi `photo` → `in_use` để
+ * `photo` chỉ còn nghĩa "chưa phân loại" và không lọt vào ô nào.
+ */
+export const UNCLASSIFIED_TYPE = 'photo';
+
 export const DEFAULT_SHOT_REQUIREMENTS: ShotReq[] = [
-  { type: 'packshot',  label: 'Packshot bao bì',  desc: 'Chụp chính diện + góc 45°, nền sạch/trắng, đủ sáng, thấy rõ nhãn', min: 2 },
-  { type: 'macro',     label: 'Macro nguyên liệu',desc: 'Cận cảnh lá trà/nguyên liệu, kết cấu, hạt — DOF nông', min: 2 },
-  { type: 'flat-lay',  label: 'Flat-lay',         desc: 'Bố cục nhìn từ trên xuống với props (tách, thìa, hoa khô)', min: 1 },
-  { type: 'lifestyle', label: 'Lifestyle',        desc: 'Khung cảnh sử dụng thật: bàn làm việc, sáng sớm, thư giãn — có người càng tốt', min: 3 },
-  { type: 'photo',     label: 'Nước pha thành phẩm', desc: 'Ly/tách trà đã pha, thấy màu nước, hơi nước bốc lên', min: 2 },
+  { type: 'packshot',  label: 'Packshot sản phẩm', desc: 'Chụp chính diện + góc 45°, nền sạch/trắng, đủ sáng, thấy rõ nhãn/chi tiết', min: 2 },
+  { type: 'macro',     label: 'Macro chi tiết',    desc: 'Cận cảnh chất liệu, kết cấu, thành phần hoặc đường may — DOF nông', min: 2 },
+  { type: 'flat-lay',  label: 'Flat-lay',          desc: 'Bố cục nhìn từ trên xuống cùng đạo cụ liên quan tới sản phẩm', min: 1 },
+  { type: 'lifestyle', label: 'Lifestyle',         desc: 'Khung cảnh sử dụng thật — có người (hoặc thú cưng) càng tốt', min: 3 },
+  { type: 'in_use',    label: 'Thành phẩm / đang dùng', desc: 'Sản phẩm ở trạng thái hoàn chỉnh khi dùng (ly đã pha, mũ đã đội…)', min: 2 },
 ];
 
 export function getShotRequirements(productRow: { shot_req_json?: string | null }): ShotReq[] {

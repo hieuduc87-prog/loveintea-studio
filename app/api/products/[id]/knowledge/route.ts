@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { DEFAULT_KNOWLEDGE_FIELDS, getShotRequirements } from '@/lib/product-knowledge';
+import { DEFAULT_KNOWLEDGE_FIELDS, getShotRequirements, UNCLASSIFIED_TYPE } from '@/lib/product-knowledge';
 import { assertResourceBrand } from '@/lib/brand-guard';
 
 /** 403 unless the caller is a member of the product's brand. */
@@ -32,8 +32,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     counts[r.type] = r.n;
   }
   const coverage = shotReqs.map(s => ({ ...s, have: counts[s.type] ?? 0, ok: (counts[s.type] ?? 0) >= s.min }));
+  // Ảnh chưa qua "AI phân loại" mang type mặc định — KHÔNG tính vào ô nào (card
+  // 26c22e82), nhưng phải nói cho người dùng biết, nếu không họ thấy "thiếu 4
+  // loại" trong khi đã tải 7 ảnh lên và không hiểu vì sao.
+  const unclassified = counts[UNCLASSIFIED_TYPE] ?? 0;
 
-  return NextResponse.json({ fields: DEFAULT_KNOWLEDGE_FIELDS, knowledge, shotReqs, coverage });
+  return NextResponse.json({ fields: DEFAULT_KNOWLEDGE_FIELDS, knowledge, shotReqs, coverage, unclassified });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {

@@ -99,6 +99,10 @@ const PIPELINE_GROUPS = ['Brain', 'Plan', 'Create', 'Publish', 'Engage', 'Learn'
 
 const TAB_LABELS: Record<TabId, string> = Object.fromEntries(TABS.map(t => [t.id, t.label])) as Record<TabId, string>;
 
+/** Store đang xem, nhớ qua F5 (card c045a7a4). Chỉ là gợi ý cho UI — quyền vẫn
+ *  do server quyết: chỉ khôi phục nếu id có trong danh sách /api/brands trả về. */
+const ACTIVE_BRAND_KEY = 'ech.activeBrand';
+
 // ─── Brand Dropdown ────────────────────────────────────────────────────────────
 
 function BrandDropdown({
@@ -323,12 +327,21 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
   const [activeBrand, setActiveBrand] = useState<BrandSummary>({
     // Neutral placeholder — replaced by the user's own brand once /api/brands loads
     // (a customer must never see another tenant's name flash).
-    id: 'loveintea', name: '…', slug: 'loveintea',
+    // Card c045a7a4: id để RỖNG, không phải 'loveintea'. Placeholder mang tên một
+    // store thật thì (a) guard fetch gắn ?brand=loveintea cho lượt render đầu →
+    // 403 với khách không có store đó, (b) khi khôi phục lại lấy chính nó làm
+    // "brand trước đó" nên F5 luôn rơi về loveintea.
+    id: '', name: '…', slug: '',
     logo_url: null, domain: null, product_count: 0,
   });
 
   // Brand đang xem → guard tự gắn vào mọi call /api/*
-  useEffect(() => { setActiveBrandForFetch(activeBrand.id); }, [activeBrand.id]);
+  useEffect(() => {
+    setActiveBrandForFetch(activeBrand.id);
+    // Nhớ store đang xem để F5 không rơi về store khác (card c045a7a4).
+    // Bỏ qua placeholder id rỗng lúc chưa tải xong danh sách.
+    if (activeBrand.id) { try { localStorage.setItem(ACTIVE_BRAND_KEY, activeBrand.id); } catch { /* private mode */ } }
+  }, [activeBrand.id]);
 
   const { data: session } = useSession();
 
@@ -339,11 +352,18 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
       const d = await r.json() as { brands: BrandSummary[] };
       if (d.brands?.length) {
         setBrands(d.brands);
-        // Restore or default to first brand
-        setActiveBrand(prev => {
-          const found = d.brands.find(b => b.id === prev.id) || d.brands[0];
-          return found;
-        });
+        // Card c045a7a4 — F5 nhảy về store khác: chỗ này ghi "Restore" nhưng KHÔNG
+        // có gì để restore. Tải lại trang là state React mới tinh, `prev.id` luôn
+        // là placeholder → admin nhiều store bấm refresh là rơi về store đầu danh
+        // sách, mà vẫn tưởng đang ở store cũ → có ngày đăng nhầm store.
+        // Nhớ lựa chọn ở localStorage; `find` trong danh sách trả về đã đảm bảo
+        // chỉ khôi phục store người đó THỰC SỰ có quyền.
+        let saved = '';
+        try { saved = localStorage.getItem(ACTIVE_BRAND_KEY) || ''; } catch { /* private mode */ }
+        setActiveBrand(prev =>
+          d.brands.find(b => b.id === saved)
+          || d.brands.find(b => b.id === prev.id)
+          || d.brands[0]);
       }
     } catch { /* ignore */ }
     finally { setBrandsLoaded(true); }

@@ -20,6 +20,7 @@ export function ProductKnowledgePanel({ productId, productName }: { productId: s
   const [knowledge, setKnowledge] = useState<Record<string, string>>({});
   const [shotReqs, setShotReqs] = useState<ShotReq[]>([]);
   const [coverage, setCoverage] = useState<Coverage[]>([]);
+  const [unclassified, setUnclassified] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
@@ -30,8 +31,9 @@ export function ProductKnowledgePanel({ productId, productName }: { productId: s
   const load = useCallback(async () => {
     setLoading(true);
     const r = await fetch(`/api/products/${productId}/knowledge`);
-    const d = await r.json() as { fields: KField[]; knowledge: Record<string, string>; shotReqs: ShotReq[]; coverage: Coverage[] };
+    const d = await r.json() as { fields: KField[]; knowledge: Record<string, string>; shotReqs: ShotReq[]; coverage: Coverage[]; unclassified?: number };
     setFields(d.fields ?? []); setKnowledge(d.knowledge ?? {}); setShotReqs(d.shotReqs ?? []); setCoverage(d.coverage ?? []);
+    setUnclassified(d.unclassified ?? 0);
     setDirty(false); setLoading(false);
   }, [productId]);
   useEffect(() => { load(); }, [load]);
@@ -128,6 +130,14 @@ export function ProductKnowledgePanel({ productId, productName }: { productId: s
             : <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-300">đủ ✓</span>}
           <button onClick={exportBrief} className="ml-auto px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-[11px] font-semibold">📤 Gửi creative (tải brief)</button>
         </div>
+        {/* Card 26c22e82: ảnh chưa phân loại không thuộc ô nào — nói thẳng, nếu
+            không người dùng thấy "thiếu 4 loại" dù vừa tải 7 ảnh lên. */}
+        {unclassified > 0 && (
+          <p className="mb-3 text-[11px] text-amber-300 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
+            {unclassified} ảnh chưa được phân loại nên chưa tính vào mục nào —
+            sang tab <b>Ảnh &amp; Video</b> bấm <b>🏷️ AI phân loại ảnh</b> để hệ thống nhận dạng.
+          </p>
+        )}
         <div className="space-y-2">
           {coverage.map((c, i) => (
             <div key={c.type} className={`flex items-center gap-3 p-2.5 rounded-lg border ${c.ok ? 'border-emerald-800/40 bg-emerald-900/10' : 'border-amber-800/40 bg-amber-900/10'}`}>

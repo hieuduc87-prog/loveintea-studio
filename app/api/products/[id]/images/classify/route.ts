@@ -16,7 +16,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   try {
     const { id } = params;
     const db = getDb();
-    const product = db.prepare('SELECT brand_id FROM products WHERE id=?').get(id) as { brand_id: string } | undefined;
+    // Lấy cả tên + chủ đề để bộ phân loại biết đây là ngành hàng gì — trước đây
+    // prompt viết cứng "trà/thảo mộc" nên brand khác bị gán nhãn sai (card 26c22e82).
+    const product = db.prepare('SELECT brand_id, name, theme FROM products WHERE id=?').get(id) as { brand_id: string; name?: string; theme?: string } | undefined;
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     const denied = assertResourceBrand(req, product.brand_id);
     if (denied) return denied;
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (!fp || !fs.existsSync(fp)) { errors.push(`${r.id.slice(0, 6)}: file không tồn tại`); continue; }
       const ext = fp.toLowerCase().split('.').pop();
       const mime = ext === 'webp' ? 'image/webp' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
-      const c = await classifyProductImage(fs.readFileSync(fp), mime);
+      const c = await classifyProductImage(fs.readFileSync(fp), mime, { productName: product.name, category: product.theme });
       if (!c) { errors.push(`${r.id.slice(0, 6)}: AI không phân loại được`); continue; }
       upd.run(c.type, c.angle, c.ref_role, c.label, c.content, JSON.stringify(c), r.id);
       done++;

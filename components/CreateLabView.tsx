@@ -11,7 +11,11 @@ interface Product { id: string; name: string; color?: string; image_url?: string
 interface Variant { caption: string; hashtags: string; image_prompt: string; targeting?: Record<string, string> }
 interface Tpl { id: string; name: string; image_url: string; thumbnail_url?: string; kind?: string; file_type?: string; slides_json?: string }
 
-const BRAND_NAME = 'Loveintea Offical';
+// Card dbc972d8 — "lỗi hiển thị demo kênh": tên trang trong bản xem thử vốn viết
+// cứng 'Loveintea Offical', nên nhân viên store khác mở Tạo Content là thấy tên
+// kênh của tenant khác. Nay lấy tên kênh THẬT đã kết nối của store đang xem,
+// không có thì rơi về tên store.
+const FALLBACK_BRAND_NAME = 'Kênh của bạn';
 
 export function CreateLabView({ brandId }: { brandId: string }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -20,6 +24,7 @@ export function CreateLabView({ brandId }: { brandId: string }) {
   const [mode, setMode] = useState<'manual' | 'ai'>('ai');
   const [surface, setSurface] = useState<'post' | 'wall'>('post');
   const [platform, setPlatform] = useState<'fb' | 'ig'>('fb');
+  const [channelName, setChannelName] = useState(FALLBACK_BRAND_NAME);
 
   // composer (2-4 fields)
   const [productId, setProductId] = useState('');
@@ -49,6 +54,26 @@ export function CreateLabView({ brandId }: { brandId: string }) {
     fetch(`/api/brands/${brandId}/segments`).then(r => r.json()).then(d => setSegments(d.segments ?? [])).catch(() => {});
   }, [brandId]);
   useEffect(() => { load(); }, [load]);
+
+  // Tên kênh cho bản xem thử: ưu tiên trang FB đã kết nối của CHÍNH store này,
+  // không có thì lấy tên store. Không bao giờ hiện tên tenant khác (card dbc972d8).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch(`/api/fb-setup/status?brand=${brandId}`);
+        const d = await r.json() as { connected?: boolean; pageName?: string };
+        if (alive && d.pageName) { setChannelName(d.pageName); return; }
+      } catch { /* chưa kết nối kênh */ }
+      try {
+        const r = await fetch('/api/brands');
+        const d = await r.json() as { brands?: Array<{ id: string; name: string }> };
+        const b = d.brands?.find(x => x.id === brandId);
+        if (alive) setChannelName(b?.name || FALLBACK_BRAND_NAME);
+      } catch { /* giữ mặc định trung lập */ }
+    })();
+    return () => { alive = false; };
+  }, [brandId]);
 
   async function aiGenerate() {
     if (!message.trim()) { setMsg('Nhập ý chính trước'); return; }
@@ -235,8 +260,8 @@ export function CreateLabView({ brandId }: { brandId: string }) {
           <div className={`bg-gray-100 rounded-lg overflow-hidden ${surface === 'wall' ? 'p-2 space-y-2' : ''}`}>
             {surface === 'wall' && <div className="bg-white rounded-lg p-3 text-gray-400 text-xs">Bài khác trên tường…</div>}
             {platform === 'fb'
-              ? <FbCard caption={fullCaption} imageUrl={imageUrl} />
-              : <IgCard caption={fullCaption} imageUrl={imageUrl} />}
+              ? <FbCard caption={fullCaption} imageUrl={imageUrl} pageName={channelName} />
+              : <IgCard caption={fullCaption} imageUrl={imageUrl} pageName={channelName} />}
             {surface === 'wall' && <div className="bg-white rounded-lg p-3 text-gray-400 text-xs">Bài khác trên tường…</div>}
           </div>
         </div>
@@ -245,12 +270,12 @@ export function CreateLabView({ brandId }: { brandId: string }) {
   );
 }
 
-function FbCard({ caption, imageUrl }: { caption: string; imageUrl: string }) {
+function FbCard({ caption, imageUrl, pageName }: { caption: string; imageUrl: string; pageName: string }) {
   return (
     <div className="bg-white text-gray-900">
       <div className="flex items-center gap-2 p-3">
-        <div className="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white text-sm font-bold">L</div>
-        <div><p className="text-sm font-semibold leading-tight">{BRAND_NAME}</p><p className="text-[11px] text-gray-500">Vừa xong · 🌐</p></div>
+        <div className="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white text-sm font-bold">{(pageName || "?").trim().charAt(0).toUpperCase()}</div>
+        <div><p className="text-sm font-semibold leading-tight">{pageName}</p><p className="text-[11px] text-gray-500">Vừa xong · 🌐</p></div>
       </div>
       {caption && <p className="px-3 pb-2 text-sm whitespace-pre-wrap">{caption}</p>}
       {imageUrl && /* eslint-disable-next-line @next/next/no-img-element */ <img src={imageUrl} alt="" className="w-full object-cover max-h-[420px]" />}
@@ -261,18 +286,20 @@ function FbCard({ caption, imageUrl }: { caption: string; imageUrl: string }) {
   );
 }
 
-function IgCard({ caption, imageUrl }: { caption: string; imageUrl: string }) {
+function IgCard({ caption, imageUrl, pageName }: { caption: string; imageUrl: string; pageName: string }) {
+  // handle IG suy từ tên kênh của chính store (trước đây cứng 'loveintea.official')
+  const handle = (pageName || 'your.brand').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '') || 'your.brand';
   return (
     <div className="bg-white text-gray-900">
       <div className="flex items-center gap-2 p-2.5">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-pink-600 p-0.5"><div className="w-full h-full rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">L</div></div>
-        <p className="text-sm font-semibold">loveintea.official</p>
+        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-pink-600 p-0.5"><div className="w-full h-full rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">{(pageName || "?").trim().charAt(0).toUpperCase()}</div></div>
+        <p className="text-sm font-semibold">{handle}</p>
       </div>
       {imageUrl
         ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={imageUrl} alt="" className="w-full aspect-square object-cover" />
         : <div className="w-full aspect-square bg-gray-200 flex items-center justify-center text-gray-400 text-xs">Ảnh sẽ hiển thị ở đây</div>}
       <div className="flex items-center gap-3 p-2.5 text-lg">❤️ 💬 ✈️</div>
-      {caption && <p className="px-2.5 pb-3 text-sm"><span className="font-semibold">loveintea.official</span> <span className="whitespace-pre-wrap">{caption}</span></p>}
+      {caption && <p className="px-2.5 pb-3 text-sm"><span className="font-semibold">{handle}</span> <span className="whitespace-pre-wrap">{caption}</span></p>}
     </div>
   );
 }

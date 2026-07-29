@@ -113,6 +113,32 @@ export async function generateTemplateImages(opts: {
   const noteNoPack = /(khong|ko)[^.;,]{0,24}(vo\s*hop|hop|bao\s*bi|box|packaging)|\b(no|without)\s+(the\s+)?(box|packaging)\b|ingredients?\s*only|chi\s+(co\s+)?nguyen\s*lieu/.test(normNote);
   const noteWithPack = !noteNoPack && /(kem|co|hien|show|with)\s+(vo\s*hop|hop|bao\s*bi|box|packaging)/.test(normNote);
 
+  // Card 1be7fe0e (blocker) — "ảnh sai packaging": mô tả slide do AI phân tích
+  // template ghi NGUYÊN VĂN thương hiệu của sản phẩm GỐC ("gói trà Keats & Co",
+  // "thương hiệu Botanica Origin", "nền màu cam"). Đoạn đó bị nhét thẳng vào
+  // prompt dưới dạng "scene to recreate" → hoá ra đang RA LỆNH vẽ lại bao bì của
+  // hãng khác, và ghi đè cả màu nền người dùng yêu cầu.
+  // Cách chữa: bóc tên riêng/tên trong nháy khỏi mô tả, và hạ mô tả template
+  // xuống vai trò BỐ CỤC thuần tuý.
+  const stripBrandNouns = (t?: string): string => {
+    if (!t) return '';
+    return t
+      // 'Moonlit Mint', "Bright Star" — tên sản phẩm gốc thường nằm trong nháy
+      .replace(/[''""«»']([^''""«»']{2,40})[''""«»']/g, 'sản phẩm')
+      // "thương hiệu X" / "brand X" / "hãng X" — bóc cụm tên riêng viết hoa theo sau.
+      // KHÔNG dùng cờ `i`: cờ đó làm [A-Z] bắt cả chữ thường nên nuốt luôn từ
+      // tiếng Việt đứng sau ("Origin trên" → "ên"). Liệt kê sẵn cả hai dạng hoa/thường.
+      .replace(/(?:[Tt]hương hiệu|[Nn]hãn hiệu|[Bb]rand|[Hh]ãng)\s+[A-Z][A-Za-z0-9&.'-]*(?:\s+(?:&|and\s)?\s*[A-Z][A-Za-z0-9&.'-]*){0,2}/g,
+        'thương hiệu của chúng tôi')
+      // tên riêng dạng "Keats & Co", "Botanica Origin" đứng độc lập
+      .replace(/\b[A-Z][a-zA-Z]{2,}\s*(?:&|and)\s*[A-Z][a-zA-Z.]{1,}\b/g, 'sản phẩm')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  };
+  // Người dùng nêu màu cụ thể (hex hoặc từ chỉ màu) → bảng màu của template phải
+  // nhường, nếu không "đổi nền thành #8BBF5C" thua "nền màu cam" của template.
+  const userSetsColor = /#[0-9a-f]{3,8}\b|\b(mau|màu|color|background|nền)\b/i.test(customPrompt || '');
+
   const images: string[] = [];
   const warnings: string[] = [];
 
@@ -135,19 +161,26 @@ export async function generateTemplateImages(opts: {
 
     const prompt = [
       `Vertical 2:3 social media image, slide ${i + 1} of ${slideUrls.length} in a carousel (role: ${role}).`,
-      meta.content ? `Scene/composition to recreate: ${meta.content}.` : '',
-      meta.visual ? `Camera angle/layout/style: ${meta.visual}.` : '',
+      // LAYOUT ONLY — mô tả template chỉ nói bố cục. Mọi thương hiệu/chữ/màu nêu
+      // trong đó thuộc về sản phẩm KHÁC và phải bị bỏ qua (card 1be7fe0e).
+      meta.content
+        ? `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${stripBrandNouns(meta.content)}. IGNORE every brand name, product name, printed wording and colour mentioned in it; those belong to a DIFFERENT product and must NOT appear.`
+        : '',
+      meta.visual ? `Camera angle/layout/style: ${stripBrandNouns(meta.visual)}.` : '',
       showProduct
         ? `Place the EXACT product shown in the reference image into this composition/angle. Keep its packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical to the reference — do NOT invent, redraw, translate, blur or omit any text on the packaging; the product's printed label must stay sharp and fully legible. The reference IS our product: ${product?.name ?? ''}.`
         : (product
             ? `This is an INGREDIENT / lifestyle slide — feature the raw or freshly prepared INGREDIENTS of "${product.name}"${product.ingredients ? ` (${product.ingredients})` : ''} arranged naturally (loose herbs, roots, flowers, dried tea, bowls, fresh produce), keeping the template slide's composition. Do NOT show the product's box, packaging, sachet, pouch, printed label or any logo in this slide — ingredients only.${product.theme ? ` Theme: ${product.theme}.` : ''}`
             : ''),
-      styleBits ? `Match the template aesthetic: ${styleBits}.` : '',
-      customPrompt ? `Extra instruction: ${customPrompt}.` : '',
+      // Bảng màu template nhường khi người dùng chỉ định màu (card 1be7fe0e).
+      styleBits && !userSetsColor ? `Match the template aesthetic: ${styleBits}.` : '',
+      // Lệnh của người dùng đứng SAU và được tuyên bố là ưu tiên cao nhất — trước
+      // đây nó chỉ là "extra instruction" nên thua mô tả template đứng trên.
+      customPrompt ? `USER INSTRUCTION — HIGHEST PRIORITY, overrides the layout reference above (including its colours and any product it mentions): ${customPrompt}.` : '',
       // Tỉ lệ THỰC TẾ: mọi vật thể/nguyên liệu tự nhiên, không phóng to bất thường.
       `Keep realistic real-world proportions and believable scale between all objects (ingredients, cups, hands, props${showProduct ? ', and the product box' : ''}); nothing oversized, floating, giant or shrunken.${sizeHint && showProduct ? ` Real product size ≈ ${sizeHint} — respect this physical scale.` : ''}`,
       showProduct
-        ? 'Photorealistic, premium, on-brand. Do NOT add any extra overlay text, captions, headings, watermarks or new logos beyond what is already printed on the product packaging.'
+        ? 'Photorealistic, premium, on-brand. Do NOT add any extra overlay text, captions, headings, watermarks or new logos beyond what is already printed on the product packaging. The ONLY brand name allowed anywhere in the image is the one printed on the reference product — never invent or borrow another brand name.'
         : 'Photorealistic, premium, on-brand. NO product packaging, NO box, NO sachet, NO added text, NO letters, NO logos in the image (if any text is unavoidable, ENGLISH only — never Vietnamese).',
     ].filter(Boolean).join(' ');
 
