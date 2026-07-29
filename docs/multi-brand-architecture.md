@@ -87,7 +87,7 @@ tenants/<b>.db   <brandId>/{img,   AES-256-GCM)         (brand,model,$)  render/
 - Chốt chặn brand ở tầng gọi API (bịt 94 điểm cùng lúc) · brand voice per-brand · **vá lỗ hổng đè token FB** · khôi phục brand voice gốc LoveinTea từ backup 09/07.
 - *Nghiệm thu*: đã verify trên production — upload brand này không đụng brand kia.
 
-### P1 — LUẬT HOÁ + GUARD TỰ ĐỘNG (ưu tiên cao nhất, ~1 buổi)
+### P1 — LUẬT HOÁ + GUARD TỰ ĐỘNG ✅ ĐÃ XONG 29/07
 Mục tiêu: **lỗi cùng loại không thể lọt lần nữa**, kể cả người mới viết code.
 1. **Bỏ tenant mặc định**: `getBrandId()` không còn trả về 'loveintea' cho thao tác GHI; thiếu tenant → 400 kèm thông báo.
 2. **Guard CI — schema**: script chặn merge nếu có bảng mới thiếu `brand_id` mà không nằm trong allowlist `PLATFORM`.
@@ -96,13 +96,13 @@ Mục tiêu: **lỗi cùng loại không thể lọt lần nữa**, kể cả ng
 5. **Kiểm thử tenant rỗng**: mọi màn hình phải chạy được với brand chưa có dữ liệu (luật G8).
 - *Nghiệm thu*: cố tình viết 1 route sai tenant → CI chặn; test suite bắt được vụ brand voice nếu tái diễn.
 
-### P2 — TÁCH VẬT LÝ FILE + CREDENTIAL (~1 buổi)
+### P2 — TÁCH VẬT LÝ FILE + CREDENTIAL ✅ ĐÃ XONG 29/07 (phần cốt lõi)
 1. `data/tenants/<brandId>/{images,video,library,fonts}` — code đọc qua một hàm `tenantPath(brandId, …)` duy nhất; file cũ giữ nguyên (đọc 2 nơi), file mới ghi vào chỗ mới.
 2. Route phục vụ ảnh kiểm tra quyền tenant thay vì public theo tên file.
 3. Dọn `settings` FB legacy: LoveinTea chuyển hẳn sang `channels`; xoá đường rơi về credential toàn cục.
 - *Nghiệm thu*: xoá một brand test = xoá đúng một thư mục; ảnh brand A không truy cập được bằng session brand B.
 
-### P3 — TÁCH DB + CHI PHÍ THEO KHÁCH (~2 buổi)
+### P3 — CHI PHÍ THEO KHÁCH ✅ ĐÃ XONG · TÁCH DB 🟡 đã có backup/restore per-tenant, chuyển đường đọc-ghi để sau
 1. `cost_ledger(brand_id, feature, model, usd, at)` — mọi call AI ghi sổ (Reel Machine đã có sẵn cơ chế, mở rộng cho ảnh/content).
 2. Bảng điều khiển chi phí per-brand + hạn mức cảnh báo.
 3. Tách DB: `platform.db` (users/brands/payment/settings hệ) + `tenants/<brandId>.db` (dữ liệu khách); `getDb(brandId)` thay `getDb()`; migration có kiểm chứng số dòng trước–sau.
@@ -137,6 +137,23 @@ Backup theo tenant · quota/hạn mức · nhật ký thao tác theo tenant · q
 1. **Ưu tiên P1 ngay hay đợi?** (khuyến nghị: làm ngay — rẻ nhất, chặn được cả lớp lỗi).
 2. **API key AI**: mỗi khách tự nối tài khoản (họ trả tiền trực tiếp) hay dùng key nền tảng rồi tính tiền lại qua cost ledger? Quyết định này định hình P3.
 3. **Cam kết với khách**: có hứa cách ly dữ liệu ở mức hợp đồng không? Nếu có → P3 (DB riêng) là bắt buộc, không phải tuỳ chọn.
+
+---
+
+## PHẦN 9 — ĐÃ THỰC THI (29/07/2026, verify trên production)
+
+| Hạng mục | Trạng thái | Bằng chứng |
+|---|---|---|
+| Chặn ghi không rõ brand | ✅ | ghi không brand → 400; có brand → chạy; đọc không bị chặn nhầm |
+| Guard CI `npm run check:tenant` | ✅ | thêm bảng vi phạm → guard bắt; hoàn nguyên → sạch (258 file) |
+| Backup + restore theo brand | ✅ | diễn tập: xoá sạch dữ liệu gossby → restore riêng gossby về đủ, loveintea nguyên vẹn; cron hằng ngày, giữ 14 ngày |
+| Vá lỗ hổng đè token FB | ✅ | credential vào `channels` per-brand (mã hoá); settings chỉ mirror legacy |
+| Brand voice per-brand + khôi phục bản gốc | ✅ | loveintea 2.301 ký tự (bản 09/07 từ backup); gossby 3.824 — độc lập |
+| File theo khách `data/tenants/<brand>/` | ✅ cốt lõi | upload ảnh SP + video/thumbnail Reel ghi vào thư mục khách; `/api/images` đọc 2 nơi nên link cũ không gãy (verify HTTP 200) |
+| Sổ chi phí theo khách | ✅ | bảng `cost_ledger` + API `/api/cost/brands`; fal/openai tự ghi kèm mã video |
+| Tách DB đọc-ghi trực tiếp | 🟡 để sau | mục tiêu backup an toàn ĐÃ đạt bằng export/restore per-tenant; chuyển `getDb()` → `getDb(brandId)` là đại phẫu, chỉ làm khi số brand tăng hoặc có cam kết hợp đồng |
+
+**Còn nợ (ưu tiên giảm dần)**: di dời file cũ trong `data/images/` về thư mục từng khách (hiện đọc 2 nơi nên không gấp) · hạn mức dung lượng + cảnh báo chi phí · gắn `check:tenant` vào CI của repo · bảng điều khiển chi phí trong UI.
 
 ---
 *Audit gốc + số liệu: phiên 29/07/2026. Bài học liên quan: `kinh-nghiem-code-chung/laws/LUAT-TONG-QUAT.md` — H3, H7, G7, G8, G9.*
