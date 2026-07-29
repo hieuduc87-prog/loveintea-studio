@@ -17,10 +17,23 @@ export async function GET(
     return new NextResponse('Not found', { status: 404 });
   }
 
-  const imagesDir = path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'images');
-  const filePath = path.join(imagesDir, safe);
-  // Resolved path must stay inside imagesDir, and must be a file (not a dir)
-  if (!filePath.startsWith(imagesDir + path.sep)) {
+  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+  const imagesDir = path.join(dataDir, 'images');
+  // ĐỌC 2 NƠI (NT4): file mới nằm trong thư mục riêng của khách
+  // data/tenants/<brand>/{images,video}; file cũ vẫn ở kho chung data/images.
+  // Route này PUBLIC (Facebook/IG phải tải được ảnh đã đăng) nên bảo vệ bằng tên
+  // file ngẫu nhiên không đoán được, đúng như kho chung hiện hành.
+  const candidates: string[] = [path.join(imagesDir, safe)];
+  try {
+    const tenantsRoot = path.join(dataDir, 'tenants');
+    for (const b of fs.readdirSync(tenantsRoot)) {
+      candidates.push(path.join(tenantsRoot, b, 'images', safe));
+      candidates.push(path.join(tenantsRoot, b, 'video', safe));
+    }
+  } catch { /* chưa có thư mục tenants */ }
+  const filePath = candidates.find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } })
+    || path.join(imagesDir, safe);
+  if (!filePath.startsWith(dataDir + path.sep)) {
     return new NextResponse('Not found', { status: 404 });
   }
   let buffer: Buffer;

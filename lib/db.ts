@@ -907,6 +907,22 @@ function initSchema(db: Database.Database) {
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN video_code TEXT`); } catch { /* already exists */ }
   try { db.exec(`CREATE INDEX IF NOT EXISTS idx_video_projects_code ON video_projects(video_code)`); } catch { /* */ }
   try { db.exec(`ALTER TABLE video_projects ADD COLUMN grade_json TEXT`); } catch { /* already exists */ }
+  // ── Sổ chi phí AI THEO BRAND (NT5 quy hoạch đa-brand) ──
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS cost_ledger (
+      id         TEXT PRIMARY KEY,
+      brand_id   TEXT NOT NULL,
+      feature    TEXT NOT NULL,      -- video_clip | image_gen | text_gen | ...
+      provider   TEXT NOT NULL,      -- fal | openai | gemini | elevenlabs
+      model      TEXT,
+      qty        TEXT,               -- "6s 768P", "1024x1536 medium"
+      usd        REAL NOT NULL,
+      ref_id     TEXT,               -- mã video / job id để truy ngược
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_cost_brand ON cost_ledger(brand_id, created_at)`);
+  } catch { /* already exists */ }
+
   // ── Unified Job Queue — mọi nút "Tạo" (ảnh/content/carousel/plan/video) ghi 1 job để theo dõi ──
   try {
     db.exec(`CREATE TABLE IF NOT EXISTS jobs (

@@ -17,13 +17,35 @@ export function resetFalCostLog(): void { costLog = []; }
 export function getFalCostLog(): { items: FalCost[]; totalUsd: number } {
   return { items: [...costLog], totalUsd: Math.round(costLog.reduce((a, c) => a + c.usd, 0) * 10000) / 10000 };
 }
+/** Brand + mã video của run hiện tại — để ghi sổ chi phí theo khách. */
+let costBrandId = '';
+let costRefId = '';
+export function setCostContext(brandId: string, refId?: string): void {
+  costBrandId = brandId || ''; costRefId = refId || '';
+}
+
 function recordCost(model: string, qty: string, usd: number): void {
   costLog.push({ model, qty, usd: Math.round(usd * 10000) / 10000, at: new Date().toISOString() });
+  // Ghi sổ theo brand (không chặn việc thật nếu lỗi)
+  if (costBrandId) {
+    import('../cost-ledger').then(({ recordCost: rec }) => {
+      const feature = model.includes('i2v') ? 'video_clip' : model.includes('sfx') ? 'video_sfx'
+        : model.includes('kontext') ? 'image_edit' : 'video_image';
+      rec({ brandId: costBrandId, feature, provider: model.startsWith('elevenlabs') ? 'elevenlabs' : 'fal',
+        model, usd, qty, refId: costRefId });
+    }).catch(() => {});
+  }
 }
 /** Ghi cost của engine NGOÀI fal (vd gpt-image-2) vào cùng ledger — số ước theo
  *  bảng giá công bố, đối chiếu dashboard nhà cung cấp. */
 export function recordExternalCost(model: string, qty: string, usd: number): void {
-  recordCost(model, qty, usd);
+  costLog.push({ model, qty, usd: Math.round(usd * 10000) / 10000, at: new Date().toISOString() });
+  if (costBrandId) {
+    import('../cost-ledger').then(({ recordCost: rec }) => {
+      rec({ brandId: costBrandId, feature: model.includes('edit') ? 'image_edit' : 'image_gen',
+        provider: 'openai', model, usd, qty, refId: costRefId });
+    }).catch(() => {});
+  }
 }
 
 function falKey(): string {

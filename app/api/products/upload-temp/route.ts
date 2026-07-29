@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { getBrandId } from '@/lib/brand-guard';
-import { IMAGES_DIR } from '@/lib/video/ffmpeg';
+import { tenantFilePath } from '@/lib/tenant-path';
 
 const MAX_BYTES = 12 * 1024 * 1024;
 
@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
     const ext = (path.extname(file.name || '').toLowerCase().match(/^\.(png|jpe?g|webp)$/) || ['.png'])[0];
     // Tên chứa brand + random: không đoán được trên /api/images (public)
     const filename = `prod_${brandId.replace(/[^a-z0-9]/gi, '')}_${crypto.randomBytes(6).toString('hex')}${ext}`;
-    fs.mkdirSync(IMAGES_DIR, { recursive: true });
-    fs.writeFileSync(path.join(IMAGES_DIR, filename), buf);
+    // Ghi vào thư mục riêng của khách (xoá/backup/tính dung lượng theo khách)
+    fs.writeFileSync(tenantFilePath(brandId, 'images', filename), buf);
     return NextResponse.json({ ok: true, url: `/api/images/${filename}` });
   } catch (e) {
     console.error('[products/upload-temp]', e);

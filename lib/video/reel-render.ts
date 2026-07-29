@@ -19,7 +19,7 @@ import {
   ffmpeg, probe, probeFull, extractFrames, pixelFrameCheck, frozenCheck,
   measureLufs, maxBlackSpan, IMAGES_DIR, TMP_DIR,
 } from './ffmpeg';
-import { falImage, falImageToVideo, falKontext, falSfx, friendlyFalError, resetFalCostLog, getFalCostLog, recordExternalCost, videoEngine } from './fal';
+import { falImage, falImageToVideo, falKontext, falSfx, friendlyFalError, resetFalCostLog, getFalCostLog, recordExternalCost, videoEngine, setCostContext } from './fal';
 import { ReelPlan, ReelSceneSpec } from './reel-director';
 import { SKUS, PALETTE, REEL_GRADE_VF, SAFE } from './reel-template';
 import { ensureBrandLibrary, brandLibRoot, clipCacheRoot, resolvePackshot, resolveLogo, resolveFonts } from './brand-library';
@@ -539,6 +539,7 @@ export async function renderReelProject(projectId: string): Promise<void> {
   try {
     ensureBrandLibrary(brandId);
     resetFalCostLog(); // chi phí THỰC: đếm từng call fal của run này
+    setCostContext(brandId, String(project.video_code || projectId.slice(0, 8))); // ghi sổ theo khách
     const plan = JSON.parse(String(project.script_json || '{}')) as ReelPlan;
     if (!plan.scenes?.length) throw new Error('ReelPlan trống — tạo lại từ API /api/video/reel');
     const prodName = plan.profile?.productName || SKUS[plan.sku]?.name || plan.sku;
@@ -626,14 +627,17 @@ export async function renderReelProject(projectId: string): Promise<void> {
     const beauty = plan.scenes.find(s => s.blockId === 'DRINK_BEAUTY') || plan.scenes[plan.scenes.length - 2];
     const thumbT = beauty ? (beauty.start + beauty.end) / 2 : durS * 0.7;
     const thumbName = `reelthumb_${String(project.video_code || projectId.slice(0, 8)).replace(/[^A-Za-z0-9-]/g, '')}_${crypto.randomBytes(4).toString('hex')}.jpg`;
-    await ffmpeg(['-ss', thumbT.toFixed(2), '-i', final, '-vframes', '1', '-q:v', '2', path.join(IMAGES_DIR, thumbName)]);
+    const { tenantFilePath: tPath } = await import('../tenant-path');
+    await ffmpeg(['-ss', thumbT.toFixed(2), '-i', final, '-vframes', '1', '-q:v', '2', tPath(brandId, 'images', thumbName)]);
     const thumbUrl = `/api/images/${thumbName}`;
 
     // Publish: video vào assets + post draft ở Review & Queue (Phiếu A: hàng chờ duyệt)
     const videoCode = String(project.video_code || projectId.slice(0, 8));
     const codeSlug = videoCode.replace(/[^A-Za-z0-9-]/g, '');
     const outName = `reel_${codeSlug}_${crypto.randomBytes(4).toString('hex')}.mp4`;
-    fs.copyFileSync(final, path.join(IMAGES_DIR, outName));
+    // Video thành phẩm nằm trong thư mục của khách (NT4)
+    const { tenantFilePath } = await import('../tenant-path');
+    fs.copyFileSync(final, tenantFilePath(brandId, 'video', outName));
     const outputUrl = `/api/images/${outName}`;
     db.prepare(`INSERT OR IGNORE INTO assets (id, brand_id, url, filename, file_type, status, source, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'video', 'unused', 'generated', datetime('now'), datetime('now'))`)
