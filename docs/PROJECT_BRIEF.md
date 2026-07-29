@@ -5,7 +5,7 @@
 ## Dự án là gì
 Marketing OS SaaS đa-tenant (Strategy → Plan → Create → Publish → Measure → Learn) cho các brand F&B/DTC.
 Stack: Next.js 14.2 App Router (standalone), SQLite better-sqlite3 (WAL, `data/studio.db`), NextAuth (Google + email/password), gpt-image-2, Gemini 2.5 (flash/flash-lite stable ONLY), edge-tts, sharp, yt-dlp.
-Domain: **app.easycreativehub.com** (tenant app) + **admin.easycreativehub.com** (Platform Console) + landing. Store thật: loveintea / bazan / rootin / gossby.
+Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middleware pin brand từ host — host thắng query, mâu thuẫn 409; wildcard CNAME + tunnel ingress đã cấu hình, store mới TỰ có domain). **app.** = sảnh chọn store (chọn brand ⇒ điều hướng sang domain store) + **admin.** (Platform Console) + landing. Store thật: loveintea / bazan / rootin / gossby. Token CF quản DNS zone này: `~/.cf_token_fleet`.
 
 ## Trạng thái vĩ mô (verify 2026-07-12)
 - **Production = Hetzner 178.105.246.16**, Docker container `loveintea-app`, port 3202, data mount `/opt/loveintea/data/` (studio.db + images/). Mac launchd chỉ là standby, KHÔNG serve domain.
