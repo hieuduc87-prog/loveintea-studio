@@ -33,11 +33,22 @@ function referencedFiles(db) {
     try { for (const row of db.prepare(`SELECT * FROM ${t}`).all()) Object.values(row).forEach(add); }
     catch { /* bảng lạ */ }
   }
-  // Kanban lưu ở file, không ở DB
-  try {
-    const kb = path.join(DATA_DIR, 'kanban');
-    for (const d of fs.readdirSync(kb)) add(fs.readFileSync(path.join(kb, d, 'card.json'), 'utf8'));
-  } catch { /* chưa có kanban */ }
+  // NGOÀI DB: quét MỌI file text trong data/ (kanban card.json, brand-library,
+  // references, flows, brand-docs…). Bản cũ chỉ đọc kanban → thư mục nào mới thêm
+  // sau này là mù, ảnh còn dùng bị coi là mồ côi. Thà quét thừa còn hơn xoá oan.
+  const SKIP = new Set(['images', 'backups', '_quarantine', 'video-cache', 'video-tmp', 'fonts', 'tenants']);
+  const TEXT = /\.(json|txt|md|jsonl|csv|ya?ml)$/i;
+  const walk = (dir, depth = 0) => {
+    if (depth > 6) return;
+    let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { if (depth > 0 || !SKIP.has(e.name)) walk(p, depth + 1); continue; }
+      if (!TEXT.test(e.name)) continue;
+      try { if (fs.statSync(p).size < 20_000_000) add(fs.readFileSync(p, 'utf8')); } catch { /* */ }
+    }
+  };
+  walk(DATA_DIR);
   return refs;
 }
 
