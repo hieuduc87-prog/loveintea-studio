@@ -4,7 +4,10 @@ export const dynamic = 'force-dynamic';
  * POST /api/auth/facebook/pages   — activate a specific page (body: { pageId })
  */
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
+import { encrypt } from '@/lib/crypto';
 import { decrypt } from '@/lib/crypto';
 import { requireAdminSession } from '@/lib/api-auth';
 
@@ -85,12 +88,32 @@ export async function POST(req: NextRequest) {
     `).run(page.connection_id);
     db.prepare('UPDATE fb_pages SET is_active=1 WHERE id=?').run(page.id);
 
-    // Decrypt page token + sync settings table for existing publish code
+    // LỖ HỔNG ĐÃ VÁ (29/07): trước đây ghi THẲNG vào settings FB_* dùng chung —
+    // brand B chọn page là ĐÈ token brand A → A đăng bài lên page của B.
+    // Giờ: lưu vào channels THEO BRAND (mã hoá), settings chỉ mirror cho loveintea.
     const pageToken = decrypt(page.page_token_enc, page.page_token_iv, page.page_token_tag);
-    upsertSetting(db, 'FB_PAGE_ID', page.page_id);
-    upsertSetting(db, 'FB_PAGE_ACCESS_TOKEN', pageToken);
-    upsertSetting(db, 'FB_PAGE_NAME', page.page_name);
-    if (page.ig_account_id) upsertSetting(db, 'IG_BUSINESS_ACCOUNT_ID', page.ig_account_id);
+    const bid = getBrandId(req) || 'loveintea';
+    const enc = encrypt(pageToken);
+    const credentials = JSON.stringify({
+      page_id: page.page_id, page_name: page.page_name,
+      ig_account_id: page.ig_account_id || '',
+      token_enc: enc.enc, token_iv: enc.iv, token_tag: enc.tag,
+    });
+    const existing = db.prepare(`SELECT id FROM channels WHERE brand_id=? AND platform='facebook'`)
+      .get(bid) as { id: string } | undefined;
+    if (existing) {
+      db.prepare(`UPDATE channels SET name=?, credentials=?, status='active' WHERE id=?`)
+        .run(page.page_name, credentials, existing.id);
+    } else {
+      db.prepare(`INSERT INTO channels (id, brand_id, platform, name, credentials, status) VALUES (?,?,?,?,?,'active')`)
+        .run(crypto.randomBytes(12).toString('hex'), bid, 'facebook', page.page_name, credentials);
+    }
+    if (bid === 'loveintea') {
+      upsertSetting(db, 'FB_PAGE_ID', page.page_id);
+      upsertSetting(db, 'FB_PAGE_ACCESS_TOKEN', pageToken);
+      upsertSetting(db, 'FB_PAGE_NAME', page.page_name);
+      if (page.ig_account_id) upsertSetting(db, 'IG_BUSINESS_ACCOUNT_ID', page.ig_account_id);
+    }
 
     return NextResponse.json({ ok: true, pageId: page.page_id, pageName: page.page_name });
   } catch (e) {

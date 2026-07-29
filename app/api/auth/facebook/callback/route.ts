@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import { getDb } from '@/lib/db';
+import { getBrandId } from '@/lib/brand-guard';
 import { encrypt } from '@/lib/crypto';
 import {
   exchangeCodeForToken,
@@ -133,10 +134,15 @@ export async function GET(req: NextRequest) {
     if (activeCount === 0 && firstPageId) {
       db.prepare('UPDATE fb_pages SET is_active=1 WHERE connection_id=? AND page_id=?')
         .run(connId, firstPageId);
-      // Backward compat: keep settings table in sync so existing publish routes work
-      upsertSetting(db, 'FB_PAGE_ID', firstPageId);
-      upsertSetting(db, 'FB_PAGE_ACCESS_TOKEN', firstPageToken);
-      if (firstIgId) upsertSetting(db, 'IG_BUSINESS_ACCOUNT_ID', firstIgId);
+      // KHÔNG tự ghi settings toàn cục nữa (đè token brand khác — vá 29/07).
+      // Người dùng chọn page ở bước sau (/api/auth/facebook/pages) — nơi đó ghi
+      // channels THEO BRAND. Chỉ mirror legacy khi thao tác thuộc brand loveintea.
+      const cbBrand = getBrandId(req) || '';
+      if (cbBrand === 'loveintea' || cbBrand === '') {
+        upsertSetting(db, 'FB_PAGE_ID', firstPageId);
+        upsertSetting(db, 'FB_PAGE_ACCESS_TOKEN', firstPageToken);
+        if (firstIgId) upsertSetting(db, 'IG_BUSINESS_ACCOUNT_ID', firstIgId);
+      }
     }
 
     // Clear CSRF cookie on response
