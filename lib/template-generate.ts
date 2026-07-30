@@ -175,7 +175,10 @@ export async function generateTemplateImages(opts: {
     const meta = slidesMeta[i] ?? {};
     const role = (meta.role || (i === 0 ? 'hook' : 'other')).toLowerCase();
     const tplSlidePath = resolveProductImagePath((slideUrls[i].url || '').split('?')[0]);
-    const refPath = resolveProductImagePath((pickProductRefUrl(productId, role) || '').split('?')[0]);
+    // Slide sản phẩm / người dùng đòi hộp → ref phải là ảnh CÓ HỘP theo nội dung
+    // (không tin nhãn packshot suông — card 7554fa71: 'front packshot' là túi trà).
+    const wantBoxRef = slideShowsProduct((slidesMeta[i] ?? {}).role || '') || noteWithPack;
+    const refPath = resolveProductImagePath((pickProductRefUrl(productId, role, { preferBox: wantBoxRef }) || '').split('?')[0]);
 
     // QUY TẮC THAY SẢN PHẨM theo VAI TRÒ slide (card e617a81f):
     // - Slide vai trò SẢN PHẨM (product/cta/hero/packaging) → base = ảnh REF Loveintea, ép ĐÚNG bao bì vào bố cục slide.

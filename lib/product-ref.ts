@@ -17,7 +17,18 @@ const ROLE_PREF: Record<string, string[]> = {
   lifestyle: ['lifestyle', 'packshot'],
 };
 
-interface PImg { image_url: string; ref_role: string | null; is_hero: number; angle: string | null }
+interface PImg { image_url: string; ref_role: string | null; is_hero: number; angle: string | null; ai_label?: string | null; analysis_json?: string | null }
+
+// TRUST-CHAIN (card 7554fa71, 5 vòng verify-gate): ảnh gắn nhãn "packshot/front"
+// hoá ra là packshot của TÚI TRÀ — hệ trung thành với ref nên ra túi thay vì hộp.
+// TÊN ≠ NỘI DUNG: khi cần HỘP phải lọc theo NỘI DUNG ảnh (ai_label/analysis),
+// không tin mỗi ref_role/angle.
+const BOX_RE = /hộp|hop|box|carton|thùng|thung/i;
+const BAG_RE = /túi|tui|bag|pyramid|sachet|pouch|gói|goi/i;
+function looksLikeBox(i: PImg): boolean {
+  const t = `${i.ai_label ?? ''} ${i.analysis_json ?? ''}`;
+  return BOX_RE.test(t) && !BAG_RE.test(t.replace(BOX_RE, ''));
+}
 
 // góc đẹp nhất làm base edit (chính diện rõ bao bì) → kém dần
 const ANGLE_RANK: Record<string, number> = { front: 0, '45': 1, side: 2, top: 3, detail: 4, back: 5 };
@@ -27,7 +38,11 @@ const angleScore = (a: string | null) => ANGLE_RANK[(a || '').toLowerCase()] ?? 
  * Trả image_url ảnh ref tốt nhất cho (productId, role). null nếu sản phẩm không có ảnh.
  * role: slide role hoặc surface (product/ingredient/lifestyle/hook/...).
  */
-export function pickProductRefUrl(productId: string | null | undefined, role = 'product'): string | null {
+export function pickProductRefUrl(
+  productId: string | null | undefined,
+  role = 'product',
+  opts?: { preferBox?: boolean },
+): string | null {
   if (!productId) return null;
   const db = getDb();
   // product_id của plan item có thể là SLUG ('hibiscus') ≠ products.id ('prod-hibiscus').
@@ -35,13 +50,18 @@ export function pickProductRefUrl(productId: string | null | undefined, role = '
   const prod = db.prepare('SELECT id, image_url FROM products WHERE id=? OR slug=? LIMIT 1').get(productId, productId) as { id: string; image_url?: string } | undefined;
   const pid = prod?.id ?? productId;
   const imgs = db.prepare(
-    'SELECT image_url, ref_role, is_hero, angle FROM product_images WHERE product_id=? ORDER BY is_hero DESC, sort_order ASC'
+    'SELECT image_url, ref_role, is_hero, angle, ai_label, analysis_json FROM product_images WHERE product_id=? ORDER BY is_hero DESC, sort_order ASC'
   ).all(pid) as PImg[];
   if (imgs.length) {
     const prefs = ROLE_PREF[(role || '').toLowerCase()] ?? ['packshot', 'lifestyle'];
     for (const pref of prefs) {
-      const group = imgs.filter(i => (i.ref_role || '') === pref);
+      let group = imgs.filter(i => (i.ref_role || '') === pref);
       if (!group.length) continue;
+      // Cần HỘP: nội dung ảnh nói "hộp" thắng nhãn/góc (Trust-Chain, card 7554fa71).
+      if (opts?.preferBox) {
+        const boxes = group.filter(looksLikeBox);
+        if (boxes.length) group = boxes;
+      }
       // LUÔN ưu tiên góc MẶT TRƯỚC (front → 45 → side...) cho mọi vai trò — base edit chuẩn nhất.
       group.sort((a, b) => angleScore(a.angle) - angleScore(b.angle));
       return group[0].image_url;
