@@ -20,13 +20,15 @@ interface TplAnalysis {
 }
 
 // Slide này có hiện BAO BÌ sản phẩm không, theo VAI TRÒ (card e617a81f: carousel cần cân bằng
-// nguyên liệu ↔ sản phẩm — KHÔNG nhét hộp/bao bì vào mọi slide). Chỉ vai trò hướng-sản-phẩm mới
-// hiện bao bì; hook/ingredient/benefit/how_to/proof/lifestyle chỉ hiện nguyên liệu.
-// Bias NGUYÊN LIỆU: role dính "ingredient" thắng (kể cả "product/ingredient") → không bao bì.
+// nguyên liệu ↔ sản phẩm — KHÔNG nhét hộp/bao bì vào mọi slide).
+// Card 7554fa71: Gemini giờ trả role GHÉP 'product|ingredient|hook' — bản cũ để
+// "ingredient/hook" phủ quyết TRƯỚC nên slide sản-phẩm-chính-hiệu cũng bị cấm hộp.
+// Nay xét VAI TRÒ ĐẦU TIÊN (primary) trong chuỗi ghép: 'product|…' → hộp;
+// 'ingredient/product' → nguyên liệu (giữ đúng bias của e617a81f).
 function slideShowsProduct(role: string): boolean {
-  const r = (role || '').toLowerCase();
-  if (/ingredient|nguyen lieu|nguyên liệu|raw|texture|hook|benefit|how[_ -]?to|lifestyle|proof/.test(r)) return false;
-  return /product|san pham|sản phẩm|packshot|packaging|bao bi|bao bì|hero|cta/.test(r);
+  const primary = (role || '').toLowerCase().split(/[|/,;]+/)[0].trim();
+  if (/ingredient|nguyen lieu|nguyên liệu|raw|texture|hook|benefit|how[_ -]?to|lifestyle|proof/.test(primary)) return false;
+  return /product|san pham|sản phẩm|packshot|packaging|bao bi|bao bì|hero|cta/.test(primary);
 }
 
 export interface TemplateGenResult {
@@ -111,7 +113,15 @@ export async function generateTemplateImages(opts: {
   // không dấu để bắt cả "khong kem vo hop" / "ko có hộp" / "no box".
   const normNote = (customPrompt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const noteNoPack = /(khong|ko)[^.;,]{0,24}(vo\s*hop|hop|bao\s*bi|box|packaging)|\b(no|without)\s+(the\s+)?(box|packaging)\b|ingredients?\s*only|chi\s+(co\s+)?nguyen\s*lieu/.test(normNote);
-  const noteWithPack = !noteNoPack && /(kem|co|hien|show|with)\s+(vo\s*hop|hop|bao\s*bi|box|packaging)/.test(normNote);
+  // Card 7554fa71: nhân viên viết "thay bằng hộp trà …" mà không được nhận diện —
+  // bản cũ chỉ bắt kèm/có/hiện/show/with. Nay: (a) động từ rộng hơn + hộp;
+  // (b) cụm "hộp trà/hộp sản phẩm/vỏ hộp/bao bì/box/packaging" xuất hiện ở đâu
+  // cũng tính là muốn hộp (noteNoPack đã chặn thể phủ định trước rồi).
+  // KHÔNG bắt chữ "hop" trần: tiếng Việt không dấu dính "phù hợp/kết hợp/tổng hợp".
+  const noteWithPack = !noteNoPack && (
+    /(vo\s*hop|hop\s*(tra|qua|san\s*pham|giay|thiec)|bao\s*bi|\bbox\b|packaging|packshot)/.test(normNote)
+    || /(dua|thay(\s*bang)?|them|chen|kem|cam|giu|dat|co|hien|show|with|include|add|insert|replace|holding)\s+(cai\s+|chiec\s+)?hop\b/.test(normNote)
+  );
 
   // Card 1be7fe0e (blocker) — "ảnh sai packaging": mô tả slide do AI phân tích
   // template ghi NGUYÊN VĂN thương hiệu của sản phẩm GỐC ("gói trà Keats & Co",
@@ -163,8 +173,13 @@ export async function generateTemplateImages(opts: {
       `Vertical 2:3 social media image, slide ${i + 1} of ${slideUrls.length} in a carousel (role: ${role}).`,
       // LAYOUT ONLY — mô tả template chỉ nói bố cục. Mọi thương hiệu/chữ/màu nêu
       // trong đó thuộc về sản phẩm KHÁC và phải bị bỏ qua (card 1be7fe0e).
+      // Card 7554fa71: trên slide SẢN PHẨM không được nói "product must NOT appear"
+      // — câu đó mâu thuẫn với lệnh "place the EXACT product" và làm mất luôn hộp.
+      // Slide sản phẩm: bỏ qua thương hiệu của template nhưng THAY bằng hộp mình.
       meta.content
-        ? `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${stripBrandNouns(meta.content)}. IGNORE every brand name, product name, printed wording and colour mentioned in it; those belong to a DIFFERENT product and must NOT appear.`
+        ? (showProduct
+            ? `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${stripBrandNouns(meta.content)}. Any product/brand the layout mentions belongs to a DIFFERENT company — REPLACE it with OUR product from the reference image; never copy the layout's own branding, wording or packaging design.`
+            : `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${stripBrandNouns(meta.content)}. IGNORE every brand name, product name, printed wording and colour mentioned in it; those belong to a DIFFERENT product and must NOT appear.`)
         : '',
       meta.visual ? `Camera angle/layout/style: ${stripBrandNouns(meta.visual)}.` : '',
       showProduct

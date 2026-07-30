@@ -60,7 +60,8 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 
 
 
-- [session 2026-07-30] 3 commit — docs(brief) · feat(domain)
+
+- [session 2026-07-30] 5 commit — docs(brief) · feat(domain)
 - [session 2026-07-29] 17 commit — fix(kanban) · docs(brief) · feat(quota) · fix(orphan) · tools(disk) · SEC(cost) · docs(arch) · feat(tenant) · SEC(fb)
 - [session 2026-07-29b] KHOÁ HẠN MỨC theo khách — `brand_quotas`+`usage_counters`, gác 4 route AI (reel ×versions, 2 route ảnh, plan ×số item), 2 lớp: hạn mức đơn vị + trần chi tiêu; `/api/usage` cho khách (CHỈ số lượng) · `/api/admin/quotas` nội bộ. Verified prod: videos=0 → 429, 0 USD tiêu; ảnh 1/1 → lần 2 chặn. Đã đặt: loveintea 20/200/500 trần $80; gossby+bazan+rootin trial 4/40/150 trần $20 [LIT-QUOTA-0729A]
 - [session 2026-07-29b] Server: backup 5 dự án (KHÔNG phải git repo — code chỉ có trên server) về `/Volumes/SSD/backups/hetzner-2026-07-29/`, verify sha256 9/9. Xoá wealthpsy-core + behoctiengviet + calorvisor-web; tắt workshophoa (giữ file); giữ bigaicrm đang chạy. Vá dò ảnh mồ côi: quét MỌI file text trong `data/` thay vì chỉ kanban (test 679→678→679). Sửa disk-guard thu hồi 0B (thiếu `-a`, bỏ sót journal). Ổ 96%→86%.
