@@ -61,6 +61,15 @@ export function pickProductRefUrl(
       if (opts?.preferBox) {
         const boxes = group.filter(looksLikeBox);
         if (boxes.length) group = boxes;
+        // Ref HỘP cho marketing phải là MẶT TRƯỚC: mask-lock 30/07 chọn nhầm ảnh
+        // side → khoá pixel hoàn hảo... của bảng Nutrition Facts mặt sau. Hộp:
+        // front > 45 > top > side/back, và nhãn nhắc nutrition/mặt sau đội sổ.
+        const BOX_ANGLE: Record<string, number> = { front: 0, '45': 1, top: 2, side: 4, back: 6 };
+        const backish = (i: PImg) => /nutrition|mặt sau|mat sau|back of|barcode/i.test(`${i.ai_label ?? ''} ${i.analysis_json ?? ''}`) ? 10 : 0;
+        group.sort((a, b) =>
+          ((BOX_ANGLE[(a.angle || '').toLowerCase()] ?? 8) + backish(a))
+          - ((BOX_ANGLE[(b.angle || '').toLowerCase()] ?? 8) + backish(b)));
+        return group[0].image_url;
       }
       // LUÔN ưu tiên góc MẶT TRƯỚC (front → 45 → side...) cho mọi vai trò — base edit chuẩn nhất.
       group.sort((a, b) => angleScore(a.angle) - angleScore(b.angle));
