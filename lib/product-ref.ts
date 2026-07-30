@@ -66,9 +66,13 @@ export function pickProductRefUrl(
         // front > 45 > top > side/back, và nhãn nhắc nutrition/mặt sau đội sổ.
         const BOX_ANGLE: Record<string, number> = { front: 0, '45': 1, top: 2, side: 4, back: 6 };
         const backish = (i: PImg) => /nutrition|mặt sau|mat sau|back of|barcode/i.test(`${i.ai_label ?? ''} ${i.analysis_json ?? ''}`) ? 10 : 0;
+        // HERO là quyền tối thượng: kho ảnh có thể trộn nhiều BIẾN THỂ (Tía Tô,
+        // Chanh Dây...) đều mang nhãn "hộp trà" — nhân viên đánh dấu 1 ảnh hero
+        // là chốt được ảnh chuẩn, mọi heuristic chỉ là fallback.
         group.sort((a, b) =>
-          ((BOX_ANGLE[(a.angle || '').toLowerCase()] ?? 8) + backish(a))
-          - ((BOX_ANGLE[(b.angle || '').toLowerCase()] ?? 8) + backish(b)));
+          (b.is_hero - a.is_hero)
+          || (((BOX_ANGLE[(a.angle || '').toLowerCase()] ?? 8) + backish(a))
+            - ((BOX_ANGLE[(b.angle || '').toLowerCase()] ?? 8) + backish(b))));
         return group[0].image_url;
       }
       // LUÔN ưu tiên góc MẶT TRƯỚC (front → 45 → side...) cho mọi vai trò — base edit chuẩn nhất.
