@@ -36,6 +36,18 @@ const LN = 'loudnorm=I=-14:TP=-1.0:LRA=9';
 
 const sha = (s: string) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 16);
 
+/** Palette end-card theo brand từ brand_dna.colors_json (pattern render.ts).
+ *  Không có màu brand: loveintea giữ palette Iced Summer; brand khác dùng trung tính. */
+function getBrandPalette(brandId: string): { cream: string; green: string; coral: string; earth: string } {
+  try {
+    const dna = getDb().prepare('SELECT colors_json FROM brand_dna WHERE brand_id=?').get(brandId) as { colors_json?: string } | undefined;
+    const vals = Object.values(JSON.parse(dna?.colors_json || '{}') as Record<string, string>)
+      .filter(v => /^#[0-9a-fA-F]{3,8}$/.test(String(v)));
+    if (vals.length >= 2) return { green: vals[0], coral: vals[1], cream: vals[2] || '#FAF9F6', earth: '#2D2D2D' };
+  } catch { /* dna chưa có */ }
+  return brandId === 'loveintea' ? PALETTE : { cream: '#FAF9F6', green: '#22252A', coral: '#4A6CF7', earth: '#2D2D2D' };
+}
+
 function esc(s: string): string {
   return String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
@@ -44,18 +56,20 @@ function esc(s: string): string {
 // ── M2: footage factory ────────────────────────────────────────────────
 
 interface ClipQa { ok: boolean; reason?: string }
+/** Ngữ cảnh QA per-video — tên sản phẩm + vật neo continuity, bơm từ profile. */
+interface QaCtx { skuName: string; anchor: string; isBev: boolean }
 
 /** Gemini vision gate cho 1 frame clip AI — CODE quyết verdict theo checklist
  *  (VERIFY-GATE law: không tin verdict tổng của LLM). */
-async function visionGate(framePath: string, scene: ReelSceneSpec, skuName: string): Promise<ClipQa> {
+async function visionGate(framePath: string, scene: ReelSceneSpec, ctx: QaCtx): Promise<ClipQa> {
   try {
     const raw = await analyzeImage(fs.readFileSync(framePath), 'image/jpeg',
-      `Inspect this AI-generated frame for a premium herbal tea reel (${skuName}). Answer ONLY JSON:
+      `Inspect this AI-generated frame for a premium product reel (${ctx.skuName}). Answer ONLY JSON:
 {"has_text_or_logo":bool,          // any readable letters, words, watermark, logo
  "wrong_subject":bool,             // subject clearly NOT: ${scene.prompt.slice(0, 140)}
- "unnatural":bool,                 // melted/warped glass, deformed hands, impossible liquid
- "implausible_physics":bool,       // effect WITHOUT visible cause: liquid stirring/swirling while the utensil is OUTSIDE the glass or absent; objects floating; pour with no source
- "neon_or_soda":bool,              // neon colors / soda-commercial / cocktail-party look
+ "unnatural":bool,                 // melted/warped ${ctx.anchor}, deformed hands, physically impossible material or liquid
+ "implausible_physics":bool,       // effect WITHOUT visible cause: motion or swirl with no visible actor or source; objects floating; pour with no source
+ "neon_or_soda":bool,              // garish neon oversaturated look${''}
  "note":"short reason"}`);
     const m = raw.match(/\{[\s\S]*\}/);
     const v = JSON.parse(m ? m[0] : raw) as { has_text_or_logo?: boolean; wrong_subject?: boolean; unnatural?: boolean; implausible_physics?: boolean; neon_or_soda?: boolean; note?: string };
@@ -63,7 +77,7 @@ async function visionGate(framePath: string, scene: ReelSceneSpec, skuName: stri
     if (v.wrong_subject) return { ok: false, reason: `sai chủ thể (${v.note})` };
     if (v.unnatural) return { ok: false, reason: `AI lỗi vật lý (${v.note})` };
     if (v.implausible_physics) return { ok: false, reason: `phi vật lý — hiệu ứng không nguyên nhân (${v.note})` };
-    if (v.neon_or_soda) return { ok: false, reason: `neon/soda look (${v.note})` };
+    if (v.neon_or_soda) return { ok: false, reason: `neon/garish look (${v.note})` };
     return { ok: true };
   } catch (e) {
     // Gate hỏng ≠ clip hỏng — cho qua nhưng ghi log (không chặn pipeline vì Gemini chập chờn)
@@ -90,14 +104,14 @@ async function reelFrozenCheck(frames: string[]): Promise<boolean> {
   return maxDiff < 1.5; // mọi frame gần như y hệt frame đầu = đứng hình thật
 }
 
-async function qaClip(file: string, scene: ReelSceneSpec, skuName: string, work: string): Promise<ClipQa> {
+async function qaClip(file: string, scene: ReelSceneSpec, ctx: QaCtx, work: string): Promise<ClipQa> {
   const meta = await probe(file);
   if (meta.duration < 4.0) return { ok: false, reason: `clip ngắn ${meta.duration.toFixed(1)}s (<4s)` };
   const frames = await extractFrames(file, path.join(work, `qa_${scene.blockId}`), 3);
   const px = await pixelFrameCheck(frames);
   if (!px.ok) return { ok: false, reason: `frame hỏng: ${px.bad.map(b => b.reason).join(',')}` };
   if (await reelFrozenCheck(frames)) return { ok: false, reason: 'clip đứng hình' };
-  return visionGate(frames[1], scene, skuName);
+  return visionGate(frames[1], scene, ctx);
 }
 
 /** Engine ảnh: 'openai' (gpt-image-2 — bám prompt ổn định hơn, CẦN billing OpenAI
@@ -160,7 +174,7 @@ const GATE_STRICT = new Set(['ICE_IMPACT', 'BREW_POUR', 'SUMMER_LIFT', 'RITUAL_P
 
 /** Consistency gate: ghép hero + frame scene cạnh nhau → Gemini trả lời CÙNG MỘT
  *  cái ly/mặt bàn/ánh sáng không. CODE quyết verdict (VERIFY-GATE law). */
-async function consistencyGate(hero: Buffer, sceneFrame: Buffer, blockId: string): Promise<{ ok: boolean; note: string }> {
+async function consistencyGate(hero: Buffer, sceneFrame: Buffer, blockId: string, anchor: string): Promise<{ ok: boolean; note: string }> {
   try {
     const sharp = (await import('sharp')).default;
     const h = 640;
@@ -176,7 +190,7 @@ async function consistencyGate(hero: Buffer, sceneFrame: Buffer, blockId: string
     const raw = await analyzeImage(combo, 'image/jpeg',
       `LEFT = hero reference shot. RIGHT = another scene of the same video (${blockId} — the action/content SHOULD differ).
 Judge ONLY physical continuity of the setting. Answer ONLY JSON:
-{"same_glass":bool,     // same glass shape+material (fill level/contents MAY differ; if glass absent on right, true)
+{"same_glass":bool,     // same ${anchor}: same shape+material+colors (state/contents MAY differ; if the ${anchor} is absent on right, true)
  "same_setting":bool,   // same surface + same lighting direction/mood
  "note":"short"}`);
     const m = raw.match(/\{[\s\S]*\}/);
@@ -204,17 +218,18 @@ async function getSceneImage(scene: ReelSceneSpec, plan: ReelPlan, work: string,
   if (plan.heroPrompt && scene.hasGlass) {
     const hero = await getHeroImage(plan, jobId);
     if (!scene.editInstruction) return hero; // DRINK_BEAUTY = hero
-    const strict = forceNew ? 'IMPORTANT: the glass MUST stay IDENTICAL in shape, size and material. ' : '';
+    const anchor = plan.profile?.anchorNoun || 'glass';
+    const strict = forceNew ? `IMPORTANT: the ${anchor} MUST stay IDENTICAL in shape, size and material. ` : '';
     const key = sha(`edit|${imageEngine()}|${hero.key}|${scene.editInstruction}|${strict}`);
     const cached = path.join(cacheDir, `img_${key}.png`);
     if (!forceNew && fs.existsSync(cached)) return { buf: fs.readFileSync(cached), key };
-    logJob(jobId, `${scene.blockId}: edit từ hero giữ nguyên ly (${imageEngine()})…`);
+    logJob(jobId, `${scene.blockId}: edit từ hero giữ nguyên ${anchor} (${imageEngine()})…`);
     const buf = await engineEdit(hero.buf, strict + scene.editInstruction, work, jobId, scene.blockId);
-    const gate = await consistencyGate(hero.buf, buf, scene.blockId);
+    const gate = await consistencyGate(hero.buf, buf, scene.blockId, anchor);
     if (!gate.ok) {
       logJob(jobId, `${scene.blockId}: ⚠ consistency FAIL (${gate.note}) — edit lại với lệnh cứng hơn`);
-      const buf2 = await engineEdit(hero.buf, 'IMPORTANT: the glass MUST stay IDENTICAL in shape, size, material and position. ' + scene.editInstruction, work, jobId, scene.blockId);
-      const gate2 = await consistencyGate(hero.buf, buf2, scene.blockId);
+      const buf2 = await engineEdit(hero.buf, `IMPORTANT: the ${anchor} MUST stay IDENTICAL in shape, size, material and position. ` + scene.editInstruction, work, jobId, scene.blockId);
+      const gate2 = await consistencyGate(hero.buf, buf2, scene.blockId, anchor);
       if (!gate2.ok) throw new Error(`${scene.blockId}: 2 lần edit vẫn lệch continuity (${gate2.note}) — chạy lại video hoặc đổi prompt`);
       fs.writeFileSync(cached, buf2);
       return { buf: buf2, key };
@@ -236,10 +251,15 @@ async function getSceneImage(scene: ReelSceneSpec, plan: ReelPlan, work: string,
 async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: string, jobId: string, brandId: string): Promise<string> {
   const cacheDir = clipCacheRoot();
   const skuName = plan.profile?.productName || SKUS[plan.sku]?.name || plan.sku;
+  const qaCtx: QaCtx = {
+    skuName,
+    anchor: plan.profile?.anchorNoun || 'glass',
+    isBev: plan.profile?.isBeverage !== false,
+  };
 
   let baseClipPath = '';
   for (let attempt = 0; attempt < 2; attempt++) {
-    const strengthen = attempt === 1 ? ' STRICTLY: no letters of any kind, natural realistic beverage, physically correct.' : '';
+    const strengthen = attempt === 1 ? ' STRICTLY: no letters of any kind, natural realistic product, physically correct.' : '';
     const img = await getSceneImage(scene, plan, work, jobId, strengthen, attempt === 1);
     const ve = videoEngine();
     const key = sha(`i2v|${ve}|${img.key}|${scene.prompt}`);
@@ -261,7 +281,7 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
     }
     const tmp = path.join(work, `gen_${scene.blockId}_${attempt}.mp4`);
     fs.writeFileSync(tmp, video);
-    const qa = await qaClip(tmp, scene, skuName, work);
+    const qa = await qaClip(tmp, scene, qaCtx, work);
     if (qa.ok) {
       fs.copyFileSync(tmp, cached);
       // Lỗ hổng đã trả giá 28/07: clip pass ở vòng retry cache theo key strengthen,
@@ -300,8 +320,9 @@ async function buildEndCard(brandId: string, plan: ReelPlan, ctaText: string, du
   const pack = resolvePackshot(brandId, plan.sku, slug);
   const logo = resolveLogo(brandId);
   const fonts = resolveFonts(brandId);
-  // L4: tên brand trên end card bơm từ DB — không viết cứng tenant.
+  // L4: tên brand + palette end card bơm từ DB theo brand — không viết cứng tenant.
   const brandName = (getDb().prepare('SELECT name FROM brands WHERE id=?').get(brandId) as { name?: string } | undefined)?.name || '';
+  const pal = getBrandPalette(brandId);
   const fontFace = (name: string, file: string | null) => file
     ? `@font-face{font-family:'${name}';src:url(data:font/${file.endsWith('.otf') ? 'otf' : 'ttf'};base64,${fs.readFileSync(file).toString('base64')});}`
     : '';
@@ -311,16 +332,16 @@ async function buildEndCard(brandId: string, plan: ReelPlan, ctaText: string, du
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
   ${fontFace('BrandHead', fonts.headline)} ${fontFace('BrandSub', fonts.sub)}
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{width:540px;height:960px;background:${PALETTE.cream};overflow:hidden;
+  html,body{width:540px;height:960px;background:${pal.cream};overflow:hidden;
     font-family:'BrandSub','Noto Sans',sans-serif}
   .logo{position:absolute;top:120px;left:50%;transform:translateX(-50%);width:110px}
   .pack{position:absolute;top:230px;left:50%;transform:translateX(-50%);width:330px;
     filter:drop-shadow(0 14px 28px rgba(45,45,45,.18))}
   .cta{position:absolute;bottom:290px;left:45px;right:45px;text-align:center;
     font-family:'BrandHead','Noto Sans',sans-serif;font-weight:700;font-size:37px;
-    line-height:1.25;color:${PALETTE.green}}
+    line-height:1.25;color:${pal.green}}
   .sub{position:absolute;bottom:245px;left:45px;right:45px;text-align:center;
-    font-size:17px;color:${PALETTE.earth};opacity:.85}
+    font-size:17px;color:${pal.earth};opacity:.85}
   </style></head><body>
   ${logoB64 ? `<img class="logo" src="${logoB64}">` : ''}
   ${packB64 ? `<img class="pack" src="${packB64}">` : ''}
@@ -416,7 +437,7 @@ function reelOverlayHtml(plan: ReelPlan, durationMs: number, fonts: { headline: 
     font-size:37px;line-height:1.22;color:#fff;
     text-shadow:0 2px 10px rgba(45,45,45,.35)}
   .micro{top:600px;font-family:'BrandSub','Noto Sans',sans-serif;font-weight:700;font-size:20px;line-height:1.4}
-  .micro span{background:rgba(255,248,240,.86);color:${PALETTE.earth};padding:7px 16px;
+  .micro span{background:rgba(255,248,240,.86);color:#2D2D2D;padding:7px 16px;
     border-radius:20px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
   </style></head><body>
   ${texts.map((t, i) => `<div class="t ${t.role === 'hook' ? 'hook' : 'micro'}" id="tx${i}">${t.role === 'hook' ? esc(t.text) : `<span>${esc(t.text)}</span>`}</div>`).join('')}
@@ -696,7 +717,7 @@ async function buildReelCaption(brandId: string, plan: ReelPlan): Promise<string
     const { resolveLangName } = await import('../brand-lang');
     const lang = resolveLangName(undefined, brandId);
     const r = await generateJSON<{ caption: string }>(
-      `Write ONE Instagram Reel caption in ${lang} for the beverage product "${prof.productName}" (${prof.moment}).
+      `Write ONE Instagram Reel caption in ${lang} for the product "${prof.productName}" (${prof.moment}).
 Brief: ${plan.captionHint.slice(0, 250)}
 Tone: modern peer, warm, premium, NOT salesy, no urgency words, NO health claims (no cure/detox/weight-loss).
 2-3 short lines + soft ending "${plan.ctaText}". Return ONLY JSON {"caption":"..."}`

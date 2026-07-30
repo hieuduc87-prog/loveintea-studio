@@ -260,6 +260,97 @@ export interface ReelTemplateDef {
   softCtas: string[];
 }
 
+// ═══ TEMPLATE UNIVERSAL — builtin TRUNG LẬP ngành hàng của ENGINE ═══════════
+// Mọi chữ ngành hàng ({ingredient}/{garnish}/{heroSubject}/{anchor}/{setting}/
+// {styleBlock}) đều là placeholder bơm từ ProductProfile — engine không biết
+// sản phẩm là gì. Đây là template MẶC ĐỊNH cho brand chưa đúc template riêng.
+
+export const UNIVERSAL_BLOCKS: ReelBlock[] = [
+  {
+    id: 'MACRO_HOOK', start: 0, end: 1.2, kind: 'ai',
+    concept: 'extreme close-up macro of {ingredient}, visible texture and gentle motion, tactile and premium',
+    camera: 'slow push-in macro',
+    sfx: 'soft tactile close-up texture sound, gentle fingertip touch, close ASMR',
+    transitionOut: 'hard',
+    edit: 'Transform into an extreme close-up macro of {ingredient} in the same setting with the same soft light; the {anchor} is out of frame. Keep the exact same color mood, surfaces and lighting.',
+  },
+  {
+    id: 'DETAIL_ACTION', start: 1.2, end: 2.6, kind: 'ai', hasGlass: true,
+    edit: 'Keep the EXACT same {anchor}, same setting and same lighting. Add hands naturally interacting with the {anchor} — adjusting, placing or presenting it. Do not change its shape, material, colors or position.',
+    concept: 'hands naturally interacting with the {anchor}, quick real action, tactile texture',
+    camera: 'locked static close shot',
+    sfx: 'soft natural handling sounds of the product, delicate ASMR',
+    transitionOut: 'hard',
+  },
+  {
+    id: 'PRODUCT_REVEAL', start: 2.6, end: 4.0, kind: 'ai', hasGlass: true,
+    edit: 'Keep the EXACT same {anchor} in the same setting with the same lighting. Reveal it fully in frame, naturally placed, hero angle. Do not change its shape, material, colors or position.',
+    concept: 'the {anchor} revealed fully in frame in its natural setting, premium reveal moment',
+    camera: 'slow tilt up reveal',
+    sfx: 'soft fabric or object settle with a gentle room ambience',
+    transitionOut: 'match',
+  },
+  {
+    id: 'TEXTURE_LIFT', start: 4.0, end: 5.2, kind: 'ai',
+    concept: 'a small accent detail of {garnish} beside the product world, bright fresh feel, tiny natural motion',
+    camera: 'locked static macro',
+    sfx: 'light delicate accent sound, tiny natural movement',
+    transitionOut: 'hard',
+    edit: 'Transform into a macro of {garnish} in the same setting, same light; the {anchor} is out of frame. Keep the exact same color mood and lighting.',
+  },
+  {
+    // HERO_BEAUTY không có edit — dùng THẲNG ảnh hero (chính là hero shot)
+    id: 'HERO_BEAUTY', start: 5.2, end: 6.8, kind: 'ai', hasGlass: true,
+    concept: '{heroSubject}, natural true colors, premium beauty shot',
+    camera: 'very slow orbital arc',
+    sfx: 'quiet premium ambience, soft subtle detail sounds',
+    transitionOut: 'xfade',
+  },
+  {
+    id: 'USE_PAYOFF', start: 6.8, end: 8.8, kind: 'ai', hasGlass: true,
+    edit: 'Keep the EXACT same {anchor} in the same setting and lighting. Add a person naturally using, wearing or enjoying it — relaxed premium moment. Do not change the {anchor} itself.',
+    concept: 'a person naturally using or enjoying the {anchor}, relaxed premium lifestyle moment',
+    camera: 'locked static medium shot',
+    sfx: 'soft natural movement and quiet warm room ambience',
+    transitionOut: 'xfade',
+  },
+  {
+    id: 'PRODUCT_CTA', start: 8.8, end: 10.0, kind: 'endcard',
+    concept: 'end card: approved packshot + logo + soft CTA (composite — KHÔNG AI generate)',
+    camera: 'static, zoom 1.0→1.04',
+    sfx: 'single soft warm chime, gentle logo resolve',
+    transitionOut: 'hard',
+  },
+];
+
+/** Negative TRUNG LẬP — chỉ cấm lỗi AI + chữ/logo, không mang ngành hàng nào. */
+export const UNIVERSAL_NEGATIVE_PROMPT =
+  'no text, no letters, no words, no watermark, no logo, no subtitles, no captions, ' +
+  'no readable packaging, no neon colors, no oversaturation, no glitch, no flicker, ' +
+  'no distorted hands, no extra fingers, no warped or melted objects, ' +
+  'no impossible physics, no effects without a visible cause, no floating objects';
+
+export const PRODUCT_UNIVERSAL_TEMPLATE: ReelTemplateDef = {
+  id: 'product_universal_v01',
+  name: 'Universal Product Reel 10s',
+  description: 'Sensory reel 10s trung lập ngành hàng: macro chất liệu → tương tác → reveal → hero beauty → khoảnh khắc sử dụng → CTA. Mọi chi tiết sản phẩm bơm từ product profile.',
+  totalS: REEL_TOTAL_S,
+  blocks: UNIVERSAL_BLOCKS,
+  videoTypeOrders: {
+    product: ['MACRO_HOOK', 'DETAIL_ACTION', 'PRODUCT_REVEAL', 'HERO_BEAUTY', 'USE_PAYOFF', 'PRODUCT_CTA'],
+    branding: ['MACRO_HOOK', 'PRODUCT_REVEAL', 'TEXTURE_LIFT', 'HERO_BEAUTY', 'USE_PAYOFF', 'PRODUCT_CTA'],
+    educate: ['MACRO_HOOK', 'DETAIL_ACTION', 'PRODUCT_REVEAL', 'TEXTURE_LIFT', 'HERO_BEAUTY', 'PRODUCT_CTA'],
+    sale: ['PRODUCT_REVEAL', 'HERO_BEAUTY', 'USE_PAYOFF', 'PRODUCT_CTA'],
+    iced_summer: ['MACRO_HOOK', 'DETAIL_ACTION', 'PRODUCT_REVEAL', 'TEXTURE_LIFT', 'HERO_BEAUTY', 'USE_PAYOFF', 'PRODUCT_CTA'],
+  },
+  heroConcept: 'a premium beauty shot of {heroSubject}, natural true colors, tactile realistic textures',
+  sceneCanvas: '{setting}',
+  gradeVf: 'eq=contrast=0.98:saturation=0.97:brightness=0.005,unsharp=5:5:0.3:5:5:0.0,noise=alls=3:allf=t',
+  negativePrompt: UNIVERSAL_NEGATIVE_PROMPT,
+  qualityBlock: '{styleBlock}',
+  softCtas: ['See it up close', 'Made for everyday moments', 'Find yours — link in bio', 'Link in bio'],
+};
+
 export const ICED_SUMMER_TEMPLATE: ReelTemplateDef = {
   id: REEL_TEMPLATE_ID,
   name: 'Iced Summer Sensory Reel 10s',
@@ -276,9 +367,17 @@ export const ICED_SUMMER_TEMPLATE: ReelTemplateDef = {
   softCtas: SOFT_CTAS,
 };
 
-/** Registry template trong repo (versioned). Template custom per-brand đọc thêm
- *  từ BRAND_LIBRARY/TEMPLATES/reel_*.json trong getReelTemplate (brand-library.ts
- *  cung cấp IO — tránh import vòng). */
+/** Registry BUILTIN của ENGINE — CHỈ chứa template trung lập ngành hàng.
+ *  Template custom per-brand đọc thêm từ BRAND_LIBRARY/TEMPLATES/reel_*.json
+ *  trong getReelTemplate (brand-library.ts cung cấp IO — tránh import vòng). */
 export const REEL_TEMPLATES: Record<string, ReelTemplateDef> = {
-  [ICED_SUMMER_TEMPLATE.id]: ICED_SUMMER_TEMPLATE,
+  [PRODUCT_UNIVERSAL_TEMPLATE.id]: PRODUCT_UNIVERSAL_TEMPLATE,
+};
+
+/** Template do NHÂN VIÊN TỪNG BRAND đúc — DATA của brand đó, KHÔNG phải engine.
+ *  Iced Summer là template của team LoveinTea (đề bài 5 phiếu A-E, Hà Phương
+ *  22/07) — chỉ brand loveintea thấy và dùng được; brand khác tự đúc template
+ *  của mình (JSON trong BRAND_LIBRARY/TEMPLATES) hoặc dùng universal. */
+export const BRAND_SEED_TEMPLATES: Record<string, ReelTemplateDef[]> = {
+  loveintea: [ICED_SUMMER_TEMPLATE],
 };

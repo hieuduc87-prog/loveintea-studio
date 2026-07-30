@@ -30,7 +30,7 @@ export function ReelFactoryView({ brandId }: { brandId: string }) {
   const [msg, setMsg] = useState('');
 
   // Khởi tạo video
-  const [templateId, setTemplateId] = useState('iced_summer_v01');
+  const [templateId, setTemplateId] = useState('');
   const [productId, setProductId] = useState('');
   const [prompt, setPrompt] = useState('');
   const [versions, setVersions] = useState(1);
@@ -54,6 +54,11 @@ export function ReelFactoryView({ brandId }: { brandId: string }) {
     } catch { /* */ }
   }, [brandId]);
   useEffect(() => { load(); }, [load]);
+  // Template mặc định = template đầu tiên của brand (server đã xếp template riêng trước universal)
+  useEffect(() => {
+    if (templates.length && !templates.some(t => t.id === templateId)) setTemplateId(templates[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates]);
 
   // Poll khi có video đang chạy
   useEffect(() => {

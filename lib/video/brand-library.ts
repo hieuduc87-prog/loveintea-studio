@@ -84,22 +84,33 @@ export function resolveFonts(brandId: string): { headline: string | null; sub: s
 }
 
 // ── Template registry (repo + custom per-brand) ────────────────────────
-import { REEL_TEMPLATES, ReelTemplateDef } from './reel-template';
+import { REEL_TEMPLATES, BRAND_SEED_TEMPLATES, ReelTemplateDef } from './reel-template';
 
-/** Template theo id: repo registry trước, rồi BRAND_LIBRARY/TEMPLATES/reel_<id>.json
- *  (template đúc từ brief). Không thấy → default iced_summer_v01. */
+/** Tách tầng (LIT-REEL-0731): ENGINE chỉ sở hữu template TRUNG LẬP (REEL_TEMPLATES);
+ *  template ngành hàng do nhân viên đúc là DATA của TỪNG brand (seed trong
+ *  BRAND_SEED_TEMPLATES hoặc JSON trong BRAND_LIBRARY/TEMPLATES) — brand khác
+ *  không thấy, không dùng được. Không truyền id → template riêng đầu tiên của
+ *  brand, hết thì universal. */
 export function getReelTemplate(brandId: string, templateId?: string): ReelTemplateDef {
-  const id = templateId || 'iced_summer_v01';
-  if (REEL_TEMPLATES[id]) return REEL_TEMPLATES[id];
-  const custom = readLibJson<ReelTemplateDef>(brandId, `TEMPLATES/reel_${id}.json`);
-  if (custom?.blocks?.length) return custom;
-  return REEL_TEMPLATES['iced_summer_v01'];
+  const seeds = BRAND_SEED_TEMPLATES[brandId] || [];
+  if (templateId) {
+    const custom = readLibJson<ReelTemplateDef>(brandId, `TEMPLATES/reel_${templateId}.json`);
+    if (custom?.blocks?.length) return custom;
+    const seed = seeds.find(t => t.id === templateId);
+    if (seed) return seed;
+    if (REEL_TEMPLATES[templateId]) return REEL_TEMPLATES[templateId];
+    // id lạ / template của brand khác → KHÔNG lộ, rơi về mặc định của brand này
+  }
+  return seeds[0] || REEL_TEMPLATES['product_universal_v01'];
 }
 
 /** Danh sách template khả dụng của brand (repo + custom) — cho UI + brief matcher. */
 export function listReelTemplates(brandId: string): Array<{ id: string; name: string; description: string; source: 'builtin' | 'custom' }> {
-  const out: Array<{ id: string; name: string; description: string; source: 'builtin' | 'custom' }> =
-    Object.values(REEL_TEMPLATES).map(t => ({ id: t.id, name: t.name, description: t.description, source: 'builtin' as const }));
+  // Template riêng của brand đứng TRƯỚC universal (là mặc định của brand đó).
+  const out: Array<{ id: string; name: string; description: string; source: 'builtin' | 'custom' }> = [
+    ...(BRAND_SEED_TEMPLATES[brandId] || []).map(t => ({ id: t.id, name: t.name, description: t.description, source: 'custom' as const })),
+    ...Object.values(REEL_TEMPLATES).map(t => ({ id: t.id, name: t.name, description: t.description, source: 'builtin' as const })),
+  ];
   try {
     const dir = path.join(brandLibRoot(brandId), 'TEMPLATES');
     for (const f of fs.readdirSync(dir)) {
@@ -130,11 +141,13 @@ export function libraryChecklist(brandId: string, skuCodes: string[], productSlu
     const p = resolvePackshot(brandId, sku, productSlugs[sku] || '');
     items.push({ key: `pack_${sku}`, label: `Packshot ${sku}`, ok: Boolean(p), detail: p ? path.basename(p) : `Nộp PACKSHOTS/${sku}/<file>.png` });
   }
-  const refs = referencesRoot(brandId, 'iced_summer_v01');
+  // Reference/motion theo template MẶC ĐỊNH của brand (không hardcode template của store nào)
+  const defaultTplId = getReelTemplate(brandId).id;
+  const refs = referencesRoot(brandId, defaultTplId);
   let refCount = 0;
   try { refCount = fs.readdirSync(refs).filter(f => f.endsWith('.mp4')).length; } catch { /* */ }
   items.push({ key: 'references', label: 'Video mẫu reference', ok: refCount >= 3, detail: `${refCount} clip (cần ≥3)` });
-  const motion = readLibJson(brandId, 'MOTION/iced_summer_motion_dictionary.json');
+  const motion = readLibJson(brandId, `MOTION/${defaultTplId.replace(/_v\d+$/, '')}_motion_dictionary.json`);
   items.push({ key: 'motion_dict', label: 'Motion dictionary', ok: Boolean(motion), detail: motion ? 'đã phân tích' : 'Bấm "Phân tích video mẫu" 1 lần' });
   return { ok: items.every(i => i.ok), items };
 }

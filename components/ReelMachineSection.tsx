@@ -33,13 +33,13 @@ const TYPE_LABELS: Record<string, string> = {
 export function ReelMachineSection({ brandId }: { brandId: string }) {
   const [meta, setMeta] = useState<ReelMeta | null>(null);
   const [productId, setProductId] = useState('');
-  const [sku, setSku] = useState('HIB');
+  const [sku, setSku] = useState('');
   const [brief, setBrief] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [composing, setComposing] = useState(false);
   const [matching, setMatching] = useState(false);
   const [matchNote, setMatchNote] = useState('');
-  const [videoType, setVideoType] = useState('iced_summer');
+  const [videoType, setVideoType] = useState('');
   const [prompt, setPrompt] = useState('');
   const [versions, setVersions] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -54,6 +54,13 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
     } catch { /* */ }
   }, [brandId]);
   useEffect(() => { load(); }, [load]);
+  // Loại video + SKU mặc định lấy từ meta của brand — không hardcode giá trị của store nào
+  useEffect(() => {
+    if (!meta) return;
+    if (meta.videoTypes?.length && !meta.videoTypes.includes(videoType)) setVideoType(meta.videoTypes[0]);
+    if (meta.skus?.length && !sku) setSku(meta.skus[0].code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta]);
 
   async function run() {
     if (!prompt.trim()) { setMsg('❌ Nhập prompt mô tả video muốn có (bắt buộc theo đề bài).'); return; }
@@ -178,7 +185,7 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
         <select value={templateId} onChange={e => setTemplateId(e.target.value)}
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
           {meta!.templates.map(t => (
-            <option key={t.id} value={t.id === 'iced_summer_v01' ? '' : t.id}>
+            <option key={t.id} value={t.id}>
               {t.source === 'custom' ? '🧬 ' : '📐 '}{t.name}
             </option>
           ))}
@@ -193,15 +200,19 @@ export function ReelMachineSection({ brandId }: { brandId: string }) {
             {meta.products.map(p => <option key={p.id} value={p.id}>{p.name}{p.hasImage ? '' : ' (chưa có ảnh)'}</option>)}
           </select>
         ) : (
+        meta?.skus?.length ? (
         <select value={sku} onChange={e => setSku(e.target.value)}
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
-          {(meta?.skus ?? [{ code: 'HIB', name: 'Hibiscus', moment: '' }]).map(s =>
+          {meta.skus.map(s =>
             <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
         </select>
+        ) : (
+        <div className="bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-500">Chưa có sản phẩm — thêm ở tab Products</div>
+        )
         )}
         <select value={videoType} onChange={e => setVideoType(e.target.value)}
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white">
-          {(meta?.videoTypes ?? ['iced_summer']).map(t =>
+          {(meta?.videoTypes ?? []).map(t =>
             <option key={t} value={t}>{TYPE_LABELS[t] ?? t}</option>)}
         </select>
         <select value={versions} onChange={e => setVersions(Number(e.target.value))}

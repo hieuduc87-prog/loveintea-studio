@@ -4,14 +4,14 @@
  *
  * Luật đề bài: reference CHỈ dạy motion grammar (scene_type, shot_duration,
  * camera, motion, sound_cue, transition) — motion dictionary KHÔNG lưu mô tả
- * bố cục/nhận diện riêng của đối thủ. Prompt scene phải là LoveinTea mới 100%.
+ * bố cục/nhận diện riêng của đối thủ. Prompt scene phải là 100% của brand đang chạy.
  */
 import fs from 'fs';
 import path from 'path';
 import { generateJSON } from '../gemini';
 import { analyzeReferenceVideo, ReferenceAnalysis } from './analyze-reference';
 import { referencesRoot, readLibJson, writeLibJson, ensureBrandLibrary } from './brand-library';
-import { SKUS, SOFT_CTAS, FORBIDDEN_CLAIMS, REEL_TEMPLATE_ID, SAFE, PHYSICS_BLOCK } from './reel-template';
+import { SKUS, SOFT_CTAS, FORBIDDEN_CLAIMS, SAFE, PHYSICS_BLOCK } from './reel-template';
 import { getProductProfile, ProductProfile } from './product-profile';
 import { learnedRulesBlock } from './learned-rules';
 import { getReelTemplate } from './brand-library';
@@ -51,9 +51,11 @@ export interface ReelPlan {
 }
 
 /** M0 — quét folder reference, phân tích từng clip, đúc motion dictionary. */
-export async function analyzeReferenceLibrary(brandId: string, templateKey = REEL_TEMPLATE_ID, log?: (m: string) => void): Promise<{ clips: number; dictionary: unknown }> {
+export async function analyzeReferenceLibrary(brandId: string, templateKey?: string, log?: (m: string) => void): Promise<{ clips: number; dictionary: unknown }> {
   ensureBrandLibrary(brandId);
-  const dir = referencesRoot(brandId, templateKey);
+  // Không truyền template → template mặc định của brand (không hardcode template store nào)
+  const tplKey = templateKey || getReelTemplate(brandId).id;
+  const dir = referencesRoot(brandId, tplKey);
   const files = (fs.existsSync(dir) ? fs.readdirSync(dir) : []).filter(f => f.endsWith('.mp4')).sort();
   if (files.length < 3) throw new Error(`Cần ≥3 video mẫu trong ${dir} (hiện có ${files.length})`);
 
@@ -70,24 +72,31 @@ export async function analyzeReferenceLibrary(brandId: string, templateKey = REE
   // Đúc grammar — chỉ giữ pattern trừu tượng, lọc bỏ chi tiết nhận diện đối thủ
   log?.('Đúc motion dictionary…');
   const dictionary = await generateJSON<Record<string, unknown>>(
-    `You are compiling a MOTION DICTIONARY for a beverage brand's vertical reel template from ${analyses.length} competitor reference analyses.
-STRICT RULES: keep ONLY abstract motion grammar (scene types, shot durations, camera moves, motion direction, cut rhythm, ASMR sound cues, transitions). DO NOT keep any brand-identifying details: no specific ingredients, no colors of their drink, no text they used, no logos, no distinctive composition descriptions.
-Return ONLY JSON: {"avg_shot_s":<num>,"cut_rhythm":"...","scene_grammar":[{"type":"macro_ingredient|ice_impact|ingredient_action|pour|garnish|drink_beauty|ritual|other","typical_duration_s":<num>,"camera":"...","motion":"...","sound_cue":"..."}],"transition_stats":{"hard":0.7,"match":0.2,"fade":0.1},"asmr_timing_notes":"..."}
+    `You are compiling a MOTION DICTIONARY for a brand's vertical reel template from ${analyses.length} competitor reference analyses.
+STRICT RULES: keep ONLY abstract motion grammar (scene types, shot durations, camera moves, motion direction, cut rhythm, ASMR sound cues, transitions). DO NOT keep any brand-identifying details: no specific ingredients/materials, no colors of their product, no text they used, no logos, no distinctive composition descriptions.
+Return ONLY JSON: {"avg_shot_s":<num>,"cut_rhythm":"...","scene_grammar":[{"type":"macro_detail|impact|detail_action|transform|accent|hero_beauty|human_moment|other","typical_duration_s":<num>,"camera":"...","motion":"...","sound_cue":"..."}],"transition_stats":{"hard":0.7,"match":0.2,"fade":0.1},"asmr_timing_notes":"..."}
 Reference analyses: ${JSON.stringify(analyses.map(a => a.analysis)).slice(0, 24000)}`
   );
-  writeLibJson(brandId, `MOTION/${templateKey.replace(/_v\d+$/, '')}_motion_dictionary.json`, dictionary);
+  writeLibJson(brandId, `MOTION/${tplKey.replace(/_v\d+$/, '')}_motion_dictionary.json`, dictionary);
   return { clips: analyses.length, dictionary };
 }
 
-function loadMotionDictionary(brandId: string, templateKey = REEL_TEMPLATE_ID): Record<string, unknown> | null {
+function loadMotionDictionary(brandId: string, templateKey: string): Record<string, unknown> | null {
   return readLibJson<Record<string, unknown>>(brandId, `MOTION/${templateKey.replace(/_v\d+$/, '')}_motion_dictionary.json`);
 }
 
-function fillConcept(tpl: string, prof: Pick<ProductProfile, 'ingredient' | 'garnish' | 'liquidColor'>): string {
+/** Đổ MỌI placeholder profile vào text template — engine không biết ngành hàng,
+ *  chỉ biết thay chỗ trống. Template thiếu placeholder nào thì bỏ qua chỗ đó. */
+function fillConcept(tpl: string, prof: ProductProfile): string {
   return tpl
     .replaceAll('{ingredient}', prof.ingredient)
     .replaceAll('{garnish}', prof.garnish)
-    .replaceAll('{liquidColor}', prof.liquidColor);
+    .replaceAll('{liquidColor}', prof.liquidColor || 'natural')
+    .replaceAll('{heroSubject}', prof.heroSubject)
+    .replaceAll('{anchor}', prof.anchorNoun || prof.productName)
+    .replaceAll('{setting}', prof.setting || 'a clean bright surface with soft natural daylight')
+    .replaceAll('{styleBlock}', prof.styleBlock || 'premium product commercial, natural bright daylight, macro detail photography, 35mm shallow depth of field, tactile realistic textures, 4K sharp clarity, stable picture, no flickering')
+    .replaceAll('{productName}', prof.productName);
 }
 
 interface UserElement { element: string; scene: string; inDrink?: boolean }
@@ -103,7 +112,7 @@ async function extractUserElements(userPrompt: string, sceneIds: string[]): Prom
 Scene ids available: ${sceneIds.join(', ')}.
 PHYSICALLY-GROUNDED RULE: describe every ACTION with its tool and contact point stated explicitly — e.g. 'a wooden spoon inserted INTO the glass, bowl submerged, gently muddling strawberry slices, liquid swirling around it' (NOT just 'muddling strawberries'). The cause must be visibly connected to its effect.
 Also list PROHIBITIONS the user states (e.g. 'no bare hands touching the drink — use the spoon') in "constraints" as short English imperative sentences.
-Return ONLY JSON {"elements":[{"element":"physically-grounded English phrase; any bag/prop plain and unmarked, no printed text","scene":"<single best scene id>","inDrink":<true if it ends up inside/on the finished drink>}],"constraints":["..."]} — max 4 elements, max 3 constraints, [] if none.`
+Return ONLY JSON {"elements":[{"element":"physically-grounded English phrase; any bag/prop plain and unmarked, no printed text","scene":"<single best scene id>","inDrink":<true if it ends up inside/on the finished hero product (e.g. in the drink, on the worn product)>}],"constraints":["..."]} — max 4 elements, max 3 constraints, [] if none.`
     );
     return {
       elements: (r.elements || [])
@@ -138,6 +147,7 @@ export async function buildReelPlan(opts: {
     if (!legacy) throw new Error(`Cần productId hoặc SKU hợp lệ (${Object.keys(SKUS).join('/')})`);
     profile = {
       productId: `prod-${legacy.productSlug}`, productName: legacy.name, productSlug: legacy.productSlug,
+      category: 'beverage', isBeverage: true, anchorNoun: 'tall clear glass',
       ingredient: legacy.ingredient, garnish: legacy.garnish, liquidColor: legacy.liquidColor,
       moment: legacy.moment, heroSubject: `${legacy.liquidColor} herbal tea`,
     };
@@ -145,7 +155,7 @@ export async function buildReelPlan(opts: {
   const skuCode = Object.values(SKUS).find(s => s.productSlug === profile.productSlug)?.code
     || profile.productSlug.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 4) || 'PROD';
   const order = T.videoTypeOrders[opts.videoType] || Object.values(T.videoTypeOrders)[0] || T.blocks.map(b => b.id);
-  const motionDict = loadMotionDictionary(opts.brandId);
+  const motionDict = loadMotionDictionary(opts.brandId, T.id);
   const vIdx = opts.versionIndex ?? 0;
 
   // Khung block theo order của loại video, timeline scale lại về tổng T.totalS giữ tỉ lệ
@@ -168,12 +178,12 @@ export async function buildReelPlan(opts: {
   try {
     const aiBlocks = blocks.filter(b => b.kind === 'ai');
     const r = await generateJSON<{ scenes: Record<string, string>; extras?: Record<string, string>; overlays: Array<{ blockId: string; text: string; role: string }>; cta: string }>(
-      `You are the scene director for a 10s premium vertical reel for the beverage product "${profile.productName}".
+      `You are the scene director for a 10s premium vertical reel for the product "${profile.productName}"${profile.category ? ` (category: ${profile.category})` : ''}.
 User's creative brief (Vietnamese possible): "${opts.userPrompt.slice(0, 500)}"
 Video type: ${opts.videoType}. Version index: ${vIdx} (vary wording slightly per version).
 Motion grammar learned from references (abstract only): ${JSON.stringify(motionDict ?? {}).slice(0, 3000)}
 
-For each scene id, refine the base concept into ONE vivid English sentence (subject + ONE action) staying 100% true to THIS product: ingredient = ${profile.ingredient}; garnish = ${profile.garnish}; liquid color = ${profile.liquidColor}. NEVER mention any text, logo, brand names, or competitor elements. NEVER change camera or timing.
+For each scene id, refine the base concept into ONE vivid English sentence (subject + ONE action) staying 100% true to THIS product: macro/texture subject = ${profile.ingredient}; accent detail = ${profile.garnish};${profile.isBeverage !== false && profile.liquidColor ? ` liquid color = ${profile.liquidColor};` : ''} hero = ${profile.heroSubject}. Stay inside THIS product's industry — never borrow scenes, props or vessels from another industry. NEVER mention any text, logo, brand names, or competitor elements. NEVER change camera or timing.
 CRITICAL — USER-REQUESTED ELEMENTS: if the user's brief EXPLICITLY requests specific visual elements or recipe steps (e.g. a pyramid tea bag steeping, sliced strawberries, honey drizzle, muddling with a wooden spoon), you MUST include them: assign EACH requested element to the SINGLE most fitting scene id via "extras" (max 3 entries), one short English sentence each describing the element being added to that scene. Any bag/packaging/prop must be plain and unmarked with absolutely no printed text. Do NOT invent elements the user did not ask for.
 Also propose AT MOST ${SAFE.maxTexts - 1} short text overlays (≤6 words each, sentence case, English) + 1 soft CTA (no "Buy now"/"Hurry"/urgency; no health claims like ${FORBIDDEN_CLAIMS.slice(0, 6).join(', ')}).
 Base concepts: ${JSON.stringify(Object.fromEntries(aiBlocks.map(b => [b.id, fillConcept(b.concept, profile)])))}
@@ -189,12 +199,15 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
     console.warn('[reel-director] Gemini refine failed — dùng concept template:', String(e).slice(0, 150));
   }
 
-  // Nhất quán NÓNG/LẠNH (template quyết) + cấm model tự bịa cốc ở cảnh không neo hero
-  const serveNote = T.serve === 'hot'
+  // Nhất quán NÓNG/LẠNH — chỉ có nghĩa với đồ uống (template beverage quyết)
+  const serveNote = profile.isBeverage === false ? '' : T.serve === 'hot'
     ? ' The drink is served HOT: gentle steam, warm tones, NO ice.'
     : T.serve === 'iced'
       ? ' The drink is served ICED: ice cubes, condensation, NO steam.'
       : '';
+  // Canvas + style là placeholder của template — đổ từ profile TRƯỚC khi ghép prompt
+  const canvasFilled = fillConcept(T.sceneCanvas, profile);
+  const qualityFilled = fillConcept(T.qualityBlock, profile);
   const extras: Record<string, string> = {};
   try {
     for (const [k, v] of Object.entries((refinedExtras || {}) as Record<string, string>)) {
@@ -219,10 +232,10 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
   // Canvas cho cảnh no-vessel: lột mệnh đề ly khỏi SCENE_CANVAS (canvas verbatim
   // chứa "the same tall clear glass…" đánh nhau với "No cups/glasses" — MACRO_HOOK
   // RM-HIBI-2807-5 fail 2 lần vì model vẽ ly theo canvas rồi gate bắt).
-  const canvasNoVessel = T.sceneCanvas.replace(/the same[^,]*?(glass|mug|cup|vessel|tumbler)[^,]*?on\s+(a|an|the)\s+/i, 'the same ');
+  const canvasNoVessel = canvasFilled.replace(/the same[^,]*?(glass|mug|cup|vessel|tumbler)[^,]*?on\s+(a|an|the)\s+/i, 'the same ');
   const scenes: ReelSceneSpec[] = blocks.map(b => {
     const extra = extras[b.id];
-    const canvas = (b.kind === 'ai' && !b.hasGlass) ? canvasNoVessel : T.sceneCanvas;
+    const canvas = (b.kind === 'ai' && !b.hasGlass) ? canvasNoVessel : canvasFilled;
     const concept = (refined[b.id] || fillConcept(b.concept, profile)) + (extra ? ` ${extra}` : '');
     const noVessel = b.kind === 'ai' && !b.hasGlass
       ? ' No cups, mugs, glasses or any drink vessels anywhere in this shot.'
@@ -243,10 +256,10 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
         ? fillConcept(b.edit, profile) + (extra ? ` Also add: ${extra} Keep everything else identical; any bag or prop must be plain and unmarked with no printed text.` : '')
         : undefined,
       imagePrompt: b.kind === 'ai'
-        ? adjustNeg(`${concept}.${sNote}${noVessel}${userConstraints} ${canvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}.${learnedBlock} ${T.negativePrompt}`, Boolean(extra))
+        ? adjustNeg(`${concept}.${sNote}${noVessel}${userConstraints} ${canvas}. ${qualityFilled}. ${PHYSICS_BLOCK}.${learnedBlock} ${T.negativePrompt}`, Boolean(extra))
         : '',
       prompt: b.kind === 'ai'
-        ? adjustNeg(`${motion}${userConstraints} ${canvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}.${learnedBlock} ${T.negativePrompt}`, Boolean(extra))
+        ? adjustNeg(`${motion}${userConstraints} ${canvas}. ${qualityFilled}. ${PHYSICS_BLOCK}.${learnedBlock} ${T.negativePrompt}`, Boolean(extra))
         : '',
       sfxPrompt: b.sfx,
     };
@@ -259,7 +272,7 @@ Return ONLY JSON: {"scenes":{"<blockId>":"refined sentence"},"extras":{"<blockId
     videoType: opts.videoType,
     userPrompt: opts.userPrompt,
     scenes,
-    heroPrompt: adjustNeg(`${T.heroConcept.replaceAll('{heroSubject}', profile.heroSubject)}${heroExtra ? `, with ${heroExtra} visible in the drink` : ''}.${serveNote} ${T.sceneCanvas}. ${T.qualityBlock}. ${PHYSICS_BLOCK}.${learnedBlock} ${T.negativePrompt}`, Boolean(heroExtra)),
+    heroPrompt: adjustNeg(`${fillConcept(T.heroConcept, profile)}${heroExtra ? `, with ${heroExtra} visible` : ''}.${serveNote} ${canvasFilled}. ${qualityFilled}. ${PHYSICS_BLOCK}.${learnedBlock} ${T.negativePrompt}`, Boolean(heroExtra)),
     gradeVf: T.gradeVf,
     totalS: Math.round(cursor * 10) / 10,
     ctaText,
