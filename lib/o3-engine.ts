@@ -87,6 +87,9 @@ export function resolveProduct(brandId: string, skuId: string): ProductInfo | nu
       };
     }
   } catch { /* DB unavailable */ }
+  // L1/L4: fallback SKUS tĩnh CHỈ cho loveintea/ngữ cảnh legacy không brand.
+  // Brand khác có id trùng slug trà (vd 'hibiscus') KHÔNG được nhận sản phẩm LIT.
+  if (brandId && brandId !== 'loveintea') return null;
   const sku = SKUS.find(s => s.id === skuId);
   if (!sku) return null;
   return {
@@ -337,7 +340,7 @@ USP ANCHOR (what this post proves):
 
 NARRATIVE STRUCTURE: ${narrative.label} — write your own pattern-interrupt hook that fits THIS product and its customer (do NOT borrow hooks from other industries).`}
 
-SCENE/CONTEXT: ${context.label} — ${context.light}
+SCENE/CONTEXT: ${isLitMatrix ? `${context.label} — ${context.light}` : (sku.bestMoment || 'a natural, true-to-life moment where this product is actually used — soft natural light')}
 
 CTA: "${config.cta}"
 
@@ -346,10 +349,10 @@ ${config.extraNotes ? `EXTRA NOTES: ${config.extraNotes}` : ''}
 Write the Instagram caption following this EXACT 4-beat structure:
 1. HOOK (1 line) — pattern-interrupt using the narrative hook, mapped to segment tension
 2. BRIDGE TO USP (1-2 lines) — connect moment/benefit to product truth using claim-safe phrasing above. THIS IS THE SELLING LINE.
-3. HERITAGE VOICE (1 line) — Warmly Wise + Proudly Vietnamese, no health claims
+3. BRAND VOICE (1 line) — ${isLitMatrix ? 'Warmly Wise + Proudly Vietnamese' : 'one line that embodies the brand voice traits above'}, no health claims
 4. CTA (1 line) — the exact CTA above
 
-Then write a brief IMAGE PROMPT (2-3 sentences) describing the photo that proves the same USP. The product (${brandLabel} "${sku.productName}" packaging) must be visible. ${bevLock ? `MANDATORY: brew in ${bevLock.vessel}, ${bevLock.color} brew color, ${bevLock.cue}.` : ''} Use: ${context.label}, ${context.light}.
+Then write a brief IMAGE PROMPT (2-3 sentences) describing the photo that proves the same USP. The product (${brandLabel} "${sku.productName}" packaging) must be visible. ${bevLock ? `MANDATORY: brew in ${bevLock.vessel}, ${bevLock.color} brew color, ${bevLock.cue}.` : ''} Use: ${isLitMatrix ? `${context.label}, ${context.light}` : `the scene/context above, natural soft light`}.
 
 Return as JSON: { "caption": "...", "imagePrompt": "..." }`;
 
@@ -392,11 +395,11 @@ export function buildImageEditPrompt(opts: {
   const context = CONTEXTS.find(c => c.id === opts.contextId);
   const usp     = USP_ANCHORS.find(u => u.id === opts.uspId);
 
-  if (!sku || !context || !usp) throw new Error('Invalid image prompt config');
-
-  // Khoá đồ uống + chi tiết túi trà/tag trắng + USP tĩnh là danh tính loveintea —
-  // gate theo brand; brand khác dùng USP suy từ chính sản phẩm (L4).
+  // Khoá đồ uống + chi tiết túi trà/tag trắng + USP/CONTEXT tĩnh là danh tính
+  // loveintea — gate theo brand; brand khác dùng USP/scene suy từ chính sản phẩm (L4),
+  // nên uspId/contextId với brand khác là TÙY CHỌN.
   const isLitMatrix = !brandId || brandId === 'loveintea';
+  if (!sku || (isLitMatrix && (!context || !usp))) throw new Error('Invalid image prompt config');
   const bev = isLitMatrix
     ? (SKU_BEVERAGE_LOCK[sku.id] || SKU_BEVERAGE_LOCK[opts.skuId])
     : undefined;
@@ -413,14 +416,14 @@ export function buildImageEditPrompt(opts: {
 
   return `Editorial lifestyle photo for ${brandLabel} — "${sku.productName}"${sku.pitch ? ` (${sku.pitch})` : ''}.
 
-SCENE: ${context.label}. ${context.light}.
+SCENE: ${context ? `${context.label}. ${context.light}.` : `${sku.bestMoment || 'A natural lifestyle moment where this product is actually used'}. Soft natural daylight.`}
 
 THE PRODUCT (keep perfectly intact — DO NOT alter label, logo, or text on packaging):
 The ${brandLabel} "${sku.name}" product packaging${sku.color ? ` (${sku.color} color)` : ''} should appear naturally in the scene — placed on a surface, partially in frame, or held. Reproduce the packaging design, printed text and logo exactly as in the reference image.
 ${bevInstructions}
 
-IMAGE MUST PROVE THIS USP: ${isLitMatrix ? usp.label : (sku.theme || sku.pitch || sku.name)}
-Required visual element: ${isLitMatrix ? usp.imageRule : "the real product with its key differentiating detail clearly visible — never props from another industry"}
+IMAGE MUST PROVE THIS USP: ${isLitMatrix ? usp!.label : (sku.theme || sku.pitch || sku.name)}
+Required visual element: ${isLitMatrix ? usp!.imageRule : "the real product with its key differentiating detail clearly visible — never props from another industry"}
 
 VISUAL STYLE:
 ${paletteLine}
@@ -578,7 +581,7 @@ ${briefLitMatrix
   : `- Segment: the brand's core customer (infer from brand strategy; never assume another industry's customer)
 - RTB: ${sku?.pitch || sku?.theme || 'state concretely why this product is worth buying'}
 - USP: ${sku?.theme || sku?.name || config.skuId}`}
-- Context: ${context?.label ?? config.contextId}
+- Context: ${briefLitMatrix ? (context?.label ?? config.contextId) : (sku?.bestMoment || context?.label || 'a natural moment where this product is used')}
 
 Generate 1 brief with EXACTLY:
 - 1 purpose (the single goal of this tile)

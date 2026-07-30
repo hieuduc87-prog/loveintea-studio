@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { SKUS, USP_ANCHORS, CONTEXTS } from '@/lib/brand-dna';
+import { useBrandProducts } from './useBrandProducts';
 
 interface GeneratedImage {
   jobId: string;
@@ -25,17 +26,20 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
   const [addingText, setAddingText] = useState(false);
   const [overlaidUrl, setOverlaidUrl] = useState<string | null>(null);
 
-  const selectedSku = SKUS.find(s => s.id === skuId);
+  // Ma trận USP/Scene tĩnh là danh tính loveintea (L4) — brand khác chỉ chọn
+  // sản phẩm (từ DB), server tự suy USP/scene từ chính sản phẩm.
+  const isLit = !brandId || brandId === 'loveintea';
+  const products = useBrandProducts(brandId);
 
   async function generate() {
-    if (!skuId || !uspId || !contextId) {
-      setError('Select SKU, USP Anchor, and Scene first');
+    if (!skuId || (isLit && (!uspId || !contextId))) {
+      setError(isLit ? 'Select SKU, USP Anchor, and Scene first' : 'Chọn sản phẩm trước');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const r = await fetch('/api/content/image', {
+      const r = await fetch(`/api/content/image${brandId ? `?brand=${encodeURIComponent(brandId)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skuId, uspId, contextId, customPrompt, useEdit }),
@@ -110,7 +114,7 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
             <div className="mb-3">
               <label className="block text-xs font-medium text-gray-400 mb-1">SKU</label>
               <div className="grid grid-cols-1 gap-2">
-                {SKUS.map(sku => (
+                {isLit ? SKUS.map(sku => (
                   <button
                     key={sku.id}
                     onClick={() => setSkuId(sku.id)}
@@ -124,11 +128,24 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
                     <span className="text-xs text-white">{sku.name}</span>
                     <span className="ml-auto w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: sku.color }} />
                   </button>
+                )) : products.length === 0 ? (
+                  <p className="text-xs text-gray-500 bg-gray-800/50 rounded-lg p-2">Chưa có sản phẩm — thêm ở tab Products trước.</p>
+                ) : products.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSkuId(p.id)}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-colors ${
+                      skuId === p.id ? 'border-brand-500 bg-brand-600/10' : 'border-gray-700 hover:border-gray-600'
+                    }`}
+                  >
+                    <span className="text-xs text-white">{p.name}</span>
+                  </button>
                 ))}
               </div>
             </div>
 
-            {/* USP */}
+            {/* USP — ma trận tĩnh riêng loveintea */}
+            {isLit && (
             <div className="mb-3">
               <label className="block text-xs font-medium text-gray-400 mb-1">USP Anchor</label>
               <div className="space-y-1">
@@ -145,8 +162,10 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
                 ))}
               </div>
             </div>
+            )}
 
-            {/* Context */}
+            {/* Context — ma trận tĩnh riêng loveintea */}
+            {isLit && (
             <div className="mb-3">
               <label className="block text-xs font-medium text-gray-400 mb-1">Scene / Context</label>
               <div className="space-y-1">
@@ -164,6 +183,7 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
                 ))}
               </div>
             </div>
+            )}
 
             <div className="mb-4">
               <label className="block text-xs font-medium text-gray-400 mb-1">Extra prompt notes (optional)</label>

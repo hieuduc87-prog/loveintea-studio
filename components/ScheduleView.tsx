@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
-import { SKUS } from '@/lib/brand-dna';
+import { useBrandProducts } from './useBrandProducts';
 
 interface Post {
   id: string; sku_id: string; caption: string; image_url?: string;
@@ -69,16 +69,18 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    const bq = brandId ? `?brand=${encodeURIComponent(brandId)}` : '';
     const [rPosts, rPlans] = await Promise.all([
-      fetch('/api/posts'),
-      fetch('/api/plans'),
+      fetch(`/api/posts${bq}`),
+      fetch(`/api/plans${bq}`),
     ]);
     const dPosts = await rPosts.json();
     const dPlans = await rPlans.json();
     setPosts(dPosts.posts ?? []);
     setPlans(dPlans.plans ?? []);
     setLoading(false);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -92,7 +94,7 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
   async function saveSchedule(platforms?: string) {
     if (!selected || !editTime) return;
     setSaving(true); setSaveMsg('');
-    const r = await fetch(`/api/posts/${selected.id}`, {
+    const r = await fetch(`/api/posts/${selected.id}${brandId ? `?brand=${encodeURIComponent(brandId)}` : ''}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -112,7 +114,7 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
     if (!selected || (!toFb && !toIg)) { setPubError('Select at least one platform'); return; }
     setPublishing(true); setPubError(''); setPubResult(null);
     try {
-      const r = await fetch('/api/publish', {
+      const r = await fetch(`/api/publish${brandId ? `?brand=${encodeURIComponent(brandId)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +133,7 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
         };
         if (d?.fb?.ok && d.fb.postId) patch.fb_post_id = d.fb.postId;
         if (d?.ig?.ok && d.ig.postId) patch.ig_post_id = d.ig.postId;
-        await fetch(`/api/posts/${selected.id}`, {
+        await fetch(`/api/posts/${selected.id}${brandId ? `?brand=${encodeURIComponent(brandId)}` : ''}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),
         });
@@ -146,7 +148,7 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
     if (!selected || !editTime || (!toFb && !toIg)) { setPubError('Select platform + time'); return; }
     setPublishing(true); setPubError(''); setPubResult(null);
     try {
-      const r = await fetch('/api/publish', {
+      const r = await fetch(`/api/publish${brandId ? `?brand=${encodeURIComponent(brandId)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -183,7 +185,13 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
     return da - db;
   }));
 
-  const sku = (id: string) => SKUS.find(s => s.id === id);
+  // Nhãn/màu sản phẩm theo brand từ DB — không tra bảng SKU tĩnh của store khác.
+  const products = useBrandProducts(brandId);
+  const sku = (id: string) => {
+    const p = products.find(x => x.id === id || x.slug === id);
+    if (!p) return undefined;
+    return { name: p.name, productName: p.display_name || p.name, color: p.color?.startsWith('#') ? p.color : '#888' };
+  };
   const planName = (id: string) => plans.find(p => p.id === id)?.title;
 
   const stats = {

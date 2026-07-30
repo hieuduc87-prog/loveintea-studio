@@ -61,7 +61,9 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 
 
 
-- [session 2026-07-31] fix(debrand) L4 phần 2: gỡ nốt literal LoveinTea ngoài o3-engine — blog/learn/match prompt bơm brand từ DB (export getBrandIdentity/resolveProduct); rules seed gate loveintea (brand khác nhận bộ generic); reel end card "with <brand.name>" từ DB; flow-builder demo + guides + momo partnerName/orderInfo + 2 UI text (BlogFactory, ContentTemplates) → Easy Creative Hub/placeholder. Comment/seed/legacy fallback giữ nguyên. Test tsx 9/9 gossby sạch, check:tenant pass, build pass [LIT-FIX-0731A]
+
+- [session 2026-07-31b] fix(tenant-map) audit "sát + đồng đều": resolveProduct CHẶN fallback SKU tĩnh cho brand ≠ loveintea (id trùng 'hibiscus' → null); generateO3Content/buildImageEditPrompt/generateBrief gate nốt context/Heritage-Voice tĩnh (brand khác dùng best_moment sản phẩm, usp/context thành tùy chọn); 6 view UI (Workshop/ImageStudio/ImageLibrary/BlogFactory/Queue/Schedule) bỏ SKUS tĩnh → useBrandProducts từ DB theo brand, ma trận O3 + USP/Scene picker chỉ hiện cho loveintea, CTA lọc câu LoveinTea, mọi fetch gắn ?brand=. Test tsx 19/19 + cross-tenant 30/30 + build pass. Reel Machine vẫn là pipeline riêng đồ uống (giới hạn cấu trúc, chưa dùng cho brand khác ngành); bazan/rootin chưa có products/DNA → cần nhập liệu [LIT-FIX-0731B]
+- [session 2026-07-31] 1 commit — fix(debrand) [LIT-FIX-0731A]
 - [session 2026-07-30b] fix(o3-engine) L4: gỡ danh tính LoveinTea viết cứng trong caption/image/brief prompt — brand bơm từ brands/brand_dna, sản phẩm DB-first; ma trận O3 tĩnh gate riêng loveintea. Test tsx 12/12 [LIT-FIX-0730G]
 - [session 2026-07-30] 5 commit — docs(brief) · feat(domain)
 - [session 2026-07-29] 17+2 commit — quota theo khách (LIT-QUOTA-0729A) · backup server + dọn ổ · SEC(cost/fb) · feat(tenant)

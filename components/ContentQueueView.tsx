@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
-import { SKUS } from '@/lib/brand-dna';
+import { useBrandProducts } from './useBrandProducts';
 
 interface Post {
   id: string; sku_id: string; caption: string; image_url?: string; video_url?: string;
@@ -112,7 +112,7 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
   async function deletePost(id: string) {
     if (!confirm('Delete this post?')) return;
     setDeleting(id);
-    await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+    await fetch(`/api/posts/${id}${brandId ? `?brand=${encodeURIComponent(brandId)}` : ''}`, { method: 'DELETE' });
     setPosts(p => p.filter(x => x.id !== id));
     if (selected?.id === id) setSelected(null);
     setDeleting(null);
@@ -178,7 +178,13 @@ export function ContentQueueView({ brandId }: { brandId?: string } = {}) {
     finally { setPublishing(false); }
   }
 
-  const sku = (id: string) => SKUS.find(s => s.id === id);
+  // Nhãn/màu sản phẩm theo brand từ DB — không tra bảng SKU tĩnh của store khác.
+  const products = useBrandProducts(brandId);
+  const sku = (id: string) => {
+    const p = products.find(x => x.id === id || x.slug === id);
+    if (!p) return undefined;
+    return { name: p.name, productName: p.display_name || p.name, color: p.color?.startsWith('#') ? p.color : '#888' };
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto h-full flex flex-col">

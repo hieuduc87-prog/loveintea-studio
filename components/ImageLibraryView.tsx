@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { SKUS, USP_ANCHORS } from '@/lib/brand-dna';
+import { USP_ANCHORS } from '@/lib/brand-dna';
+import { useBrandProducts } from './useBrandProducts';
 
 interface LibImage {
   id: string;
@@ -28,7 +29,8 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
 
   // Upload
   const uploadRef = useRef<HTMLInputElement>(null);
-  const [uploadSku, setUploadSku] = useState('hibiscus');
+  // L1: không default sản phẩm của tenant nào — chọn sản phẩm đầu tiên của brand khi load.
+  const [uploadSku, setUploadSku] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
 
@@ -87,7 +89,18 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
     setTimeout(() => setCopying(''), 1500);
   }
 
-  const sku = (id: string) => SKUS.find(s => s.id === id);
+  // Nhãn sản phẩm theo brand từ DB; ma trận USP tĩnh chỉ có nghĩa với loveintea (L4).
+  const isLit = !brandId || brandId === 'loveintea';
+  const products = useBrandProducts(brandId);
+  useEffect(() => {
+    if (!uploadSku && products.length) setUploadSku(products[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
+  const sku = (id: string) => {
+    const p = products.find(x => x.id === id || x.slug === id);
+    if (!p) return undefined;
+    return { name: p.name, productName: p.display_name || p.name, color: p.color?.startsWith('#') ? p.color : '#888' };
+  };
   const usp = (id: string) => USP_ANCHORS.find(u => u.id === id);
 
   return (
@@ -103,10 +116,11 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
         >
           <option value="">All SKUs</option>
-          {SKUS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
 
-        {/* USP filter */}
+        {/* USP filter — ma trận tĩnh riêng loveintea */}
+        {isLit && (
         <select
           value={uspFilter}
           onChange={e => setUspFilter(e.target.value)}
@@ -115,6 +129,7 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
           <option value="">All USPs</option>
           {USP_ANCHORS.map(u => <option key={u.id} value={u.id}>{u.id} — {u.label}</option>)}
         </select>
+        )}
 
         {/* Fav toggle */}
         <button
@@ -133,7 +148,7 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
           {uploadMsg && <span className={`text-xs ${uploadMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{uploadMsg}</span>}
           <select value={uploadSku} onChange={e => setUploadSku(e.target.value)}
             className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none">
-            {SKUS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <input ref={uploadRef} type="file" accept="image/*" className="hidden" multiple
             onChange={e => { const files = Array.from(e.target.files ?? []); files.forEach(f => uploadFile(f)); e.target.value = ''; }} />

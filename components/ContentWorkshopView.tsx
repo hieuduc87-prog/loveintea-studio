@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { SKUS, SEGMENTS, RTBS, USP_ANCHORS, NARRATIVES, CONTEXTS, CTA_OPTIONS, FORMATS } from '@/lib/brand-dna';
+import { useBrandProducts } from './useBrandProducts';
 
 interface O3Result { caption: string; imagePrompt: string; hashtags: string; cellId: string; }
 interface LogEntry  { msg: string; status: 'loading' | 'ok' | 'error'; }
@@ -82,7 +83,15 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchChunkInfo, setBatchChunkInfo] = useState<{ chunk: number; total: number } | null>(null);
 
-  const selectedSku = SKUS.find(s => s.id === config.skuId);
+  // Ma trận O3 tĩnh (SEGMENTS/RTBS/USP/NARRATIVES/CONTEXTS) + SKUS + CTA gắn
+  // hashtag là danh tính loveintea (L4) — brand khác chọn sản phẩm từ DB, server
+  // tự suy USP/scene/hook từ chính sản phẩm; picker ma trận ẩn đi.
+  const isLit = !brandId || brandId === 'loveintea';
+  const products = useBrandProducts(brandId);
+  // Admin trên app. domain: brand phải đi kèm query — host không pin brand ở đó.
+  const bq = brandId ? `?brand=${encodeURIComponent(brandId)}` : '';
+  const ctaOptions = isLit ? [...CTA_OPTIONS] : CTA_OPTIONS.filter(c => !/LoveinTea|#TimelessRemedies/i.test(c));
+  const selectedSku = isLit ? SKUS.find(s => s.id === config.skuId) : undefined;
 
   // SKU-aware variable filtering
   const filteredSegments = config.varLayer === 'sku' && config.skuId
@@ -120,7 +129,7 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
 
   async function runSingleJob(cfg: typeof config): Promise<{ caption: string; imageUrl: string } | null> {
     // Step 1: Caption
-    const r1 = await fetch('/api/content/generate', {
+    const r1 = await fetch(`/api/content/generate${bq}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cfg),
     });
@@ -128,7 +137,7 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
     if (!r1.ok || d1.error) throw new Error(d1.error ?? 'Caption failed');
 
     // Step 2: Save to queue immediately (even before image)
-    const r3 = await fetch('/api/posts', {
+    const r3 = await fetch(`/api/posts${bq}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...cfg, ...d1, status: 'draft' }),
     });
@@ -138,7 +147,7 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
     // Step 3: Image
     let imageUrl = '';
     try {
-      const r2 = await fetch('/api/content/image', {
+      const r2 = await fetch(`/api/content/image${bq}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skuId: cfg.skuId, uspId: cfg.uspId, contextId: cfg.contextId, customPrompt: d1.imagePrompt, useEdit: true }),
       });
@@ -146,18 +155,18 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
       if (r2.ok && !d2.error && d2.imageUrl) {
         imageUrl = d2.imageUrl;
         // Update post with image
-        if (postId) await fetch(`/api/posts/${postId}`, {
+        if (postId) await fetch(`/api/posts/${postId}${bq}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image_url: imageUrl }),
         });
       } else {
-        if (postId) await fetch(`/api/posts/${postId}`, {
+        if (postId) await fetch(`/api/posts/${postId}${bq}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ notes: d2.error ?? 'Image generation failed' }),
         });
       }
     } catch (e) {
-      if (postId) await fetch(`/api/posts/${postId}`, {
+      if (postId) await fetch(`/api/posts/${postId}${bq}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notes: String(e) }),
       });
@@ -167,13 +176,13 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
   }
 
   async function generate() {
-    if (!config.skuId || !config.segmentId || !config.rtbId || !config.uspId || !config.narrativeId || !config.contextId) {
+    if (!config.skuId || (isLit && (!config.segmentId || !config.rtbId || !config.uspId || !config.narrativeId || !config.contextId))) {
       setError('Please fill all required fields'); return;
     }
     setLoading(true); setError(''); setResult(null); setGenImage(null); setLogs([]);
     addLog('⟳ Generating caption & image prompt (Gemini)…', 'loading');
     try {
-      const r = await fetch('/api/content/generate', {
+      const r = await fetch(`/api/content/generate${bq}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
@@ -185,7 +194,7 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
 
       // Save to queue immediately (before image, so it's always visible)
       addLog('⟳ Saving to Content Queue…', 'loading');
-      const r3 = await fetch('/api/posts', {
+      const r3 = await fetch(`/api/posts${bq}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...config, ...data, status: 'draft' }),
       });
@@ -196,14 +205,14 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
       // Auto-gen image
       setImgLoading(true);
       addLog('⟳ Generating image with GPT-image-2 edit…', 'loading');
-      const r2 = await fetch('/api/content/image', {
+      const r2 = await fetch(`/api/content/image${bq}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skuId: config.skuId, uspId: config.uspId, contextId: config.contextId, customPrompt: data.imagePrompt, useEdit: true }),
       });
       const d2 = await r2.json() as { imageUrl?: string; jobId?: string; durationMs?: number; error?: string };
       if (!r2.ok || d2.error) {
         // Image failed — update post with error note, still show in queue
-        if (postId) await fetch(`/api/posts/${postId}`, {
+        if (postId) await fetch(`/api/posts/${postId}${bq}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ notes: d2.error ?? 'Image generation failed' }),
         });
@@ -212,7 +221,7 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
         setGenImage({ url: d2.imageUrl!, jobId: d2.jobId!, durationMs: d2.durationMs ?? 0 });
         updateLastLog(`✓ Image ready (${Math.round((d2.durationMs ?? 0) / 1000)}s)`, 'ok');
         // Update post with image url
-        if (postId) await fetch(`/api/posts/${postId}`, {
+        if (postId) await fetch(`/api/posts/${postId}${bq}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image_url: d2.imageUrl }),
         });
@@ -221,7 +230,7 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
         if (autoPostFb && data.caption && d2.imageUrl) {
           addLog('⟳ Auto-posting to Facebook…', 'loading');
           try {
-            const rPub = await fetch('/api/publish', {
+            const rPub = await fetch(`/api/publish${bq}`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 caption: data.caption,
@@ -232,14 +241,14 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
             const dPub = await rPub.json() as { fb?: { ok: boolean; postId?: string; error?: string }; error?: string };
             if (dPub?.fb?.ok) {
               updateLastLog(`✅ Posted to Facebook (ID: ${dPub.fb.postId})`, 'ok');
-              if (postId) await fetch(`/api/posts/${postId}`, {
+              if (postId) await fetch(`/api/posts/${postId}${bq}`, {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'published', fb_post_id: dPub.fb.postId, published_at: new Date().toISOString() }),
               });
             } else {
               const errMsg = dPub?.fb?.error ?? dPub?.error ?? 'Unknown error';
               updateLastLog(`✗ FB post failed: ${errMsg}`, 'error');
-              if (postId) await fetch(`/api/posts/${postId}`, {
+              if (postId) await fetch(`/api/posts/${postId}${bq}`, {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'failed' }),
               });
@@ -282,11 +291,14 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
     setBatchError('');
     const missing: string[] = [];
     if (!batchSkus.length)       missing.push('SKU');
-    if (!batchSegments.length)   missing.push('Segment');
-    if (!batchRtbs.length)       missing.push('Reason to Buy (RTB)');
-    if (!batchUsps.length)       missing.push('USP Anchor');
-    if (!batchNarratives.length) missing.push('Narrative');
-    if (!batchContexts.length)   missing.push('Scene / Context');
+    // Ma trận chỉ bắt buộc với loveintea — brand khác server tự suy từ sản phẩm.
+    if (isLit) {
+      if (!batchSegments.length)   missing.push('Segment');
+      if (!batchRtbs.length)       missing.push('Reason to Buy (RTB)');
+      if (!batchUsps.length)       missing.push('USP Anchor');
+      if (!batchNarratives.length) missing.push('Narrative');
+      if (!batchContexts.length)   missing.push('Scene / Context');
+    }
     if (missing.length) {
       setBatchError(`Thiếu: ${missing.join(', ')}. Chọn ít nhất 1 cho mỗi trường.`);
       return;
@@ -403,7 +415,7 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">SKU</label>
                   <div className="grid grid-cols-3 sm:grid-cols-2 gap-2">
-                    {SKUS.map(sku => (
+                    {isLit ? SKUS.map(sku => (
                       <button key={sku.id} onClick={() => setConfig(c => ({ ...c, skuId: sku.id }))}
                         className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-left transition-colors ${config.skuId === sku.id ? 'border-brand-500 bg-brand-600/10' : 'border-gray-700 hover:border-gray-600'}`}>
                         <div className="w-8 h-10 rounded overflow-hidden flex-shrink-0 bg-gray-800">
@@ -412,10 +424,18 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
                         <div><p className="text-xs text-white font-medium">{sku.name}</p><p className="text-[10px] text-gray-500">{sku.bestMoment}</p></div>
                         <span className="ml-auto w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: sku.color }} />
                       </button>
+                    )) : products.length === 0 ? (
+                      <p className="text-xs text-gray-500 col-span-full bg-gray-800/50 rounded-lg p-2">Chưa có sản phẩm — thêm ở tab Products trước.</p>
+                    ) : products.map(p => (
+                      <button key={p.id} onClick={() => setConfig(c => ({ ...c, skuId: p.id }))}
+                        className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-left transition-colors ${config.skuId === p.id ? 'border-brand-500 bg-brand-600/10' : 'border-gray-700 hover:border-gray-600'}`}>
+                        <div><p className="text-xs text-white font-medium">{p.name}</p>{p.theme && <p className="text-[10px] text-gray-500">{p.theme}</p>}</div>
+                      </button>
                     ))}
                   </div>
                 </div>
-                {/* Variable Layer toggle */}
+                {/* Variable Layer toggle — chỉ có nghĩa với ma trận loveintea */}
+                {isLit && (
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">
                     Variable Layer
@@ -430,11 +450,13 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Format selector */}
                 <Select label="Content Format" value={config.formatId} onChange={v => setConfig(c => ({ ...c, formatId: v }))}
                   options={FORMATS.map(f => ({ value: f.id, label: `${f.label} (${f.size})` }))} />
 
+                {isLit && (<>
                 <Select label="Segment"
                   value={config.segmentId} onChange={v => setConfig(c => ({ ...c, segmentId: v }))}
                   options={filteredSegments.map(s => ({
@@ -449,8 +471,9 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
                   options={NARRATIVES.map(n => ({ value: n.id, label: `${n.id} — ${n.label}` }))} />
                 <Select label="Scene / Context" value={config.contextId} onChange={v => setConfig(c => ({ ...c, contextId: v }))}
                   options={CONTEXTS.map(c => ({ value: c.id, label: c.label }))} />
+                </>)}
                 <Select label="CTA" value={config.cta} onChange={v => setConfig(c => ({ ...c, cta: v }))}
-                  options={CTA_OPTIONS.map(c => ({ value: c, label: c }))} />
+                  options={ctaOptions.map(c => ({ value: c, label: c }))} />
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">Extra Notes (optional)</label>
                   <textarea value={config.extraNotes} onChange={e => setConfig(c => ({ ...c, extraNotes: e.target.value }))}
@@ -582,7 +605,10 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
               <h2 className="text-sm font-semibold text-white">Batch Generator</h2>
 
               <MultiCheck label="SKUs" selected={batchSkus} onToggle={toggle(setBatchSkus)}
-                items={SKUS.map(s => ({ id: s.id, label: s.name, color: s.color }))} />
+                items={isLit
+                  ? SKUS.map(s => ({ id: s.id, label: s.name, color: s.color }))
+                  : products.map(p => ({ id: p.id, label: p.name }))} />
+              {isLit && (<>
               <MultiCheck label="Scenes / Contexts" selected={batchContexts} onToggle={toggle(setBatchContexts)}
                 items={CONTEXTS.map(c => ({ id: c.id, label: c.label }))} />
               <MultiCheck label="USP Anchors" selected={batchUsps} onToggle={toggle(setBatchUsps)}
@@ -593,8 +619,9 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
                 items={RTBS.map(r => ({ id: r.id, label: `${r.id}: ${r.label.slice(0, 35)}…` }))} />
               <MultiCheck label="Narratives" selected={batchNarratives} onToggle={toggle(setBatchNarratives)}
                 items={NARRATIVES.map(n => ({ id: n.id, label: `${n.id} — ${n.label}` }))} />
+              </>)}
               <MultiCheck label="CTAs" selected={batchCtas} onToggle={toggle(setBatchCtas)}
-                items={CTA_OPTIONS.map(c => ({ id: c, label: c }))} />
+                items={ctaOptions.map(c => ({ id: c, label: c }))} />
 
               <div className={`rounded-lg p-3 text-xs ${batchCombinations.length > 20 ? 'bg-yellow-900/30 border border-yellow-800/50' : 'bg-gray-800/50'}`}>
                 <span className={`font-bold text-sm ${batchCombinations.length > 20 ? 'text-yellow-400' : 'text-white'}`}>{batchCombinations.length}</span>
@@ -649,7 +676,9 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
                 </div>
                 <div className="space-y-2">
                   {batchJobs.map(job => {
-                    const sku = SKUS.find(s => s.id === job.skuId);
+                    const sku = isLit
+                      ? SKUS.find(s => s.id === job.skuId)
+                      : (() => { const p = products.find(x => x.id === job.skuId); return p ? { name: p.name, color: '#888' } : undefined; })();
                     return (
                       <div key={job.id} className={`bg-gray-900 border rounded-xl p-3 flex items-center gap-3 ${
                         job.status === 'done' ? 'border-green-800/50' :

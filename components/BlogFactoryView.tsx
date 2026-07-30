@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { SKUS } from '@/lib/brand-dna';
+import { useBrandProducts } from './useBrandProducts';
 import { sanitizeBlogHtml } from '@/lib/sanitize-html';
 
 interface BlogPost {
@@ -20,6 +20,7 @@ export function BlogFactoryView({ brandId }: { brandId?: string } = {}) {
   const [posts, setPosts]     = useState<BlogPost[]>([]);
   const [selected, setSelected] = useState<{ post: BlogPost; content: string } | null>(null);
   const [error, setError]     = useState('');
+  const products = useBrandProducts(brandId);
 
   // Brand context — admin xem đúng brand đang chọn (non-admin đã bị middleware scope).
   const bq = brandId ? `?brand=${encodeURIComponent(brandId)}` : '';
@@ -84,7 +85,7 @@ export function BlogFactoryView({ brandId }: { brandId?: string } = {}) {
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
                 >
                   <option value="">All SKUs</option>
-                  {SKUS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               {error && <p className="text-red-400 text-xs">{error}</p>}
