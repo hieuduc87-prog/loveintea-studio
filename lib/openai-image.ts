@@ -90,6 +90,10 @@ export async function editProductImage(opts: {
   size?: ImageSize;
   quality?: ImageQuality;
   brandId?: string;
+  /** Ảnh tham chiếu THÊM (card 7554fa71): gpt-image-2 edit nhận NHIỀU ảnh.
+   *  Một ảnh + văn xuôi thua ngữ nghĩa bố cục (hộp bị biến thành túi trà qua 3
+   *  vòng verify-gate) — gửi ảnh bố cục + ảnh sản phẩm là cách duy nhất giữ FORM. */
+  extraImagePaths?: string[];
 }): Promise<string> {
   const { productImagePath, prompt: rawPrompt, size = '1024x1536', quality = 'medium', brandId } = opts;
   const prompt = withPhotoreal(rawPrompt, getModelLook(brandId));
@@ -98,21 +102,21 @@ export async function editProductImage(opts: {
     throw new Error(`Product image not found: ${productImagePath}`);
   }
 
-  const imageBuffer = fs.readFileSync(productImagePath);
-  // MIME đúng theo đuôi file (template slides có thể là .webp/.jpg, không phải png)
-  const ext = path.extname(productImagePath).toLowerCase();
-  const mime = ext === '.webp' ? 'image/webp'
-    : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
-    : 'image/png';
-  const imageFile = new File(
-    [imageBuffer],
-    path.basename(productImagePath),
-    { type: mime }
-  );
+  const toFile = (p: string): File => {
+    const buf = fs.readFileSync(p);
+    // MIME đúng theo đuôi file (template slides có thể là .webp/.jpg, không phải png)
+    const ext = path.extname(p).toLowerCase();
+    const mime = ext === '.webp' ? 'image/webp'
+      : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+      : 'image/png';
+    return new File([buf], path.basename(p), { type: mime });
+  };
+  const files = [productImagePath, ...(opts.extraImagePaths ?? []).filter(p => p && fs.existsSync(p))]
+    .map(toFile);
 
   const response = await withQuotaFallback(client => client.images.edit({
     model: 'gpt-image-2',
-    image: imageFile,
+    image: files.length > 1 ? files : files[0],
     prompt,
     size,
     quality,

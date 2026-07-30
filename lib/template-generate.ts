@@ -188,12 +188,17 @@ export async function generateTemplateImages(opts: {
     // đồ ăn không thể biến mất. Hàng không-tiêu-hoá: base = ảnh THẬT của sản
     // phẩm, template chỉ còn vai trò mood/màu.
     const nonConsumable = Boolean(product) && !product!.ingredients;
+    // Card 7554fa71 vòng 3: một ảnh + văn xuôi KHÔNG giữ nổi form hộp. Slide sản
+    // phẩm gửi CẢ HAI: ảnh 1 = template (bố cục), ảnh 2 = packshot (danh tính+form).
+    const productImg = refPath || packshotPath;
     const base = showProduct
-      ? (refPath || packshotPath || tplSlidePath)
+      ? ((tplSlidePath && productImg) ? tplSlidePath : (productImg || tplSlidePath))
       : (nonConsumable
-          ? (refPath || packshotPath || tplSlidePath)
-          : (tplSlidePath || refPath || packshotPath));
-    const usingProductBase = showProduct && Boolean(refPath || packshotPath);
+          ? (productImg || tplSlidePath)
+          : (tplSlidePath || productImg));
+    const extraImagePaths = showProduct && tplSlidePath && productImg ? [productImg] : [];
+    const usingProductBase = showProduct && Boolean(productImg);
+    const twoImageMode = extraImagePaths.length > 0;
 
     const prompt = [
       `Vertical 2:3 social media image, slide ${i + 1} of ${slideUrls.length} in a carousel (role: ${role}).`,
@@ -209,7 +214,9 @@ export async function generateTemplateImages(opts: {
         : '',
       meta.visual ? `Camera angle/layout/style: ${stripBrandNouns(meta.visual)}.` : '',
       showProduct
-        ? `Place the EXACT product shown in the reference image into this composition/angle. Keep its packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical to the reference — do NOT invent, redraw, translate, blur or omit any text on the packaging; the product's printed label must stay sharp and fully legible. The reference IS our product: ${product?.name ?? ''}.`
+        ? (twoImageMode
+            ? `TWO reference images are provided. IMAGE 1 = layout/composition reference only (its own product and branding must NOT appear). IMAGE 2 = OUR REAL PRODUCT — place THIS exact product into IMAGE 1's composition and camera angle. Keep IMAGE 2's packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical — do NOT invent, redraw, translate, blur or omit any text; the printed label must stay sharp and fully legible. Our product: ${product?.name ?? ''}.`
+            : `Place the EXACT product shown in the reference image into this composition/angle. Keep its packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical to the reference — do NOT invent, redraw, translate, blur or omit any text on the packaging; the product's printed label must stay sharp and fully legible. The reference IS our product: ${product?.name ?? ''}.`)
         : (product
             // Gossby 30/07: câu cũ viết cứng đạo cụ ngành trà ("loose herbs, dried
             // tea, bowls") → bài MŨ CHÓ ra bát gia vị. Luật L4: prompt không được
@@ -233,7 +240,7 @@ export async function generateTemplateImages(opts: {
 
     try {
       const raw = base
-        ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536', brandId: opts.brandId })
+        ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536', brandId: opts.brandId, extraImagePaths })
         : await generateImage({ prompt, size: '1024x1536', brandId: opts.brandId });
       const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
       if (url) images.push(url);
