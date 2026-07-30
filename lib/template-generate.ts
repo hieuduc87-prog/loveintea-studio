@@ -5,7 +5,7 @@
  */
 import { v4 as uuid } from 'uuid';
 import { getDb } from './db';
-import { editProductImage, generateImage, saveImageToFile } from './openai-image';
+import { editProductImage, editWithProductLock, generateImage, saveImageToFile } from './openai-image';
 import { resolveProductImagePath } from './plan-generate';
 import fs from 'fs';
 import { pickProductRefUrl, productHasBoxImage } from './product-ref';
@@ -211,6 +211,13 @@ export async function generateTemplateImages(opts: {
     const extraImagePaths = showProduct && tplSlidePath && productImg ? [tplSlidePath] : [];
     const usingProductBase = showProduct && Boolean(productImg);
     const twoImageMode = extraImagePaths.length > 0;
+    // MASK-LOCK (học từ amz-pipeline): slide sản phẩm mà bố cục KHÔNG cần người
+    // cầm/mặc → sản phẩm là PIXEL GỐC khoá bằng mask, model chỉ vẽ nền. Chữ và
+    // artwork không thể sai vì không hề được vẽ lại. Cảnh có người cầm vẫn đi
+    // đường restage 2 ảnh + fidelity gate (tay đè lên sản phẩm không khoá được).
+    const layoutText = `${meta.content ?? ''} ${meta.visual ?? ''} ${customPrompt ?? ''}`;
+    const layoutWantsHands = /(cầm|nắm|tay|người mẫu|người|đội|mặc|đeo|hold|holding|hand|person|model|wear|wearing)/i.test(layoutText);
+    const maskLockMode = showProduct && Boolean(productImg) && !layoutWantsHands;
 
     const prompt = [
       `Vertical 2:3 social media image, slide ${i + 1} of ${slideUrls.length} in a carousel (role: ${role}).`,
@@ -251,14 +258,27 @@ export async function generateTemplateImages(opts: {
     ].filter(Boolean).join(' ');
 
     try {
-      let raw = base
-        ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536', brandId: opts.brandId, extraImagePaths })
-        : await generateImage({ prompt, size: '1024x1536', brandId: opts.brandId });
+      let raw: string;
+      if (maskLockMode && productImg) {
+        onLog?.(`slide ${i + 1}: mask-lock — sản phẩm là pixel gốc, chỉ vẽ nền`);
+        const scene = [
+          meta.content ? `Scene to paint around the product: ${neutralizePackForm(stripBrandNouns(meta.content))}.` : '',
+          styleBits && !userSetsColor ? `Aesthetic: ${styleBits}.` : '',
+          customPrompt ? `USER INSTRUCTION — HIGHEST PRIORITY: ${customPrompt}.` : '',
+        ].filter(Boolean).join(' ');
+        raw = await editWithProductLock({ productImagePath: productImg, prompt: scene, size: '1024x1536', brandId: opts.brandId });
+      } else {
+        raw = base
+          ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536', brandId: opts.brandId, extraImagePaths })
+          : await generateImage({ prompt, size: '1024x1536', brandId: opts.brandId });
+      }
 
       // GATE TRUNG THỰC SẢN PHẨM (founder 30/07): slide có sản phẩm → máy tự so
       // chữ + bao bì với ảnh thật, lệch thì tự gen lại 1 lần, vẫn lệch thì cảnh
       // báo rõ ràng — không đợi mắt người phát hiện "BELLEA".
-      if (usingProductBase && productImg && raw.startsWith('data:')) {
+      if (maskLockMode) {
+        onLog?.(`slide ${i + 1}: QA bỏ qua — pixel sản phẩm được khoá cứng, không thể sai chữ/bao bì`);
+      } else if (usingProductBase && productImg && raw.startsWith('data:')) {
         try {
           const refBuf = fs.readFileSync(productImg);
           const genBuf = Buffer.from(raw.slice(raw.indexOf(',') + 1), 'base64');

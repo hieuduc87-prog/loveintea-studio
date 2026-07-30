@@ -183,3 +183,15 @@ export function friendlyFalError(e: unknown): string {
     return 'Prompt bị chặn bởi bộ lọc an toàn của model — đổi cách mô tả cảnh.';
   return msg.slice(0, 300);
 }
+
+/** Tách nền sản phẩm (fal-ai/imageutils/rembg) → PNG trong suốt.
+ *  Học từ amz-pipeline: đây là bước đầu của mask-lock — sản phẩm thành cutout
+ *  để dán lên canvas và KHOÁ pixel khi gọi gpt-image-2 edit. */
+export async function falRembg(image: Buffer): Promise<Buffer> {
+  const dataUri = `data:image/png;base64,${image.toString('base64')}`;
+  const out = await falRun<{ image?: { url?: string } }>('fal-ai/imageutils/rembg', { image_url: dataUri }, 120_000);
+  const url = out.image?.url;
+  if (!url) throw new Error('rembg: không có ảnh trả về');
+  recordExternalCost('fal:rembg', '1 ảnh', 0.001);
+  return download(url);
+}

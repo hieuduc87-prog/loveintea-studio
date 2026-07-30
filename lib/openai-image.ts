@@ -17,7 +17,10 @@
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+import sharp from 'sharp';
 import { withPhotoreal } from './photoreal';
+import { falRembg } from './video/fal';
 import { getModelLook } from './brand-lang';
 
 let _client: OpenAI | null = null;
@@ -200,4 +203,77 @@ export async function saveImageToFile(
   // NO upscale: quality='medium' output is already crisp at native res — upscaling
   // only softens + bloats the file. The /api/images ?w= endpoint resizes per platform.
   return `/api/images/${filename}`;
+}
+
+/**
+ * MASK-LOCK (học từ amz-pipeline/openai-engine.generateWithGptImageLocked):
+ * sản phẩm là PIXEL GỐC dán lên canvas, mask bảo gpt-image-2 "vùng sản phẩm
+ * CẤM ĐỘNG — chỉ vẽ nền xung quanh". Chữ/artwork không thể sai vì KHÔNG được
+ * vẽ lại. Quy ước mask OpenAI: alpha=0 → model VẼ; alpha=255 → GIỮ pixel gốc.
+ *
+ * Dùng cho slide sản phẩm KHÔNG cần người cầm (hero/packshot/bối cảnh mặt bàn).
+ * Cảnh người cầm sản phẩm vẫn phải đi đường restage 2 ảnh + fidelity gate
+ * (tay đè lên sản phẩm thì không khoá pixel được).
+ */
+export async function editWithProductLock(opts: {
+  productImagePath: string;      // ảnh sản phẩm (nền gì cũng được — tự tách nền)
+  prompt: string;                // mô tả BỐI CẢNH cần vẽ quanh sản phẩm
+  size?: ImageSize;
+  quality?: ImageQuality;
+  productScale?: number;         // 0-1, phần canvas sản phẩm chiếm (mặc định 0.62)
+  productGravity?: string;       // sharp gravity (mặc định 'center')
+  brandId?: string;
+}): Promise<string> {
+  const { productImagePath, size = '1024x1536', quality = 'medium',
+          productScale = 0.62, productGravity = 'center' } = opts;
+  if (!fs.existsSync(productImagePath)) throw new Error(`Product image not found: ${productImagePath}`);
+
+  // 1. Cutout trong suốt — cache theo hash file (rembg tốn tiền + thời gian)
+  const srcBuf = fs.readFileSync(productImagePath);
+  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+  const cutDir = path.join(dataDir, 'cutouts');
+  fs.mkdirSync(cutDir, { recursive: true });
+  const hash = crypto.createHash('sha1').update(srcBuf).digest('hex').slice(0, 16);
+  const cutPath = path.join(cutDir, `${hash}.png`);
+  let cutout: Buffer;
+  if (fs.existsSync(cutPath)) cutout = fs.readFileSync(cutPath);
+  else {
+    cutout = await falRembg(await sharp(srcBuf).png().toBuffer());
+    fs.writeFileSync(cutPath, cutout);
+  }
+
+  // 2. Canvas + mask (port từ amz-pipeline)
+  const [cw, ch] = size.split('x').map(Number);
+  const resized = await sharp(cutout)
+    .resize(Math.round(cw * productScale), Math.round(ch * productScale),
+            { fit: 'inside', withoutEnlargement: false })
+    .png().toBuffer();
+  const canvas = await sharp({ create: { width: cw, height: ch, channels: 4,
+      background: { r: 255, g: 255, b: 255, alpha: 255 } } })
+    .composite([{ input: resized, gravity: productGravity }])
+    .png().toBuffer();
+  const mask = await sharp({ create: { width: cw, height: ch, channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([{ input: resized, gravity: productGravity }])
+    .png().toBuffer();
+
+  const prompt = withPhotoreal(
+    `${opts.prompt} The product is ALREADY PLACED in the image and its pixels are locked — paint a photorealistic scene around it with natural shadows, reflections and lighting that match the scene; never draw over or alter the product.`,
+    getModelLook(opts.brandId),
+  );
+
+  const imageFile = new File([new Uint8Array(canvas)], 'image.png', { type: 'image/png' });
+  const maskFile = new File([new Uint8Array(mask)], 'mask.png', { type: 'image/png' });
+  const response = await withQuotaFallback(client => client.images.edit({
+    model: 'gpt-image-2',
+    image: imageFile,
+    mask: maskFile,
+    prompt,
+    size,
+    quality,
+    n: 1,
+  } as Parameters<typeof client.images.edit>[0]));
+  const imageData = response.data?.[0];
+  if (!imageData?.b64_json) throw new Error('No image returned from OpenAI (mask edit)');
+  return `data:image/png;base64,${imageData.b64_json}`;
 }
