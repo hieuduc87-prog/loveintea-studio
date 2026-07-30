@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { isAllBrands, userBrands } from '@/lib/brand-guard';
+import { isAllBrands, userBrands, getBrandId } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       ids?: string[]; action?: string; scheduledAt?: string; status?: string;
     };
     if (!ids?.length || !action) return NextResponse.json({ error: 'ids and action required' }, { status: 400 });
+    getBrandId(req); // P3: đặt ngữ cảnh brand cho DB — posts nằm trong DB từng brand
     const db = getDb();
 
     // TENANT ISOLATION: only touch posts the caller may access (by brand).

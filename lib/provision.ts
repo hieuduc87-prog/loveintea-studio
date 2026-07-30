@@ -6,6 +6,7 @@
  * admin-gated /api/admin/stores routes.
  */
 import { getDb } from './db';
+import { runWithBrand } from './tenant-context';
 import { v4 as uuid } from 'uuid';
 import { hashPassword, genPassword } from './password';
 
@@ -38,39 +39,46 @@ export function createStore(input: { name: string; slug?: string; logo_url?: str
   const exists = db.prepare('SELECT 1 FROM brands WHERE id=? OR slug=?').get(id, slug);
   if (exists) throw new Error('Store slug already exists');
 
-  const tx = db.transaction(() => {
-    db.prepare(`INSERT INTO brands (id, name, slug, logo_url, domain, created_at) VALUES (?,?,?,?,?,datetime('now'))`)
+  // P3: brands = global, brand_dna = DB riêng của brand MỚI → chạy trong ngữ cảnh
+  // brand mới (tenant handle ATTACH global nên ghi brands vẫn đúng chỗ).
+  runWithBrand(id, () => {
+    const tdb = getDb();
+    tdb.prepare(`INSERT INTO brands (id, name, slug, logo_url, domain, created_at) VALUES (?,?,?,?,?,datetime('now'))`)
       .run(id, name, slug, input.logo_url || null, input.domain || null);
-    db.prepare(`INSERT OR IGNORE INTO brand_dna (id, brand_id) VALUES (?,?)`).run(uuid(), id);
+    tdb.prepare(`INSERT OR IGNORE INTO brand_dna (id, brand_id) VALUES (?,?)`).run(uuid(), id);
   });
-  tx();
   return { id, slug };
 }
 
 /** All stores with per-tenant stats for the platform dashboard. */
 export function getStoresWithStats(): StoreStats[] {
-  const db = getDb();
-  return db.prepare(`
-    SELECT b.id, b.name, b.slug, b.logo_url, b.domain, b.created_at,
-      (SELECT COUNT(*) FROM products p       WHERE p.brand_id = b.id) AS products,
-      (SELECT COUNT(*) FROM posts pt         WHERE pt.brand_id = b.id) AS posts,
-      (SELECT COUNT(*) FROM brand_members bm  WHERE bm.brand_id = b.id) AS members,
-      (SELECT COUNT(*) FROM channels c        WHERE c.brand_id = b.id AND c.platform='facebook' AND c.status='active') AS fb_channels
-    FROM brands b
-    ORDER BY b.created_at DESC, b.name
-  `).all().map((r) => {
-    const row = r as Record<string, unknown>;
+  const db = getDb(); // console admin: không brand context → global (brands/members/channels)
+  const brands = db.prepare(`SELECT id, name, slug, logo_url, domain, created_at FROM brands ORDER BY created_at DESC, name`)
+    .all() as Array<Record<string, unknown>>;
+  return brands.map((row) => {
+    const id = String(row.id);
+    const members = (db.prepare('SELECT COUNT(*) c FROM brand_members WHERE brand_id=?').get(id) as { c: number }).c;
+    const fb = (db.prepare(`SELECT COUNT(*) c FROM channels WHERE brand_id=? AND platform='facebook' AND status='active'`).get(id) as { c: number }).c;
+    // P3: products/posts nằm trong DB từng brand — đếm trong ngữ cảnh brand đó.
+    let products = 0, posts = 0;
+    try {
+      ({ products, posts } = runWithBrand(id, () => {
+        const t = getDb();
+        return {
+          products: (t.prepare('SELECT COUNT(*) c FROM products').get() as { c: number }).c,
+          posts: (t.prepare('SELECT COUNT(*) c FROM posts').get() as { c: number }).c,
+        };
+      }));
+    } catch { /* brand slug lạ/không mở được DB → 0 */ }
     return {
-      id: String(row.id),
+      id,
       name: String(row.name),
       slug: String(row.slug),
       logo_url: (row.logo_url as string) ?? null,
       domain: (row.domain as string) ?? null,
       created_at: (row.created_at as string) ?? null,
-      products: Number(row.products) || 0,
-      posts: Number(row.posts) || 0,
-      members: Number(row.members) || 0,
-      fb_connected: Number(row.fb_channels) > 0,
+      products, posts, members,
+      fb_connected: fb > 0,
     };
   });
 }

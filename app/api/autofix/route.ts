@@ -15,6 +15,15 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
+import { runWithBrand } from '@/lib/tenant-context';
+
+/** P3: video_projects nằm trong DB từng brand — quét mọi brand (tool nội bộ). */
+function eachBrand<T>(fn: () => T): T[] {
+  const brands = (getDb().prepare('SELECT id FROM brands').all() as Array<{ id: string }>).map(b => b.id);
+  const out: T[] = [];
+  for (const b of brands) { try { out.push(runWithBrand(b, fn)); } catch { /* brand chưa có DB */ } }
+  return out;
+}
 import { DATA_DIR } from '@/lib/video/ffmpeg';
 
 const KANBAN_DIR = path.join(DATA_DIR, 'kanban');
@@ -49,10 +58,11 @@ export async function GET(req: NextRequest) {
     return card ? NextResponse.json({ card }) : NextResponse.json({ error: 'not found' }, { status: 404 });
   }
   if (video) {
-    const row = getDb().prepare(
+    const code = video.replace(/[^A-Za-z0-9-]/g, '').slice(0, 40);
+    const row = eachBrand(() => getDb().prepare(
       `SELECT id, video_code, title, status, error, output_url, script_json, render_log, grade_json, created_at, updated_at
        FROM video_projects WHERE video_code=?`
-    ).get(video.replace(/[^A-Za-z0-9-]/g, '').slice(0, 40));
+    ).get(code)).find(Boolean);
     return row ? NextResponse.json({ video: row }) : NextResponse.json({ error: 'not found' }, { status: 404 });
   }
 
@@ -63,9 +73,9 @@ export async function GET(req: NextRequest) {
       if (c && ['todo', 'fix_failed', 'doing'].includes(String(c.status || 'todo'))) cards.push(c);
     }
   } catch { /* chưa có kanban dir */ }
-  const rendering = getDb().prepare(
+  const rendering = eachBrand(() => getDb().prepare(
     `SELECT id, video_code, status FROM video_projects WHERE status IN ('queued','rendering')`
-  ).all();
+  ).all()).flat();
   return NextResponse.json({ cards, rendering, deployedRev: deployedRev() });
 }
 
@@ -77,10 +87,10 @@ export async function PATCH(req: NextRequest) {
 
   if (body.requeueVideo) {
     const code = String(body.requeueVideo).replace(/[^A-Za-z0-9-]/g, '').slice(0, 40);
-    const r = getDb().prepare(
+    const requeued = eachBrand(() => getDb().prepare(
       `UPDATE video_projects SET status='queued', error=NULL WHERE video_code=? AND status='failed'`
-    ).run(code);
-    return NextResponse.json({ ok: true, requeued: r.changes });
+    ).run(code).changes).reduce((a, b) => a + b, 0);
+    return NextResponse.json({ ok: true, requeued });
   }
 
   const id = String(body.id || '');

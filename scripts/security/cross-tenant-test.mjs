@@ -16,6 +16,7 @@
 import Database from 'better-sqlite3';
 import { scryptSync, randomBytes } from 'crypto';
 import path from 'path';
+import fs from 'fs';
 
 const BASE = (process.env.BASE_URL || 'http://localhost:3202').replace(/\/$/, '');
 const DB_PATH = path.join(process.env.DATA_DIR || 'data', 'studio.db');
@@ -28,51 +29,82 @@ function hashPassword(pw) {
 }
 
 // ── Seed ──────────────────────────────────────────────────────────────────
-function seed(db) {
+// P3 DB-per-tenant: registry (brands/users/members) vào GLOBAL studio.db;
+// resource nghiệp vụ vào DB TỪNG BRAND data/tenants/<id>/studio.db (file do
+// server tạo ở lần request đầu — main() warm trước rồi mới seed resource).
+function seedGlobal(db) {
   const tx = db.transaction(() => {
     for (const b of ['a', 'b']) {
       db.prepare('INSERT OR REPLACE INTO brands (id, name, slug) VALUES (?,?,?)')
         .run(`${P}${b}`, `Sectest ${b.toUpperCase()}`, `${P}${b}`);
+      db.prepare(`INSERT OR REPLACE INTO auth_users (id, name, email, role, is_approved, password_hash)
+        VALUES (?,?,?,?,1,?)`).run(`${P}user-${b}`, `Sectest ${b.toUpperCase()}`, `${P}${b}@example.com`, 'editor', hashPassword(PW));
+      db.prepare('INSERT OR REPLACE INTO brand_members (user_id, brand_id, role) VALUES (?,?,?)')
+        .run(`${P}user-${b}`, `${P}${b}`, 'member');
     }
-    // Editor of store A (non-admin, can write, scoped to A). Approved so login works.
-    db.prepare(`INSERT OR REPLACE INTO auth_users (id, name, email, role, is_approved, password_hash)
-      VALUES (?,?,?,?,1,?)`).run(`${P}user-a`, 'Sectest A', `${P}a@example.com`, 'editor', hashPassword(PW));
-    db.prepare('INSERT OR REPLACE INTO brand_members (user_id, brand_id, role) VALUES (?,?,?)')
-      .run(`${P}user-a`, `${P}a`, 'member');
-
-    // B-owned resources (the victims) + one A-owned product (positive control).
-    db.prepare('INSERT OR REPLACE INTO products (id, brand_id, slug, name) VALUES (?,?,?,?)')
-      .run(`${P}b-product`, `${P}b`, `${P}b-prod`, 'B Product');
-    db.prepare('INSERT OR REPLACE INTO products (id, brand_id, slug, name) VALUES (?,?,?,?)')
-      .run(`${P}a-product`, `${P}a`, `${P}a-prod`, 'A Product');
-    db.prepare('INSERT OR REPLACE INTO posts (id, brand_id, sku_id, caption, platforms, status) VALUES (?,?,?,?,?,?)')
-      .run(`${P}b-post`, `${P}b`, '', 'B caption', 'facebook', 'draft');
-    db.prepare('INSERT OR REPLACE INTO content_plans (id, brand_id, title) VALUES (?,?,?)')
-      .run(`${P}b-plan`, `${P}b`, 'B Plan');
-    db.prepare('INSERT OR REPLACE INTO content_templates (id, brand_id, name, image_url) VALUES (?,?,?,?)')
-      .run(`${P}b-tpl`, `${P}b`, 'B Template', '/api/images/none.png');
-    db.prepare('INSERT OR REPLACE INTO knowledge_docs (id, brand_id, type, title) VALUES (?,?,?,?)')
-      .run(`${P}b-doc`, `${P}b`, 'rule', 'B Doc');
-    db.prepare('INSERT OR REPLACE INTO video_clips (id, brand_id, product_id, url, filename) VALUES (?,?,?,?,?)')
-      .run(`${P}b-clip`, `${P}b`, `${P}b-product`, '/api/images/none.mp4', 'none.mp4');
-    // [LIT-SEC-0721A] blog + image_library (feature loveintea-legacy vừa được scope brand)
-    db.prepare('INSERT OR REPLACE INTO blog_posts (id, brand_id, sku_id, topic, title, status) VALUES (?,?,?,?,?,?)')
-      .run(`${P}b-blog`, `${P}b`, '', 'B topic', 'B blog', 'draft');
-    db.prepare('INSERT OR REPLACE INTO image_library (id, brand_id, sku_id, image_url) VALUES (?,?,?,?)')
-      .run(`${P}b-img`, `${P}b`, 'hibiscus', '/api/images/none.png');
   });
   tx();
 }
 
+function openTenant(brand) {
+  const f = path.join(process.env.DATA_DIR || 'data', 'tenants', brand, 'studio.db');
+  const t = new Database(f);
+  t.pragma('journal_mode = WAL');
+  // better-sqlite3 BẬT foreign_keys mặc định — file tenant đã drop bảng platform
+  // (brands/auth…) nên FK cha "treo": phải OFF như server, nếu không prepare nổ.
+  t.pragma('foreign_keys = OFF');
+  return t;
+}
+
+function seedTenantResources() {
+  const a = openTenant(`${P}a`);
+  a.prepare('INSERT OR REPLACE INTO products (id, brand_id, slug, name) VALUES (?,?,?,?)')
+    .run(`${P}a-product`, `${P}a`, `${P}a-prod`, 'A Product');
+  a.close();
+  const b = openTenant(`${P}b`);
+  b.prepare('INSERT OR REPLACE INTO products (id, brand_id, slug, name) VALUES (?,?,?,?)')
+    .run(`${P}b-product`, `${P}b`, `${P}b-prod`, 'B Product');
+  b.prepare('INSERT OR REPLACE INTO posts (id, brand_id, sku_id, caption, platforms, status) VALUES (?,?,?,?,?,?)')
+    .run(`${P}b-post`, `${P}b`, '', 'B caption', 'facebook', 'draft');
+  b.prepare('INSERT OR REPLACE INTO content_plans (id, brand_id, title) VALUES (?,?,?)')
+    .run(`${P}b-plan`, `${P}b`, 'B Plan');
+  b.prepare('INSERT OR REPLACE INTO content_templates (id, brand_id, name, image_url) VALUES (?,?,?,?)')
+    .run(`${P}b-tpl`, `${P}b`, 'B Template', '/api/images/none.png');
+  b.prepare('INSERT OR REPLACE INTO knowledge_docs (id, brand_id, type, title) VALUES (?,?,?,?)')
+    .run(`${P}b-doc`, `${P}b`, 'rule', 'B Doc');
+  b.prepare('INSERT OR REPLACE INTO video_clips (id, brand_id, product_id, url, filename) VALUES (?,?,?,?,?)')
+    .run(`${P}b-clip`, `${P}b`, `${P}b-product`, '/api/images/none.mp4', 'none.mp4');
+  b.prepare('INSERT OR REPLACE INTO blog_posts (id, brand_id, sku_id, topic, title, status) VALUES (?,?,?,?,?,?)')
+    .run(`${P}b-blog`, `${P}b`, '', 'B topic', 'B blog', 'draft');
+  b.prepare('INSERT OR REPLACE INTO image_library (id, brand_id, sku_id, image_url) VALUES (?,?,?,?)')
+    .run(`${P}b-img`, `${P}b`, 'hibiscus', '/api/images/none.png');
+  b.close();
+}
+
 function cleanup(db) {
+  // Global registry rows (bảng tenant cũ trong global có thể còn ở dạng zz_legacy — thử cả hai)
   const tables = ['video_clips', 'knowledge_docs', 'content_templates', 'content_plans',
     'posts', 'products', 'blog_posts', 'image_library', 'brand_members', 'auth_users', 'brands'];
-  for (const t of tables) {
+  for (const t of [...tables, ...tables.map(x => `zz_legacy_${x}`)]) {
     try {
-      const col = t === 'brand_members' ? 'user_id' : t === 'auth_users' ? 'id' : 'id';
+      const col = t.includes('brand_members') ? 'user_id' : 'id';
       db.prepare(`DELETE FROM ${t} WHERE ${col} LIKE ?`).run(`${P}%`);
-      if (t === 'brand_members') db.prepare(`DELETE FROM ${t} WHERE brand_id LIKE ?`).run(`${P}%`);
-    } catch { /* table may not exist in older schema */ }
+      if (t.includes('brand_members')) db.prepare(`DELETE FROM ${t} WHERE brand_id LIKE ?`).run(`${P}%`);
+    } catch { /* table may not exist */ }
+  }
+  // Tenant DB của brand test: XOÁ DÒNG, KHÔNG xoá file/thư mục — server đang giữ
+  // handle mở; rm file là server ghi vào inode "ma" còn suite mở file mới (đã trả giá).
+  const tenantTables = ['video_clips', 'knowledge_docs', 'content_templates', 'content_plans',
+    'posts', 'products', 'blog_posts', 'image_library'];
+  for (const b of ['a', 'b']) {
+    const f = path.join(process.env.DATA_DIR || 'data', 'tenants', `${P}${b}`, 'studio.db');
+    if (!fs.existsSync(f)) continue;
+    try {
+      const t = new Database(f);
+      t.pragma('foreign_keys = OFF');
+      for (const tbl of tenantTables) { try { t.prepare(`DELETE FROM ${tbl}`).run(); } catch { /* */ } }
+      t.close();
+    } catch { /* */ }
   }
 }
 
@@ -155,9 +187,21 @@ async function main() {
   let pass = 0, fail = 0;
   const fails = [];
   try {
-    cleanup(db); seed(db);
+    cleanup(db); seedGlobal(db);
     const jarA = await login(`${P}a@example.com`, PW);
-    console.log(`\n🔐 Logged in as store-A editor. Base: ${BASE}\n`);
+    const jarB = await login(`${P}b@example.com`, PW);
+    // Warm: request đầu theo brand để server tạo data/tenants/<id>/studio.db (schema)
+    const wa = await call(jarA, 'GET', `/api/products?brand=${P}a`);
+    const wb = await call(jarB, 'GET', `/api/products?brand=${P}b`);
+    console.log(`warm tenants: A=${wa} B=${wb}`);
+    const tdirA = path.join(process.env.DATA_DIR || 'data', 'tenants', `${P}a`);
+    console.log(`tenant dir A exists: ${fs.existsSync(tdirA)}`);
+    if (!fs.existsSync(tdirA)) {
+      const dbg = await fetch(`${BASE}/api/products?brand=${P}a`, { headers: { cookie: cookieHeader(jarA) } });
+      console.log('debug products body:', (await dbg.text()).slice(0, 300));
+    }
+    seedTenantResources();
+    console.log(`\n🔐 Logged in as store-A editor (B seeded as victim). Base: ${BASE}\n`);
 
     console.log('── Cross-tenant (A → B, expect 403/404) ──');
     for (const [method, url, body] of CROSS) {
@@ -183,4 +227,4 @@ async function main() {
   console.log('✅ Tenant isolation holds — store A cannot reach store B.');
 }
 
-main().catch((e) => { console.error('Test harness error:', e.message); process.exit(2); });
+main().catch((e) => { console.error('Test harness error:', e.stack || e.message); process.exit(2); });

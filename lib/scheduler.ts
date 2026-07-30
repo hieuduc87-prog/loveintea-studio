@@ -9,6 +9,7 @@
  */
 import { v4 as uuid } from 'uuid';
 import { getDb } from './db';
+import { runWithBrand } from './tenant-context';
 import {
   postToFacebook, postToInstagram, hasIgCreds,
   postVideoToFacebook, postReelToInstagram,
@@ -24,6 +25,13 @@ const VIDEO_QUEUE_INTERVAL_MS = 30_000;
 const VIDEO_SCHEDULE_INTERVAL_MS = 5 * 60_000;
 
 let videoRendering = false;
+
+/** Brand list từ GLOBAL DB — scheduler loop từng brand trong runWithBrand (P3). */
+function listBrandIds(): string[] {
+  try {
+    return (getDb().prepare('SELECT id FROM brands').all() as Array<{ id: string }>).map(b => b.id);
+  } catch { return []; }
+}
 
 declare global {
   // eslint-disable-next-line no-var
@@ -48,8 +56,11 @@ export function startScheduler() {
     processVideoQueue().catch(e => console.error('[scheduler] video queue error:', e));
   }, VIDEO_QUEUE_INTERVAL_MS);
 
-  setInterval(() => {
-    processVideoSchedules().catch(e => console.error('[scheduler] video schedule error:', e));
+  setInterval(async () => {
+    // P3: video_schedules per-brand
+    for (const b of listBrandIds()) {
+      await runWithBrand(b, () => processVideoSchedules()).catch((e: unknown) => console.error(`[scheduler] video schedule error [${b}]:`, e));
+    }
   }, VIDEO_SCHEDULE_INTERVAL_MS);
 
   // First metrics sync 2 min after boot (let the server settle)
@@ -62,25 +73,34 @@ export function startScheduler() {
 /** Render queued video projects — strictly one at a time (2 vCPU server). */
 export async function processVideoQueue() {
   if (videoRendering) return;
-  const db = getDb();
-  // Recover projects stuck in 'rendering' from a previous crashed process
-  db.prepare(`UPDATE video_projects SET status='failed', error='render interrupted (server restart)'
-    WHERE status='rendering' AND updated_at < datetime('now', '-30 minutes')`).run();
-  const next = db.prepare(`SELECT id FROM video_projects WHERE status='queued' ORDER BY updated_at ASC LIMIT 1`)
-    .get() as { id: string } | undefined;
-  if (!next) return;
+  // P3: video_projects nằm trong DB từng brand — quét mọi brand, chọn job cũ nhất toàn cục.
+  let pick: { brandId: string; id: string; updatedAt: string } | null = null;
+  for (const brandId of listBrandIds()) {
+    runWithBrand(brandId, () => {
+      const db = getDb();
+      db.prepare(`UPDATE video_projects SET status='failed', error='render interrupted (server restart)'
+        WHERE status='rendering' AND updated_at < datetime('now', '-30 minutes')`).run();
+      const next = db.prepare(`SELECT id, updated_at FROM video_projects WHERE status='queued' ORDER BY updated_at ASC LIMIT 1`)
+        .get() as { id: string; updated_at: string } | undefined;
+      if (next && (!pick || next.updated_at < pick.updatedAt)) pick = { brandId, id: next.id, updatedAt: next.updated_at };
+    });
+  }
+  if (!pick) return;
+  const chosen = pick as { brandId: string; id: string };
 
   videoRendering = true;
-  db.prepare(`UPDATE video_projects SET status='rendering', updated_at=datetime('now') WHERE id=?`).run(next.id);
-  console.log(`[scheduler] video render start: ${next.id}`);
+  console.log(`[scheduler] video render start: ${chosen.id} [${chosen.brandId}]`);
   try {
-    const { renderProject } = await import('./video/render');
-    await renderProject(next.id);
-    console.log(`[scheduler] video render done: ${next.id}`);
-    // Project thuộc lịch định kỳ → tạo bài đăng mang video (draft/scheduled)
-    try { onScheduledProjectDone(next.id); } catch (e) { console.error('[scheduler] schedule post error:', e); }
+    await runWithBrand(chosen.brandId, async () => {
+      getDb().prepare(`UPDATE video_projects SET status='rendering', updated_at=datetime('now') WHERE id=?`).run(chosen.id);
+      const { renderProject } = await import('./video/render');
+      await renderProject(chosen.id);
+      console.log(`[scheduler] video render done: ${chosen.id}`);
+      // Project thuộc lịch định kỳ → tạo bài đăng mang video (draft/scheduled)
+      try { onScheduledProjectDone(chosen.id); } catch (e) { console.error('[scheduler] schedule post error:', e); }
+    });
   } catch (e) {
-    console.error(`[scheduler] video render failed: ${next.id}:`, e);
+    console.error(`[scheduler] video render failed: ${chosen.id}:`, e);
   } finally {
     videoRendering = false;
   }
@@ -109,9 +129,16 @@ interface DuePost {
 }
 
 export async function publishDuePosts() {
-  const db = getDb();
   // Heartbeat — Dashboard reads this to confirm the scheduler is alive
   upsertSetting('scheduler_last_tick', new Date().toISOString());
+  // P3: posts nằm trong DB từng brand — xử lý tuần tự theo brand.
+  for (const schedBrandId of listBrandIds()) {
+    await runWithBrand(schedBrandId, () => publishDueForBrand());
+  }
+}
+
+async function publishDueForBrand() {
+  const db = getDb();
   const due = db.prepare(`
     SELECT id, caption, image_url, images_json, platforms, fb_post_id, ig_post_id, brand_id, video_url
     FROM posts
@@ -126,7 +153,7 @@ export async function publishDuePosts() {
 
   const logInsert = db.prepare(`
     INSERT INTO publish_log (id, brand_id, post_id, platform, action, status, result_id, error)
-    VALUES (?, ?, ?, 'scheduled_publish', ?, ?, ?)
+    VALUES (?, ?, ?, ?, 'scheduled_publish', ?, ?, ?)
   `);
 
   for (const post of due) {
@@ -205,6 +232,13 @@ function upsertMetrics(postId: string, brandId: string, platform: string, m: Fet
 }
 
 export async function syncMetrics() {
+  // P3: posts/post_metrics/scoreboard nằm trong DB từng brand.
+  for (const schedBrandId of listBrandIds()) {
+    await runWithBrand(schedBrandId, () => syncMetricsForBrand());
+  }
+}
+
+async function syncMetricsForBrand() {
   const db = getDb();
   const posts = db.prepare(`
     SELECT id, brand_id, fb_post_id, ig_post_id

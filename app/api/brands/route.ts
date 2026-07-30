@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
 import { authOptions } from '@/lib/auth-options';
+import { runWithBrand, isValidBrandSlug } from '@/lib/tenant-context';
 
 export async function GET() {
   const db = getDb();
@@ -13,13 +14,21 @@ export async function GET() {
 
   // Brand scoping: admins see all; members see assigned brands;
   // users with no membership rows see all (legacy single-team behavior)
+  // P3: products nằm trong DB từng brand — đếm per-brand trong ngữ cảnh brand đó.
+  const withCount = (rows: Array<Record<string, unknown>>) => rows.map(b => {
+    let product_count = 0;
+    const id = String(b.id);
+    if (isValidBrandSlug(id)) {
+      try {
+        product_count = runWithBrand(id, () =>
+          (getDb().prepare('SELECT COUNT(*) c FROM products').get() as { c: number }).c);
+      } catch { /* brand mới chưa có DB → 0 */ }
+    }
+    return { ...b, product_count };
+  });
   let brands: unknown[];
   if (role === 'admin' || role === 'root_admin' || !userId) {
-    brands = db.prepare(`
-      SELECT b.*,
-        (SELECT COUNT(*) FROM products p WHERE p.brand_id = b.id) as product_count
-      FROM brands b ORDER BY b.name
-    `).all();
+    brands = withCount(db.prepare(`SELECT b.* FROM brands b ORDER BY b.name`).all() as Array<Record<string, unknown>>);
   } else {
     const memberships = db.prepare(`SELECT brand_id FROM brand_members WHERE user_id = ?`).all(userId) as Array<{ brand_id: string }>;
     // TENANT ISOLATION: a non-admin with no membership sees NOTHING (no more
@@ -28,11 +37,9 @@ export async function GET() {
       brands = [];
     } else {
       const placeholders = memberships.map(() => '?').join(',');
-      brands = db.prepare(`
-        SELECT b.*,
-          (SELECT COUNT(*) FROM products p WHERE p.brand_id = b.id) as product_count
-        FROM brands b WHERE b.id IN (${placeholders}) ORDER BY b.name
-      `).all(...memberships.map(m => m.brand_id));
+      brands = withCount(db.prepare(`
+        SELECT b.* FROM brands b WHERE b.id IN (${placeholders}) ORDER BY b.name
+      `).all(...memberships.map(m => m.brand_id)) as Array<Record<string, unknown>>);
     }
   }
   return NextResponse.json({ brands });

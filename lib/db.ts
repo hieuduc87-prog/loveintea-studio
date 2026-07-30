@@ -1,24 +1,184 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { currentBrandId, isValidBrandSlug } from './tenant-context';
 
 // DATA_DIR must point outside .next/ so data survives next build
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const DB_PATH = path.join(DATA_DIR, 'studio.db');
 
-let _db: Database.Database | null = null;
+// ═══ P3 — DB-PER-TENANT (LIT-P3-0731E, mô hình dlsamz) ═══════════════════
+// Sau migration: data/studio.db = GLOBAL (chỉ bảng platform); mỗi brand có
+// data/tenants/<brand>/studio.db chứa bảng nghiệp vụ + ATTACH global as g —
+// SQLite resolve tên bảng main→attached nên SQL cũ (WHERE brand_id=?) chạy
+// nguyên vẹn, còn mở nhầm brand là bất khả thi về cấu trúc.
+// Bảng nghiệp vụ cũ trong global đổi tên zz_legacy_* (rollback + đường sót nổ to).
+// Kill-switch: TENANT_DB_SPLIT=0 → toàn bộ chạy như cũ (single DB).
 
-export function getDb(): Database.Database {
+const SPLIT_FLAG = path.join(DATA_DIR, 'tenants', '.db-per-tenant');
+const splitEnabled = () => process.env.TENANT_DB_SPLIT !== '0';
+const splitDone = () => splitEnabled() && fs.existsSync(SPLIT_FLAG);
+
+/** Bảng PLATFORM — sống ở GLOBAL, bị drop khỏi file tenant. Mọi bảng khác = tenant. */
+const PLATFORM_DB_TABLES = [
+  'settings',
+  'auth_users', 'auth_accounts', 'auth_sessions', 'auth_verification_tokens',
+  'brands', 'brand_members',
+  'payment_plans', 'momo_payments', 'bank_transfers', 'subscriptions',
+  'brand_quotas', 'usage_counters', 'cost_ledger',
+  'channels', 'fb_connections', 'fb_pages',
+  'jobs',
+];
+
+let _db: Database.Database | null = null;
+const _tenantDbs = new Map<string, Database.Database>();
+
+function getGlobalDb(): Database.Database {
   if (_db) return _db;
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   _db = new Database(DB_PATH);
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
   initSchema(_db);
+  try { migrateToTenantDbs(_db); } catch (e) {
+    console.error('[db] TENANT SPLIT MIGRATION FAILED — tiếp tục chạy single-DB:', e);
+  }
+  auditGlobalTenantTables(_db);
+  // Sau split: bảng zz_legacy_* + bảng tenant bị drop để lại FK "treo" trong
+  // schema global (SQLite rewrite FK khi RENAME không phủ hết) → mọi DML vào
+  // bảng cha (brands…) với FK ON sẽ nổ "no such table". Platform tables không
+  // dựa vào FK enforcement của SQLite — tắt hẳn ở global sau split.
+  if (splitDone()) _db.pragma('foreign_keys = OFF');
   return _db;
 }
 
-function initSchema(db: Database.Database) {
+/** Sau split: initSchema (chạy mỗi boot) vẫn tạo bảng tenant RỖNG trong global —
+ *  CỐ Ý GIỮ RỖNG: request thiếu brand context đọc bảng tenant sẽ ra rỗng →
+ *  route trả 404 (fail-closed, không 500 sập cả lớp route đọc-theo-ID).
+ *  Đổi lại phải AUDIT: bảng tenant trong global mà CÓ DÒNG = một đường GHI
+ *  thiếu context vừa rò — cảnh báo to để vá (doctrine: không chết âm thầm). */
+function auditGlobalTenantTables(db: Database.Database): void {
+  if (!splitDone()) return;
+  for (const t of listUserTables(db)) {
+    if (PLATFORM_DB_TABLES.includes(t) || t.startsWith('zz_legacy_')) continue;
+    try {
+      const n = t === 'tags'
+        ? (db.prepare(`SELECT COUNT(*) c FROM tags WHERE id NOT LIKE 'tag-%'`).get() as { c: number }).c
+        : (db.prepare(`SELECT COUNT(*) c FROM ${t}`).get() as { c: number }).c;
+      if (n > 0) console.error(`[db] ⚠ AUDIT: bảng tenant "${t}" trong GLOBAL có ${n} dòng SAU split — có đường ghi thiếu brand context, cần vá!`);
+    } catch { /* bảng lạ */ }
+  }
+}
+
+function listUserTables(db: Database.Database): string[] {
+  return (db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`).all() as Array<{ name: string }>).map(r => r.name);
+}
+
+/** Mở (cache) DB của 1 brand: full schema → drop bảng platform → ATTACH global. */
+function getTenantDb(brandId: string): Database.Database {
+  const cached = _tenantDbs.get(brandId);
+  if (cached) return cached;
+  if (!isValidBrandSlug(brandId)) throw new Error(`INVALID_BRAND_SLUG: ${brandId}`);
+  const dir = path.join(DATA_DIR, 'tenants', brandId);
+  fs.mkdirSync(dir, { recursive: true });
+  const db = new Database(path.join(dir, 'studio.db'));
+  db.pragma('journal_mode = WAL');
+  // FK OFF: bảng tenant có REFERENCES tới brands/auth (đã drop khỏi file này) —
+  // enforcement nằm ở tầng app + global; bật FK ở đây là lỗi "no such table".
+  db.pragma('foreign_keys = OFF');
+  initSchema(db, { tenant: true });
+  for (const t of PLATFORM_DB_TABLES) {
+    try { db.exec(`DROP TABLE IF EXISTS main.${t}`); } catch { /* */ }
+  }
+  db.prepare(`ATTACH ? AS g`).run(DB_PATH);
+  _tenantDbs.set(brandId, db);
+  return db;
+}
+
+function resolveDb(): Database.Database {
+  const global_ = getGlobalDb(); // đảm bảo init + migration chạy trước
+  if (!splitDone()) return global_;
+  const brandId = currentBrandId();
+  if (process.env.DEBUG_TENANT === '1') console.log('[tenant-debug] resolveDb brand =', JSON.stringify(brandId));
+  if (!brandId) return global_;
+  return getTenantDb(brandId);
+}
+
+/** DB theo NGỮ CẢNH: có brand (AsyncLocalStorage, do brand-guard/runWithBrand đặt)
+ *  → DB riêng của brand (kèm ATTACH global); không brand → GLOBAL.
+ *
+ *  Trả về PROXY late-binding: rất nhiều route viết `const db = getDb()` TRƯỚC
+ *  getBrandId() — nếu bind handle tại đây thì bắt nhầm GLOBAL. Proxy resolve
+ *  handle tại THỜI ĐIỂM gọi .prepare/.exec/... nên thứ tự khai báo không còn
+ *  quan trọng. LƯU Ý: đừng cache statement prepare() ở module-scope (bind theo
+ *  context lúc prepare) — prepare trong hàm như hiện tại là đúng. */
+const _dbProxy = new Proxy({} as Record<string | symbol, unknown>, {
+  get(_t, prop) {
+    const real = resolveDb() as unknown as Record<string | symbol, unknown>;
+    const v = real[prop];
+    return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(real) : v;
+  },
+}) as unknown as Database.Database;
+
+export function getDb(): Database.Database {
+  return _dbProxy;
+}
+
+/** Migration 1 lần: copy dữ liệu nghiệp vụ vào file từng brand, verify đếm dòng,
+ *  rồi đổi tên bảng cũ thành zz_legacy_* trong global. Idempotent qua SPLIT_FLAG. */
+function migrateToTenantDbs(global_: Database.Database): void {
+  if (!splitEnabled() || fs.existsSync(SPLIT_FLAG)) return;
+  const brands = (global_.prepare('SELECT id FROM brands').all() as Array<{ id: string }>).map(b => b.id).filter(isValidBrandSlug);
+  if (!brands.length) { fs.mkdirSync(path.dirname(SPLIT_FLAG), { recursive: true }); fs.writeFileSync(SPLIT_FLAG, new Date().toISOString()); return; }
+
+  console.log(`[db] P3 split: migrating ${brands.length} brand(s) → data/tenants/…`);
+  global_.pragma('wal_checkpoint(TRUNCATE)');
+  fs.copyFileSync(DB_PATH, DB_PATH + '.pre-split.bak');
+
+  const tenantTables = listUserTables(global_).filter(t => !PLATFORM_DB_TABLES.includes(t) && !t.startsWith('zz_legacy_'));
+  const hasBrandCol = (t: string) =>
+    (global_.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).some(c => c.name === 'brand_id');
+
+  for (const brandId of brands) {
+    const t = getTenantDb(brandId); // đã ATTACH g = global
+    const copyAll = t.transaction(() => {
+      for (const tbl of tenantTables) {
+        if (hasBrandCol(tbl)) {
+          t.prepare(`INSERT OR IGNORE INTO main.${tbl} SELECT * FROM g.${tbl} WHERE brand_id=?`).run(brandId);
+        } else if (tbl === 'batch_runs') {
+          t.prepare(`INSERT OR IGNORE INTO main.batch_runs SELECT * FROM g.batch_runs
+            WHERE id IN (SELECT DISTINCT batch_id FROM g.image_jobs WHERE brand_id=? AND batch_id IS NOT NULL)`).run(brandId);
+        } else if (brandId === 'loveintea') {
+          // bảng không brand_id = di sản đơn-tenant → thuộc loveintea
+          console.warn(`[db] P3 split: bảng ${tbl} không có brand_id — gán legacy cho loveintea`);
+          t.prepare(`INSERT OR IGNORE INTO main.${tbl} SELECT * FROM g.${tbl}`).run();
+        }
+      }
+    });
+    copyAll();
+  }
+
+  // Verify: tổng dòng theo brand ở các file tenant == global (bảng có brand_id)
+  for (const tbl of tenantTables) {
+    if (!hasBrandCol(tbl)) continue;
+    const gCount = (global_.prepare(`SELECT COUNT(*) c FROM ${tbl} WHERE brand_id IN (${brands.map(() => '?').join(',')})`).get(...brands) as { c: number }).c;
+    let tCount = 0;
+    for (const b of brands) tCount += (getTenantDb(b).prepare(`SELECT COUNT(*) c FROM main.${tbl}`).get() as { c: number }).c;
+    if (tCount < gCount) throw new Error(`P3 split VERIFY FAIL bảng ${tbl}: global=${gCount} tenant-sum=${tCount} — GIỮ NGUYÊN single-DB`);
+  }
+
+  // Đổi tên bảng cũ — đường code sót sẽ NỔ TO thay vì âm thầm đọc dữ liệu cũ (doctrine)
+  global_.pragma('foreign_keys = OFF');
+  for (const tbl of tenantTables) {
+    global_.exec(`ALTER TABLE ${tbl} RENAME TO zz_legacy_${tbl}`);
+  }
+  global_.pragma('foreign_keys = ON');
+  fs.mkdirSync(path.dirname(SPLIT_FLAG), { recursive: true });
+  fs.writeFileSync(SPLIT_FLAG, new Date().toISOString());
+  console.log(`[db] P3 split DONE: ${brands.length} brand(s), ${tenantTables.length} bảng nghiệp vụ. Backup: studio.db.pre-split.bak`);
+}
+
+function initSchema(db: Database.Database, opts?: { tenant?: boolean }) {
   db.exec(`
 
     -- ─────────────────────────────────────────────
@@ -1066,6 +1226,10 @@ function initSchema(db: Database.Database) {
     `);
   } catch { /* already exists */ }
 
+  // ── Seeds: CHỈ cho GLOBAL DB — file tenant không được seed danh tính
+  //    loveintea hay data platform (L1 KHÔNG default tenant) ─────────────
+  if (opts?.tenant) return;
+
   // ── Seed root users ────────────────────────────────
   db.exec(`
     INSERT OR IGNORE INTO auth_users (id, name, email, role, is_approved, created_at)
@@ -1077,11 +1241,13 @@ function initSchema(db: Database.Database) {
     VALUES ('root-son', 'Manh Son', 'manhson.nguyen@gmail.com', 'admin', 1, datetime('now'));
   `);
 
-  // ── Seed default brand if not exists ──────────────
-  seedDefaultBrand(db);
+  // ── Seed default brand if not exists (pre-split only — sau split dùng provisioning) ──
+  if (!splitDone()) seedDefaultBrand(db);
 
   // ── Migrate existing images → assets DAM ───────────
-  try {
+  // Sau split: assets là bảng TENANT — bỏ qua ở global (module instance nào của
+  // bundle chạy lại initSchema cũng không được tái tạo rác vào global).
+  if (!splitDone()) try {
     db.exec(`
       INSERT OR IGNORE INTO assets
         (id, brand_id, product_id, url, filename, file_type, status, source, source_job_id, created_at, updated_at)
@@ -1116,8 +1282,8 @@ function initSchema(db: Database.Database) {
     `);
   } catch { /* already seeded */ }
 
-  // ── Seed default tags ───────────────────────────────
-  try {
+  // ── Seed default tags (bảng TENANT — chỉ khi chưa split) ───────────────
+  if (!splitDone()) try {
     db.exec(`
       INSERT OR IGNORE INTO tags (id, brand_id, name, slug, type, color) VALUES
         ('tag-dandelion','loveintea','Dandelion','dandelion','product','#F4A020'),

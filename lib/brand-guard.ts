@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { enterBrandContext } from './tenant-context';
 
 /**
  * Brand-tenant guard helpers (defense-in-depth, layer 2).
@@ -22,8 +23,12 @@ import { NextRequest, NextResponse } from 'next/server';
  *  không lộ), và route ghi phải tự chặn bằng requireBrand(). */
 export function getBrandId(req: NextRequest): string {
   const header = req.headers.get('x-brand-id');
-  if (header) return header;
-  return req.nextUrl.searchParams.get('brand') || req.nextUrl.searchParams.get('brandId') || '';
+  const brand = header || req.nextUrl.searchParams.get('brand') || req.nextUrl.searchParams.get('brandId') || '';
+  // P3 DB-per-tenant: gắn brand vào AsyncLocalStorage — mọi getDb() phía sau
+  // của request này tự mở đúng DB brand (lib/tenant-context.ts).
+  enterBrandContext(brand);
+  if (process.env.DEBUG_TENANT === '1') console.log('[tenant-debug] getBrandId =', JSON.stringify(brand), 'header =', JSON.stringify(header));
+  return brand;
 }
 
 /** Cổng BẮT BUỘC cho route ghi/tốn tiền: thiếu brand → 400 ngay, không đoán hộ.
@@ -50,8 +55,11 @@ export function userBrands(req: NextRequest): string[] {
 /** True if the caller may access `brandId`. Super-admins may access any brand. */
 export function canAccessBrand(req: NextRequest, brandId: string | null | undefined): boolean {
   if (!brandId) return false;
-  if (isAllBrands(req)) return true;
-  return userBrands(req).includes(brandId);
+  const ok = isAllBrands(req) || userBrands(req).includes(brandId);
+  // Resource brand THẮNG context (route [id]/… có thể khác ?brand= của admin):
+  // truy cập hợp lệ → chuyển ngữ cảnh DB sang brand của resource.
+  if (ok) enterBrandContext(brandId);
+  return ok;
 }
 
 /**

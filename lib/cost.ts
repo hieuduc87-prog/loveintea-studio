@@ -3,6 +3,7 @@
  * Unit costs are estimates (USD) stored in settings so they can be tuned per account.
  */
 import { getDb } from './db';
+import { runWithBrand } from './tenant-context';
 
 export interface UnitCosts {
   caption_usd: number;   // 1 AI caption (Gemini/OpenAI)
@@ -54,11 +55,14 @@ export function buildCostReport(brandId: string, includeRevenue = false): CostRe
   const n = (sql: string, ...p: unknown[]) => (db.prepare(sql).get(...p) as { n: number } | undefined)?.n ?? 0;
 
   // Actual usage
-  const captions  = n(`SELECT COUNT(*) n FROM posts WHERE brand_id=? AND caption IS NOT NULL AND caption!=''`, brandId);
-  const images    = n(`SELECT COUNT(*) n FROM image_jobs WHERE status='done'`)
-                  + n(`SELECT COUNT(*) n FROM posts WHERE brand_id=? AND image_url LIKE '/api/images/%'`, brandId);
-  const videos    = n(`SELECT COUNT(*) n FROM video_projects WHERE brand_id=? AND status='done'`, brandId);
-  const templates = n(`SELECT COUNT(*) n FROM content_templates WHERE brand_id=? AND analysis!=''`, brandId);
+  // P3: bảng tenant nằm trong DB từng brand — đếm trong ngữ cảnh brand đó.
+  const { captions, images, videos, templates } = runWithBrand(brandId, () => ({
+    captions:  n(`SELECT COUNT(*) n FROM posts WHERE brand_id=? AND caption IS NOT NULL AND caption!=''`, brandId),
+    images:    n(`SELECT COUNT(*) n FROM image_jobs WHERE status='done'`)
+             + n(`SELECT COUNT(*) n FROM posts WHERE brand_id=? AND image_url LIKE '/api/images/%'`, brandId),
+    videos:    n(`SELECT COUNT(*) n FROM video_projects WHERE brand_id=? AND status='done'`, brandId),
+    templates: n(`SELECT COUNT(*) n FROM content_templates WHERE brand_id=? AND analysis!=''`, brandId),
+  }));
 
   const cost = {
     captions: captions * unit.caption_usd,
