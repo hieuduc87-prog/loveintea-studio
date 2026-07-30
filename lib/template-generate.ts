@@ -191,12 +191,16 @@ export async function generateTemplateImages(opts: {
     // Card 7554fa71 vòng 3: một ảnh + văn xuôi KHÔNG giữ nổi form hộp. Slide sản
     // phẩm gửi CẢ HAI: ảnh 1 = template (bố cục), ảnh 2 = packshot (danh tính+form).
     const productImg = refPath || packshotPath;
+    // Vòng 4: template làm ảnh CHÍNH thì model vẫn vẽ lại thiết kế hộp. Trong
+    // images.edit, ảnh ĐẦU là đối tượng được giữ danh tính mạnh nhất → đảo vai:
+    // packshot = ảnh chính (thiết kế bao bì bất khả xâm phạm), template = ảnh
+    // phụ chỉ để lấy bố cục/góc máy.
     const base = showProduct
-      ? ((tplSlidePath && productImg) ? tplSlidePath : (productImg || tplSlidePath))
+      ? (productImg || tplSlidePath)
       : (nonConsumable
           ? (productImg || tplSlidePath)
           : (tplSlidePath || productImg));
-    const extraImagePaths = showProduct && tplSlidePath && productImg ? [productImg] : [];
+    const extraImagePaths = showProduct && tplSlidePath && productImg ? [tplSlidePath] : [];
     const usingProductBase = showProduct && Boolean(productImg);
     const twoImageMode = extraImagePaths.length > 0;
 
@@ -215,7 +219,7 @@ export async function generateTemplateImages(opts: {
       meta.visual ? `Camera angle/layout/style: ${stripBrandNouns(meta.visual)}.` : '',
       showProduct
         ? (twoImageMode
-            ? `TWO reference images are provided. IMAGE 1 = layout/composition reference only (its own product and branding must NOT appear). IMAGE 2 = OUR REAL PRODUCT — place THIS exact product into IMAGE 1's composition and camera angle. Keep IMAGE 2's packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical — do NOT invent, redraw, translate, blur or omit any text; the printed label must stay sharp and fully legible. Our product: ${product?.name ?? ''}.`
+            ? `TWO reference images are provided. IMAGE 1 = OUR REAL PRODUCT — its packaging artwork, colours, label layout, ALL printed text/wording and logos are FINAL and must be reproduced 100% IDENTICAL (do NOT redesign, restyle, recolour, translate or invent packaging; copy the exact artwork). IMAGE 2 = composition/camera-angle reference ONLY — restage OUR product from IMAGE 1 into IMAGE 2's scene and pose; IMAGE 2's own product and branding must NOT appear. Our product: ${product?.name ?? ''}.`
             : `Place the EXACT product shown in the reference image into this composition/angle. Keep its packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical to the reference — do NOT invent, redraw, translate, blur or omit any text on the packaging; the product's printed label must stay sharp and fully legible. The reference IS our product: ${product?.name ?? ''}.`)
         : (product
             // Gossby 30/07: câu cũ viết cứng đạo cụ ngành trà ("loose herbs, dried
