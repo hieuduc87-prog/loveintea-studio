@@ -341,7 +341,6 @@ export const PRODUCT_UNIVERSAL_TEMPLATE: ReelTemplateDef = {
     branding: ['MACRO_HOOK', 'PRODUCT_REVEAL', 'TEXTURE_LIFT', 'HERO_BEAUTY', 'USE_PAYOFF', 'PRODUCT_CTA'],
     educate: ['MACRO_HOOK', 'DETAIL_ACTION', 'PRODUCT_REVEAL', 'TEXTURE_LIFT', 'HERO_BEAUTY', 'PRODUCT_CTA'],
     sale: ['PRODUCT_REVEAL', 'HERO_BEAUTY', 'USE_PAYOFF', 'PRODUCT_CTA'],
-    iced_summer: ['MACRO_HOOK', 'DETAIL_ACTION', 'PRODUCT_REVEAL', 'TEXTURE_LIFT', 'HERO_BEAUTY', 'USE_PAYOFF', 'PRODUCT_CTA'],
   },
   heroConcept: 'a premium beauty shot of {heroSubject}, natural true colors, tactile realistic textures',
   sceneCanvas: '{setting}',
