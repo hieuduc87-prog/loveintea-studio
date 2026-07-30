@@ -92,6 +92,17 @@ export async function generateTemplateImages(opts: {
   const product = productId
     ? db.prepare('SELECT * FROM products WHERE id=? OR (brand_id=? AND slug=?)').get(productId, bid, productId) as Record<string, string> | undefined
     : undefined;
+  // ingredients trong DB có thể là chuỗi JSON '[]' — truthy nhưng RỖNG (mũ chó
+  // gossby 30/07). Chuẩn hoá về text sạch; rỗng thật thì slide detail dùng
+  // chất liệu/cận cảnh thay vì "components: []".
+  if (product) {
+    let ing = String(product.ingredients ?? '').trim();
+    if (ing.startsWith('[')) {
+      try { ing = (JSON.parse(ing) as unknown[]).map(x => String(x)).filter(Boolean).join(', '); }
+      catch { ing = ing.replace(/[[\]"]/g, '').trim(); }
+    }
+    product.ingredients = ing;
+  }
   const packshotPath = resolveProductImagePath(product?.image_url);
 
   // Gợi ý kích thước thật để giữ TỈ LỆ hợp lý (card: hộp trà không được to quá so với lá trà).
@@ -185,7 +196,13 @@ export async function generateTemplateImages(opts: {
       showProduct
         ? `Place the EXACT product shown in the reference image into this composition/angle. Keep its packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical to the reference — do NOT invent, redraw, translate, blur or omit any text on the packaging; the product's printed label must stay sharp and fully legible. The reference IS our product: ${product?.name ?? ''}.`
         : (product
-            ? `This is an INGREDIENT / lifestyle slide — feature the raw or freshly prepared INGREDIENTS of "${product.name}"${product.ingredients ? ` (${product.ingredients})` : ''} arranged naturally (loose herbs, roots, flowers, dried tea, bowls, fresh produce), keeping the template slide's composition. Do NOT show the product's box, packaging, sachet, pouch, printed label or any logo in this slide — ingredients only.${product.theme ? ` Theme: ${product.theme}.` : ''}`
+            // Gossby 30/07: câu cũ viết cứng đạo cụ ngành trà ("loose herbs, dried
+            // tea, bowls") → bài MŨ CHÓ ra bát gia vị. Luật L4: prompt không được
+            // giả định ngành — đạo cụ suy từ CHÍNH dữ liệu sản phẩm; hàng không
+            // ăn-uống thì slide này là chi tiết chất liệu / cận cảnh đang dùng.
+            ? `This is a DETAIL / lifestyle slide for "${product.name}"${product.theme ? ` (${product.theme})` : ''} — keep the template slide's composition. ${product.ingredients
+                ? `Feature its actual components/ingredients ONLY: ${product.ingredients} — arranged naturally.`
+                : 'Feature a close-up of the product\'s real materials, texture, craft details, or the product being used in real life.'} NEVER add food ingredients, herbs, spices, bowls or produce unless they are explicitly listed as this product's components. Do NOT show the product's box, packaging, sachet, pouch, printed label or any logo in this slide.`
             : ''),
       // Bảng màu template nhường khi người dùng chỉ định màu (card 1be7fe0e).
       styleBits && !userSetsColor ? `Match the template aesthetic: ${styleBits}.` : '',
