@@ -152,7 +152,7 @@ export function BlogFactoryView({ brandId }: { brandId?: string } = {}) {
             <div className="bg-gray-900 border border-gray-800 rounded-xl h-96 flex flex-col items-center justify-center text-center">
               <p className="text-4xl mb-3">📝</p>
               <p className="text-white font-medium mb-1">Generate a Blog Post</p>
-              <p className="text-gray-500 text-sm">1500+ words, SEO optimized, English<br />with LoveinTea brand voice.</p>
+              <p className="text-gray-500 text-sm">1500+ words, SEO optimized, English<br />theo brand voice của store.</p>
             </div>
           )}
         </div>

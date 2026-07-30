@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const momoRes = await createMoMoPayment({
       orderId,
       amount: plan.price as number,
-      orderInfo: `LoveinTea Studio — ${plan.name} (${orderId})`,
+      orderInfo: `Easy Creative Hub — ${plan.name} (${orderId})`,
       redirectUrl: `${appUrl}/payment/momo-result?orderId=${orderId}`,
       ipnUrl:      `${appUrl}/api/payment/momo-callback`,
       extraData:   Buffer.from(JSON.stringify({ planId, userId: user.id })).toString('base64'),

@@ -42,7 +42,10 @@ export async function POST(req: NextRequest) {
       `SELECT rule_text FROM content_rules WHERE brand_id = ? AND status = 'active' ORDER BY created_at ASC`
     ).all(bid) as { rule_text: string }[];
 
-    const prompt = `You are the learning engine for LoveinTea.
+    // L4: tên brand bơm từ DB theo brandId, không viết cứng tenant.
+    const brandName = (db.prepare('SELECT name FROM brands WHERE id=?').get(bid) as { name?: string } | undefined)?.name || 'this brand';
+
+    const prompt = `You are the learning engine for ${brandName}.
 
 INPUT — Post performance data (last 30 days):
 ${JSON.stringify(posts.map(p => ({

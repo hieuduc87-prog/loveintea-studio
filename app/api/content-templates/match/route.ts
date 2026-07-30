@@ -76,7 +76,14 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    const prompt = `You are a content production AI for a Vietnamese beverage brand (LoveinTea — hibiscus, chrysanthemum, artichoke herbal teas).
+    // L4: danh tính brand bơm từ DB theo brandId, không viết cứng tenant/ngành hàng.
+    const brandRow = db.prepare('SELECT name FROM brands WHERE id=?').get(brandId) as { name?: string } | undefined;
+    const dnaRow = db.prepare('SELECT tagline, through_line FROM brand_dna WHERE brand_id=?').get(brandId) as { tagline?: string; through_line?: string } | undefined;
+    const brandDesc = brandRow?.name
+      ? `the brand "${brandRow.name}"${dnaRow?.through_line || dnaRow?.tagline ? ` — ${dnaRow.through_line || dnaRow.tagline}` : ''}`
+      : 'a consumer brand';
+
+    const prompt = `You are a content production AI for ${brandDesc}.
 
 Given the following content request and available templates, pick the ${limit} BEST templates and explain why.
 

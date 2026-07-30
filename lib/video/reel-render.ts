@@ -300,6 +300,8 @@ async function buildEndCard(brandId: string, plan: ReelPlan, ctaText: string, du
   const pack = resolvePackshot(brandId, plan.sku, slug);
   const logo = resolveLogo(brandId);
   const fonts = resolveFonts(brandId);
+  // L4: tên brand trên end card bơm từ DB — không viết cứng tenant.
+  const brandName = (getDb().prepare('SELECT name FROM brands WHERE id=?').get(brandId) as { name?: string } | undefined)?.name || '';
   const fontFace = (name: string, file: string | null) => file
     ? `@font-face{font-family:'${name}';src:url(data:font/${file.endsWith('.otf') ? 'otf' : 'ttf'};base64,${fs.readFileSync(file).toString('base64')});}`
     : '';
@@ -323,7 +325,7 @@ async function buildEndCard(brandId: string, plan: ReelPlan, ctaText: string, du
   ${logoB64 ? `<img class="logo" src="${logoB64}">` : ''}
   ${packB64 ? `<img class="pack" src="${packB64}">` : ''}
   <div class="cta">${esc(ctaText)}</div>
-  <div class="sub">with LoveinTea</div>
+  ${brandName ? `<div class="sub">with ${esc(brandName)}</div>` : ''}
   <script>window.SEEK=function(){};</script></body></html>`;
 
   // 1 frame PNG là đủ — chuyển động tạo bằng zoompan

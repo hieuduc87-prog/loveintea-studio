@@ -45,8 +45,8 @@ function makeDemoFlow(): object {
       },
       {
         id: n3, type: 'step', x: 500, y: 160,
-        title: 'Chọn SKU', description: 'Chọn sản phẩm: Dandelion, Chrysanthemum, Lotus, Ginger Turmeric...',
-        processType: 'manual', tool: 'LoveinTea Studio',
+        title: 'Chọn SKU', description: 'Chọn sản phẩm từ danh sách Products của brand',
+        processType: 'manual', tool: 'Easy Creative Hub',
         prompt: '', promptNotes: '',
         inputRequired: '', outputDescription: '',
         assignedTo: 'Content Creator', estimatedTime: '2 phút',
@@ -55,7 +55,7 @@ function makeDemoFlow(): object {
       {
         id: n4, type: 'step', x: 500, y: 400,
         title: 'Chọn USP + Scene', description: 'Chọn góc độ marketing (Ritual Calm, Gentle Detox...) và bối cảnh (Morning Kitchen, Garden Moment...)',
-        processType: 'manual', tool: 'LoveinTea Studio',
+        processType: 'manual', tool: 'Easy Creative Hub',
         prompt: '', promptNotes: '',
         inputRequired: '', outputDescription: '',
         assignedTo: 'Content Creator', estimatedTime: '3 phút',
@@ -63,16 +63,16 @@ function makeDemoFlow(): object {
       },
       {
         id: n5, type: 'ai_step', x: 760, y: 280,
-        title: 'Build Prompt', description: 'System tự build prompt từ SKU + USP + Scene, kết hợp Brand DNA của LoveinTea',
-        processType: 'ai', tool: 'LoveinTea Studio',
-        prompt: `You are a brand photographer for LoveinTea — Timeless Remedies.
+        title: 'Build Prompt', description: 'System tự build prompt từ SKU + USP + Scene, kết hợp Brand DNA của brand',
+        processType: 'ai', tool: 'Easy Creative Hub',
+        prompt: `You are a brand photographer for {brand.name} — {brand.tagline}.
 Product: {sku.name} ({sku.productName})
 USP Angle: {usp.headline} — {usp.sub}
 Scene: {context.label}
-Brand colors: Heritage Green #1A5632, Love Coral #E04854
-Voice: Warmly Wise, Cheerfully Simple, Proudly Vietnamese
+Brand colors: {brand.colors}
+Voice: {brand.voiceTraits}
 
-Create a photorealistic lifestyle scene. Keep product prominently placed. Vietnamese aesthetic. Soft natural lighting. No text overlay.`,
+Create a photorealistic lifestyle scene. Keep product prominently placed. Match the brand aesthetic. Soft natural lighting. No text overlay.`,
         promptNotes: `Prompt được auto-generate từ brand-dna.ts.
 Điều chỉnh được:
 • Góc máy: add 'overhead shot', 'eye-level', 'close-up'
@@ -90,7 +90,7 @@ Create a photorealistic lifestyle scene. Keep product prominently placed. Vietna
         prompt: `EDIT MODE (recommended):
 Product image as reference — keep packaging intact and clearly visible.
 Add lifestyle scene: {scene_description}
-Style: photorealistic, Vietnamese aesthetic, soft natural light
+Style: photorealistic, on-brand aesthetic, soft natural light
 Negative: blurry, distorted, text overlay, watermark
 
 GENERATE MODE:
@@ -107,7 +107,7 @@ Size: 1024x1024, quality: standard`,
       },
       {
         id: n7, type: 'decision', x: 1280, y: 280,
-        title: 'Review Output', description: 'Kiểm tra output: brand consistent? Product visible? Lighting OK? Vietnamese feel? No text?',
+        title: 'Review Output', description: 'Kiểm tra output: brand consistent? Product visible? Lighting OK? Đúng chất brand? No text?',
         processType: 'manual', tool: '',
         prompt: '', promptNotes: '',
         inputRequired: 'Generated image',
@@ -115,16 +115,16 @@ Size: 1024x1024, quality: standard`,
         assignedTo: 'Content Creator', estimatedTime: '2 phút',
         notes: `Checklist:
 ✅ Product rõ và đúng bao bì
-✅ Màu brand đúng (Heritage Green, Coral)
+✅ Màu brand đúng theo Brand DNA
 ✅ Không có chữ
-✅ Cảm giác Vietnamese
+✅ Cảm giác đúng brand
 ✅ Ánh sáng đẹp, không bị flash cứng`,
         outputImages: [],
       },
       {
         id: n8, type: 'output', x: 1520, y: 160,
         title: 'Lưu vào Image Library', description: 'Lưu ảnh vào library với metadata: SKU, USP, scene, kênh sử dụng. Ready để dùng.',
-        processType: 'manual', tool: 'LoveinTea Studio',
+        processType: 'manual', tool: 'Easy Creative Hub',
         prompt: '', promptNotes: '',
         inputRequired: 'Approved image',
         outputDescription: 'Image stored in /api/images với full metadata JSON',
@@ -134,7 +134,7 @@ Size: 1024x1024, quality: standard`,
       {
         id: n9, type: 'step', x: 1280, y: 460,
         title: 'Chỉnh Prompt', description: 'Edit custom prompt: thêm negative prompts, chỉnh góc độ, ánh sáng, màu sắc, mood. Thay scene hoặc USP nếu cần.',
-        processType: 'manual', tool: 'LoveinTea Studio',
+        processType: 'manual', tool: 'Easy Creative Hub',
         prompt: '', promptNotes: '',
         inputRequired: 'Output image không đạt + feedback cụ thể',
         outputDescription: 'Revised prompt hoặc settings',

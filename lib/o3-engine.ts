@@ -29,7 +29,7 @@ function parseJson<T>(s: string | undefined | null, fallback: T): T {
   try { return s ? (JSON.parse(s) as T) : fallback; } catch { return fallback; }
 }
 
-function getBrandIdentity(brandId: string): BrandIdentity {
+export function getBrandIdentity(brandId: string): BrandIdentity {
   if (!brandId) return EMPTY_IDENTITY;
   try {
     const db = getDb();
@@ -66,7 +66,7 @@ interface ProductInfo {
 
 /** DB trước (đa-brand, lọc theo brand_id); SKUS tĩnh chỉ là fallback legacy
  *  cho ngữ cảnh chưa có brand — KHÔNG dùng SKUS tĩnh khi brand khác có id trùng. */
-function resolveProduct(brandId: string, skuId: string): ProductInfo | null {
+export function resolveProduct(brandId: string, skuId: string): ProductInfo | null {
   if (!skuId) return null;
   try {
     const db = getDb();

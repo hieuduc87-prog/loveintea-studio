@@ -1240,7 +1240,7 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
   return (
     <div className="border-t border-gray-800 pt-4">
       <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">🎬 Tạo post từ template ({slideCount} ảnh)</p>
-      <p className="text-[11px] text-gray-500 mb-2">Chọn sản phẩm → AI thay <b>sản phẩm Loveintea</b> vào đúng góc/bố cục template (giữ nguyên bao bì), sinh {slideCount} ảnh → 1 post carousel.</p>
+      <p className="text-[11px] text-gray-500 mb-2">Chọn sản phẩm → AI thay <b>sản phẩm của brand</b> vào đúng góc/bố cục template (giữ nguyên bao bì), sinh {slideCount} ảnh → 1 post carousel.</p>
       <input value={customPrompt} onChange={e => setCustomPrompt(e.target.value)}
         placeholder="Yêu cầu thêm (tùy chọn): vd 'đặt trên bàn gỗ, ánh sáng sáng', 'thêm tách trà'…"
         className="w-full mb-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white" />

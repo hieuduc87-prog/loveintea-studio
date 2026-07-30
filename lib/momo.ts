@@ -53,8 +53,8 @@ export async function createMoMoPayment(p: MoMoCreateParams): Promise<MoMoCreate
 
   const body = {
     partnerCode: c.partnerCode,
-    partnerName: 'LoveinTea Studio',
-    storeId:     'LoveinTeaStudio',
+    partnerName: 'Easy Creative Hub',
+    storeId:     'EasyCreativeHub',
     requestId,
     amount:      p.amount,
     orderId:     p.orderId,

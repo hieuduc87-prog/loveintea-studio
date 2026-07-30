@@ -7,7 +7,7 @@ export interface Guide {
 export const GUIDES: Guide[] = [
   {
     id: 'overview', icon: '🏠', title: 'Tổng quan hệ thống', group: 'Bắt đầu',
-    intro: 'LoveinTea Studio là hệ điều hành marketing khép kín: Chiến lược → Kế hoạch → Sản xuất → Đăng → Đo lường → Học hỏi → quay lại Chiến lược. Mọi tính năng phục vụ vòng lặp này; càng vận hành, hệ thống càng tự tối ưu (template/segment/insight nào thắng thì ưu tiên).',
+    intro: 'Easy Creative Hub là hệ điều hành marketing khép kín: Chiến lược → Kế hoạch → Sản xuất → Đăng → Đo lường → Học hỏi → quay lại Chiến lược. Mọi tính năng phục vụ vòng lặp này; càng vận hành, hệ thống càng tự tối ưu (template/segment/insight nào thắng thì ưu tiên).',
     steps: [
       'Điều hướng bằng link sạch: mỗi tab là 1 URL (vd /plan-calendar, /video-studio) — bookmark hoặc share được.',
       'Brand switcher ở góc trên sidebar: mọi dữ liệu (sản phẩm, kế hoạch, kênh, metrics) tách theo brand.',

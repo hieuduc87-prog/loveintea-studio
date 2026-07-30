@@ -94,8 +94,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'seed') {
-      // Seed default rules from brand knowledge
-      const defaults = [
+      // Seed default rules from brand knowledge.
+      // L4 multi-brand-doctrine: các rule mang danh tính/ngành hàng LoveinTea
+      // (tag trắng, brew color lock) CHỈ seed cho brand loveintea — brand khác
+      // nhận bộ generic, rule riêng tự tích lũy qua Learn.
+      const defaults = bid === 'loveintea' ? [
         'Every post must follow 4-beat structure: Hook → Bridge to USP → Heritage Voice → CTA',
         'Copy must use theme/moment language only — NEVER structure/function health claims',
         'Tag: 1 white LoveinTea logo tag. NOT red, NOT kraft.',
@@ -103,6 +106,13 @@ export async function POST(req: NextRequest) {
         'Emotion:proof ratio ~70:30. Never let proof exceed 50%.',
         'Each post tests exactly 1 variable_cell — no multi-variable posts',
         'Brew color must match per-SKU HARD LOCK (see beverage table)',
+        'IG = brand/discovery channel; FB = community/trust/conversion channel',
+      ] : [
+        'Every post must follow 4-beat structure: Hook → Bridge to USP → Brand Voice → CTA',
+        'Copy must use theme/moment language only — NEVER structure/function health claims',
+        'CTA: maximum 1-2 per every 9 tiles in the feed grid',
+        'Emotion:proof ratio ~70:30. Never let proof exceed 50%.',
+        'Each post tests exactly 1 variable_cell — no multi-variable posts',
         'IG = brand/discovery channel; FB = community/trust/conversion channel',
       ];
 
