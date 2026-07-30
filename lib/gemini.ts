@@ -197,6 +197,37 @@ export interface CollectionAnalysis {
 }
 
 /** Analyze ALL images of a collection template → structure + reusable skeleton. */
+
+/**
+ * So/đánh giá NHIỀU ảnh, trả JSON tuỳ prompt — dùng cho các GATE thị giác
+ * (fidelity sản phẩm, so chữ trên bao bì...). Code gọi tự quyết verdict từ
+ * từng trường JSON (VERIFY-GATE law: không tin verdict tổng của LLM).
+ */
+export async function imagesVerdictJSON<T = Record<string, unknown>>(
+  images: Array<{ data: Buffer; mimeType: string }>,
+  prompt: string,
+): Promise<T> {
+  const parts: Array<{ inlineData: { data: string; mimeType: string } } | string> = images.map(img => ({
+    inlineData: { data: img.data.toString('base64'), mimeType: img.mimeType },
+  }));
+  parts.push(prompt);
+  let lastError: unknown;
+  for (const modelName of MODELS) {
+    try {
+      const client = getClient();
+      const model = client.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: 'application/json' } });
+      const result = await model.generateContent(parts as Parameters<typeof model.generateContent>[0]);
+      const raw = result.response.text().trim();
+      const m = raw.match(/\{[\s\S]*\}/);
+      return JSON.parse(m ? m[0] : raw) as T;
+    } catch (e) {
+      lastError = e;
+      if (!isRetryable(e)) throw e;
+    }
+  }
+  throw lastError;
+}
+
 export async function analyzeTemplateCollection(images: Array<{ data: Buffer; mimeType: string }>): Promise<CollectionAnalysis> {
   const prompt = `Bạn là giám đốc sáng tạo. Đây là MỘT template content gồm ${images.length} ảnh THEO THỨ TỰ (ảnh 1 → ${images.length}).
 Phân tích CHI TIẾT để hiểu cấu trúc template và rút ra KHUNG SƯỜN tái sử dụng được cho sản phẩm khác.

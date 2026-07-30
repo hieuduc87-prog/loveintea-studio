@@ -73,3 +73,14 @@ export function pickProductRefUrl(
   // không có product_images → packshot mặc định của sản phẩm
   return prod?.image_url ?? null;
 }
+
+/** Sản phẩm có ẢNH BAO BÌ/HỘP thật trong kho không — quyết định prompt có được
+ *  nói tới packaging hay phải CẤM bịa hộp (gossby 30/07: AI tự vẽ hộp carton
+ *  cho mũ chó không hề bán kèm hộp). */
+export function productHasBoxImage(productId: string | null | undefined): boolean {
+  if (!productId) return false;
+  const db = getDb();
+  const prod = db.prepare('SELECT id FROM products WHERE id=? OR slug=? LIMIT 1').get(productId, productId) as { id: string } | undefined;
+  const rows = db.prepare('SELECT ai_label, analysis_json FROM product_images WHERE product_id=?').all(prod?.id ?? productId) as Array<{ ai_label: string | null; analysis_json: string | null }>;
+  return rows.some(r => looksLikeBox({ image_url: '', ref_role: null, is_hero: 0, angle: null, ai_label: r.ai_label, analysis_json: r.analysis_json }));
+}

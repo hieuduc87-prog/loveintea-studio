@@ -7,7 +7,9 @@ import { v4 as uuid } from 'uuid';
 import { getDb } from './db';
 import { editProductImage, generateImage, saveImageToFile } from './openai-image';
 import { resolveProductImagePath } from './plan-generate';
-import { pickProductRefUrl } from './product-ref';
+import fs from 'fs';
+import { pickProductRefUrl, productHasBoxImage } from './product-ref';
+import { verifyProductFidelity, fidelityRetryClause } from './product-fidelity';
 import { generateJSON } from './gemini';
 
 interface SlideAnalysis { index?: number; role?: string; content?: string; text_on_image?: string; visual?: string }
@@ -104,6 +106,9 @@ export async function generateTemplateImages(opts: {
     product.ingredients = ing;
   }
   const packshotPath = resolveProductImagePath(product?.image_url);
+  // Sản phẩm có ẢNH bao bì thật không — không có thì prompt CẤM bịa hộp
+  // (gossby 30/07: AI tự vẽ hộp carton cho mũ chó bán không hộp).
+  const productHasBox = productHasBoxImage(productId);
 
   // Gợi ý kích thước thật để giữ TỈ LỆ hợp lý (card: hộp trà không được to quá so với lá trà).
   // Best-effort: bắt mẫu "11.5x7x14cm" / "11,5 x 7 x 14 cm" trong knowledge_json.
@@ -216,13 +221,13 @@ export async function generateTemplateImages(opts: {
       // Slide sản phẩm: bỏ qua thương hiệu của template nhưng THAY bằng hộp mình.
       meta.content
         ? (showProduct
-            ? `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${neutralizePackForm(stripBrandNouns(meta.content))}. Any product/brand the layout mentions belongs to a DIFFERENT company — REPLACE it with OUR product from the reference image; never copy the layout's own branding, wording or packaging design. ${FORM_LOCK}`
+            ? `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${neutralizePackForm(stripBrandNouns(meta.content))}. Any product/brand the layout mentions belongs to a DIFFERENT company — REPLACE it with OUR product from the reference image; never copy the layout's own branding, wording or packaging design. ${productHasBox ? FORM_LOCK : ''}`
             : `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${stripBrandNouns(meta.content)}. IGNORE every brand name, product name, printed wording and colour mentioned in it; those belong to a DIFFERENT product and must NOT appear.`)
         : '',
       meta.visual ? `Camera angle/layout/style: ${stripBrandNouns(meta.visual)}.` : '',
       showProduct
         ? (twoImageMode
-            ? `TWO reference images are provided. IMAGE 1 = OUR REAL PRODUCT — its packaging artwork, colours, label layout, ALL printed text/wording and logos are FINAL and must be reproduced 100% IDENTICAL (do NOT redesign, restyle, recolour, translate or invent packaging; copy the exact artwork). IMAGE 2 = composition/camera-angle reference ONLY — restage OUR product from IMAGE 1 into IMAGE 2's scene and pose; IMAGE 2's own product and branding must NOT appear. Our product: ${product?.name ?? ''}.`
+            ? `TWO reference images are provided. IMAGE 1 = OUR REAL PRODUCT — its ${productHasBox ? 'packaging artwork, colours, label layout, ' : ''}appearance, materials, colours, ALL printed/embroidered text and logos are FINAL and must be reproduced 100% IDENTICAL (do NOT redesign, restyle, recolour, translate or invent anything; copy the exact look). IMAGE 2 = composition/camera-angle reference ONLY — restage OUR product from IMAGE 1 into IMAGE 2's scene and pose; IMAGE 2's own product and branding must NOT appear.${productHasBox ? '' : ' This product is sold WITHOUT any retail box or packaging — NEVER draw a box, carton, pouch or any packaging for it; show ONLY the product itself.'} Our product: ${product?.name ?? ''}.`
             : `Place the EXACT product shown in the reference image into this composition/angle. Keep its packaging shape, label, ALL printed text/wording and logos, colour AND proportions 100% identical to the reference — do NOT invent, redraw, translate, blur or omit any text on the packaging; the product's printed label must stay sharp and fully legible. The reference IS our product: ${product?.name ?? ''}.`)
         : (product
             // Gossby 30/07: câu cũ viết cứng đạo cụ ngành trà ("loose herbs, dried
@@ -239,16 +244,47 @@ export async function generateTemplateImages(opts: {
       // đây nó chỉ là "extra instruction" nên thua mô tả template đứng trên.
       customPrompt ? `USER INSTRUCTION — HIGHEST PRIORITY, overrides the layout reference above (including its colours and any product it mentions): ${customPrompt}.` : '',
       // Tỉ lệ THỰC TẾ: mọi vật thể/nguyên liệu tự nhiên, không phóng to bất thường.
-      `Keep realistic real-world proportions and believable scale between all objects (ingredients, cups, hands, props${showProduct ? ', and the product box' : ''}); nothing oversized, floating, giant or shrunken.${sizeHint && showProduct ? ` Real product size ≈ ${sizeHint} — respect this physical scale.` : ''}`,
+      `Keep realistic real-world proportions and believable scale between all objects (ingredients, cups, hands, props${showProduct && productHasBox ? ', and the product box' : ''}); nothing oversized, floating, giant or shrunken.${sizeHint && showProduct ? ` Real product size ≈ ${sizeHint} — respect this physical scale.` : ''}`,
       showProduct
         ? 'Photorealistic, premium, on-brand. Do NOT add any extra overlay text, captions, headings, watermarks or new logos beyond what is already printed on the product packaging. The ONLY brand name allowed anywhere in the image is the one printed on the reference product — never invent or borrow another brand name.'
         : 'Photorealistic, premium, on-brand. NO product packaging, NO box, NO sachet, NO added text, NO letters, NO logos in the image (if any text is unavoidable, ENGLISH only — never Vietnamese).',
     ].filter(Boolean).join(' ');
 
     try {
-      const raw = base
+      let raw = base
         ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536', brandId: opts.brandId, extraImagePaths })
         : await generateImage({ prompt, size: '1024x1536', brandId: opts.brandId });
+
+      // GATE TRUNG THỰC SẢN PHẨM (founder 30/07): slide có sản phẩm → máy tự so
+      // chữ + bao bì với ảnh thật, lệch thì tự gen lại 1 lần, vẫn lệch thì cảnh
+      // báo rõ ràng — không đợi mắt người phát hiện "BELLEA".
+      if (usingProductBase && productImg && raw.startsWith('data:')) {
+        try {
+          const refBuf = fs.readFileSync(productImg);
+          const genBuf = Buffer.from(raw.slice(raw.indexOf(',') + 1), 'base64');
+          let v = await verifyProductFidelity(refBuf, genBuf, { refHasPackaging: productHasBox });
+          if (v.checked && !v.ok) {
+            onLog?.(`slide ${i + 1}: QA sản phẩm FAIL (${v.textMismatch ? `chữ "${v.generatedText}" ≠ "${v.expectedText}"` : ''}${v.inventedPackaging ? ' bịa bao bì' : ''}) — gen lại…`);
+            const raw2 = base
+              ? await editProductImage({ productImagePath: base, prompt: `${prompt} ${fidelityRetryClause(v)}`, size: '1024x1536', brandId: opts.brandId, extraImagePaths })
+              : raw;
+            if (raw2.startsWith('data:')) {
+              const v2 = await verifyProductFidelity(refBuf, Buffer.from(raw2.slice(raw2.indexOf(',') + 1), 'base64'), { refHasPackaging: productHasBox });
+              if (v2.checked && v2.ok) { raw = raw2; v = v2; onLog?.(`slide ${i + 1}: QA đạt sau gen lại ✓`); }
+              else if (!v2.checked || (v2.textMismatch && !v.textMismatch) === false) { raw = raw2; v = v2; }
+            }
+            if (v.checked && !v.ok) {
+              const w = `slide ${i + 1}: ⚠ sản phẩm chưa khớp ảnh thật (${[v.textMismatch ? `chữ phải là "${v.expectedText}"` : '', v.inventedPackaging ? 'có bao bì AI tự bịa' : ''].filter(Boolean).join(', ')}) — KIỂM TRA KỸ trước khi đăng`;
+              warnings.push(w); onLog?.(w);
+            }
+          } else if (v.checked) {
+            onLog?.(`slide ${i + 1}: QA sản phẩm ✓ (chữ + bao bì khớp ảnh thật)`);
+          } else {
+            onLog?.(`slide ${i + 1}: QA sản phẩm bỏ qua (${v.note})`);
+          }
+        } catch { /* gate không bao giờ chặn việc thật */ }
+      }
+
       const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
       if (url) images.push(url);
       onLog?.(`slide ${i + 1}/${slideUrls.length} ✓`);
