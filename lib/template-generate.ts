@@ -8,7 +8,7 @@ import { getDb } from './db';
 import { editProductImage, editWithProductLock, generateImage, saveImageToFile } from './openai-image';
 import { resolveProductImagePath } from './plan-generate';
 import fs from 'fs';
-import { pickProductRefUrl, productHasBoxImage } from './product-ref';
+import { pickProductRefUrl, productHasBoxImage, refImageAngle } from './product-ref';
 import { verifyProductFidelity, fidelityRetryClause } from './product-fidelity';
 import { generateJSON } from './gemini';
 
@@ -261,7 +261,18 @@ export async function generateTemplateImages(opts: {
       let raw: string;
       if (maskLockMode && productImg) {
         onLog?.(`slide ${i + 1}: mask-lock — sản phẩm là pixel gốc, chỉ vẽ nền`);
+        // GÓC MÁY THEO SẢN PHẨM: pixel bị khoá không xoay được → cảnh phải xoay
+        // theo góc ảnh gốc, nếu không hộp nhìn-từ-trên nằm giữa cảnh ngang là vênh.
+        const refAngle = refImageAngle(productId, pickProductRefUrl(productId, role, { preferBox: wantBoxRef }) || '');
+        const CAMERA: Record<string, string> = {
+          top: 'CAMERA: top-down flat-lay — shot directly from above; the tabletop surface fills the frame; every prop lies FLAT and is also seen from above; no horizon, no background wall.',
+          '45': 'CAMERA: high angle about 45° looking down at the surface; props on the table seen from the same 45° perspective.',
+          front: 'CAMERA: eye-level straight on at product height; background scene behind the product; surface visible at the bottom.',
+          side: 'CAMERA: eye-level straight on at product height; background scene behind the product.',
+        };
+        const cameraClause = CAMERA[refAngle] ?? CAMERA['45'];
         const scene = [
+          cameraClause,
           meta.content ? `Scene to paint around the product: ${neutralizePackForm(stripBrandNouns(meta.content))}.` : '',
           styleBits && !userSetsColor ? `Aesthetic: ${styleBits}.` : '',
           customPrompt ? `USER INSTRUCTION — HIGHEST PRIORITY: ${customPrompt}.` : '',

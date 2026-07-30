@@ -97,3 +97,17 @@ export function productHasBoxImage(productId: string | null | undefined): boolea
   const rows = db.prepare('SELECT ai_label, analysis_json FROM product_images WHERE product_id=?').all(prod?.id ?? productId) as Array<{ ai_label: string | null; analysis_json: string | null }>;
   return rows.some(r => looksLikeBox({ image_url: '', ref_role: null, is_hero: 0, angle: null, ai_label: r.ai_label, analysis_json: r.analysis_json }));
 }
+
+/** Góc chụp của một ảnh ref (theo url) — để scene sinh ra KHỚP phối cảnh với
+ *  pixel sản phẩm bị khoá (founder 30/07: hộp nhìn-từ-trên dán vào cảnh ngang
+ *  là vênh ngay; sản phẩm không xoay được thì CẢNH phải xoay theo sản phẩm). */
+export function refImageAngle(productId: string | null | undefined, imageUrl: string | null | undefined): string {
+  if (!productId || !imageUrl) return '';
+  const base = imageUrl.split('?')[0].split('/').pop() ?? '';
+  if (!base) return '';
+  const db = getDb();
+  const prod = db.prepare('SELECT id FROM products WHERE id=? OR slug=? LIMIT 1').get(productId, productId) as { id: string } | undefined;
+  const row = db.prepare('SELECT angle FROM product_images WHERE product_id=? AND image_url LIKE ?')
+    .get(prod?.id ?? productId, `%${base}%`) as { angle: string | null } | undefined;
+  return (row?.angle ?? '').toLowerCase();
+}
