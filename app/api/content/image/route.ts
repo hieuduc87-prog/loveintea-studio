@@ -9,6 +9,8 @@ import { buildImageEditPrompt } from '@/lib/o3-engine';
 import { SKUS } from '@/lib/brand-dna';
 import { getDb } from '@/lib/db';
 import { getBrandId } from '@/lib/brand-guard';
+import { pickProductRefUrl } from '@/lib/product-ref';
+import { resolveProductImagePath } from '@/lib/plan-generate';
 
 export async function POST(req: NextRequest) {
   const limited = enforceRateLimit(req, { scope: 'ai:image', limit: 20, windowMs: 60_000 });
@@ -17,8 +19,14 @@ export async function POST(req: NextRequest) {
   const brandId = getBrandId(req);
   const { skuId, uspId, contextId, customPrompt, useEdit = true } = await req.json();
 
+  // Đa-brand (L4): sản phẩm nằm trong bảng products theo brand — SKUS tĩnh chỉ là
+  // legacy loveintea. Có 1 trong 2 là hợp lệ.
+  const dbProduct = brandId
+    ? db.prepare('SELECT id, slug, image_url FROM products WHERE brand_id=? AND (id=? OR slug=?)')
+        .get(brandId, skuId ?? '', skuId ?? '') as { id: string; slug: string; image_url?: string } | undefined
+    : undefined;
   const sku = SKUS.find(s => s.id === skuId);
-  if (!sku) return NextResponse.json({ error: 'Invalid SKU' }, { status: 400 });
+  if (!sku && !dbProduct) return NextResponse.json({ error: 'Invalid SKU' }, { status: 400 });
 
   const overQuota = reserveQuota(brandId, 'image', 1);
   if (overQuota) return NextResponse.json({ error: overQuota.error }, { status: 429 });
@@ -26,7 +34,7 @@ export async function POST(req: NextRequest) {
   const jobId  = uuid();
   let prompt: string;
   try {
-    prompt = buildImageEditPrompt({ skuId, uspId, contextId, extraNotes: customPrompt });
+    prompt = buildImageEditPrompt({ skuId, uspId, contextId, extraNotes: customPrompt, brandId });
   } catch (e) {
     return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 400 });
   }
@@ -41,15 +49,16 @@ export async function POST(req: NextRequest) {
   try {
     let imageUrl: string;
 
-    // ALWAYS prefer edit mode — keeps product packaging intact
-    if (useEdit) {
-      const productImagePath = path.join(
-        process.cwd(), 'public', 'brand', 'products',
-        path.basename(sku.image)
-      );
-      imageUrl = await editProductImage({ productImagePath, prompt, size: '1024x1536' });
+    // ALWAYS prefer edit mode — keeps product packaging intact.
+    // Ảnh gốc: packshot DB của brand trước (product_images/products.image_url),
+    // fallback ảnh tĩnh public/brand/products chỉ cho SKU legacy.
+    const refUrl = dbProduct ? (pickProductRefUrl(dbProduct.id, 'product') || dbProduct.image_url) : null;
+    const productImagePath = (refUrl ? resolveProductImagePath(refUrl) : null)
+      || (sku ? path.join(process.cwd(), 'public', 'brand', 'products', path.basename(sku.image)) : null);
+    if (useEdit && productImagePath) {
+      imageUrl = await editProductImage({ productImagePath, prompt, size: '1024x1536', brandId });
     } else {
-      imageUrl = await generateImage({ prompt, size: '1024x1536' });
+      imageUrl = await generateImage({ prompt, size: '1024x1536', brandId });
     }
 
     // Save to file if base64

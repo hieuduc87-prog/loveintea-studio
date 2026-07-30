@@ -6,7 +6,95 @@
 
 import { generateCaption } from './gemini';
 import { getDb } from './db';
-import { BRAND, SKUS, SEGMENTS, RTBS, USP_ANCHORS, NARRATIVES, CONTEXTS } from './brand-dna';
+import { SKUS, SEGMENTS, RTBS, USP_ANCHORS, NARRATIVES, CONTEXTS } from './brand-dna';
+
+// ── Brand identity (L4 multi-brand-doctrine: danh tính tenant TRUYỀN VÀO prompt,
+//    không viết cứng tên hãng/ngành hàng — 30/07 gỡ 3 cụm "LoveinTea ... herbal tea") ──
+
+interface BrandIdentity {
+  name: string;            // '' nếu không xác định được brand — KHÔNG default tenant (L1)
+  throughLine: string;
+  voiceTraits: string[];
+  neverSay: string[];
+  alwaysSay: string[];
+  hashtags: string[];
+  colors: Record<string, string>;
+}
+
+const EMPTY_IDENTITY: BrandIdentity = {
+  name: '', throughLine: '', voiceTraits: [], neverSay: [], alwaysSay: [], hashtags: [], colors: {},
+};
+
+function parseJson<T>(s: string | undefined | null, fallback: T): T {
+  try { return s ? (JSON.parse(s) as T) : fallback; } catch { return fallback; }
+}
+
+function getBrandIdentity(brandId: string): BrandIdentity {
+  if (!brandId) return EMPTY_IDENTITY;
+  try {
+    const db = getDb();
+    const brand = db.prepare('SELECT name FROM brands WHERE id=?').get(brandId) as { name?: string } | undefined;
+    const dna = db.prepare(
+      'SELECT tagline, through_line, voice_traits, compliance_json, hashtags, colors_json FROM brand_dna WHERE brand_id=?'
+    ).get(brandId) as Record<string, string> | undefined;
+    const comp = parseJson<{ neverSay?: string[]; alwaysSay?: string[] }>(dna?.compliance_json, {});
+    return {
+      name: brand?.name || '',
+      throughLine: dna?.through_line || dna?.tagline || '',
+      voiceTraits: parseJson<string[]>(dna?.voice_traits, []).filter(Boolean),
+      neverSay: (comp.neverSay || []).filter(Boolean),
+      alwaysSay: (comp.alwaysSay || []).filter(Boolean),
+      hashtags: parseJson<string[]>(dna?.hashtags, []).filter(Boolean),
+      colors: parseJson<Record<string, string>>(dna?.colors_json, {}),
+    };
+  } catch {
+    return EMPTY_IDENTITY;
+  }
+}
+
+interface ProductInfo {
+  id: string;              // slug chuẩn (khớp SKU_BEVERAGE_LOCK / SEGMENTS.leadSkus)
+  name: string;
+  productName: string;
+  theme: string;
+  color: string;
+  ingredients: string[];
+  bestMoment: string;
+  pitch: string;
+  useCases: string[];
+}
+
+/** DB trước (đa-brand, lọc theo brand_id); SKUS tĩnh chỉ là fallback legacy
+ *  cho ngữ cảnh chưa có brand — KHÔNG dùng SKUS tĩnh khi brand khác có id trùng. */
+function resolveProduct(brandId: string, skuId: string): ProductInfo | null {
+  if (!skuId) return null;
+  try {
+    const db = getDb();
+    const row = brandId
+      ? db.prepare('SELECT * FROM products WHERE brand_id=? AND (id=? OR slug=?)').get(brandId, skuId, skuId) as Record<string, string> | undefined
+      : undefined;
+    if (row) {
+      return {
+        id: row.slug || row.id,
+        name: row.name,
+        productName: row.display_name || row.name,
+        theme: row.theme || '',
+        color: row.color || '',
+        ingredients: parseJson<string[]>(row.ingredients, []),
+        bestMoment: row.best_moment || '',
+        pitch: row.pitch || '',
+        useCases: parseJson<string[]>(row.use_cases, []),
+      };
+    }
+  } catch { /* DB unavailable */ }
+  const sku = SKUS.find(s => s.id === skuId);
+  if (!sku) return null;
+  return {
+    id: sku.id, name: sku.name, productName: sku.productName, theme: sku.theme,
+    color: sku.color, ingredients: [...sku.ingredients], bestMoment: sku.bestMoment,
+    pitch: sku.pitch, useCases: [...sku.useCases],
+  };
+}
 
 // ── Per-SKU HARD LOCK (from detail-spec §2.4) ─────────────────────────────
 const SKU_BEVERAGE_LOCK: Record<string, { color: string; vessel: string; cue: string }> = {
@@ -157,7 +245,8 @@ function getScoreboardContext(brandId: string): string {
 // ── Main content generation ────────────────────────────────────────────────
 
 export async function generateO3Content(config: O3Config): Promise<O3Result> {
-  const sku_ = SKUS.find(s => s.id === config.skuId);
+  const brandId = config.brandId || '';
+  const sku_ = resolveProduct(brandId, config.skuId);
   // Only SKU is required. Any variable not selected is AUTO-PICKED (relevant to the
   // SKU when possible, else the first option) so 2-3 selections are enough to run.
   if (!sku_) throw new Error('Vui lòng chọn sản phẩm (SKU) trước khi generate.');
@@ -173,11 +262,17 @@ export async function generateO3Content(config: O3Config): Promise<O3Result> {
     || CONTEXTS.find(c => sku.bestMoment && JSON.stringify(c).toLowerCase().includes(String(sku.bestMoment).toLowerCase())) || CONTEXTS[0];
   const context = context_!;
 
-  const brandId = config.brandId || '';
+  const brand = getBrandIdentity(brandId);
   const knowledgeBlock = getKnowledgeContext(brandId);
   const { version: ruleVersion, rules } = getActiveRules(brandId);
   const scoreboardBlock = getScoreboardContext(brandId);
-  const bevLock = SKU_BEVERAGE_LOCK[config.skuId];
+  // Ma trận O3 tĩnh (SEGMENTS/RTBS/USP/NARRATIVES hook) + khoá đồ uống là DỮ LIỆU
+  // RIÊNG của loveintea (chứa nguyên văn tên hãng, túi trà, thảo mộc). Brand khác
+  // phải thay bằng dữ liệu sản phẩm/DNA của chính họ — gate theo brand (L4).
+  const isLitMatrix = !brandId || brandId === 'loveintea';
+  const bevLock = isLitMatrix
+    ? (SKU_BEVERAGE_LOCK[sku.id] || SKU_BEVERAGE_LOCK[config.skuId])
+    : undefined;
 
   const rulesBlock = rules.length
     ? `\nACTIVE RULES (rule_version: ${ruleVersion}):\n${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}`
@@ -191,26 +286,37 @@ export async function generateO3Content(config: O3Config): Promise<O3Result> {
 (These are NON-NEGOTIABLE in both copy description and image prompt)`
     : '';
 
-  const prompt = `You are writing an Instagram caption for LoveinTea, a premium Vietnamese herbal tea brand sold in the US.
+  // Danh tính brand bơm từ brands/brand_dna theo brandId — không giả định ngành (L4).
+  const brandLabel = brand.name || 'this brand';
+  const voiceBlock = brand.voiceTraits.length
+    ? `BRAND VOICE (NON-NEGOTIABLE — every trait in every post):\n${brand.voiceTraits.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
+    : 'BRAND VOICE: warm, human, specific to this brand — never generic AI tone.';
+  const neverLine = brand.neverSay.length
+    ? `COMPLIANCE — NEVER USE: ${brand.neverSay.join(', ')}`
+    : 'COMPLIANCE: no medical/health-effect claims, no superlatives you cannot prove.';
+  const alwaysLine = brand.alwaysSay.length
+    ? ` Preferred phrasings: ${brand.alwaysSay.map(p => `"${p}"`).join(', ')}.`
+    : '';
 
-BRAND VOICE (NON-NEGOTIABLE — all 3 traits in every post):
-1. Warmly Wise — gentle grandmother authority, knowledgeable, never clinical
-2. Cheerfully Simple — light, joyful, accessible; wellness is a treat not a chore
-3. Proudly Vietnamese — celebrate heritage, NEVER exoticize
+  const prompt = `You are writing an Instagram caption for ${brandLabel}${brand.throughLine ? ` — ${brand.throughLine}` : ''}.
 
-COMPLIANCE — NEVER USE: cures, treats, heals, prevents disease, innovative, disrupting, mysterious, exotic Eastern, detox, liver, heart, optimize, protocol
-CLAIM-SAFE APPROACH: Describe moments, rituals, feelings. NEVER promise health effects on organs or body systems. Use "traditionally used to support" or "a soothing ritual for" framing.
+${voiceBlock}
+
+${neverLine}
+CLAIM-SAFE APPROACH: Describe moments, rituals, feelings. NEVER promise physical or health effects on organs or body systems.${alwaysLine}
 ${knowledgeBlock}
 ${rulesBlock}
 ${scoreboardBlock}
 
 PRODUCT: ${sku.productName}
-- Ingredients: ${sku.ingredients.join(', ')}
-- Theme: ${sku.theme}
-- Best moment: ${sku.bestMoment}
+${sku.ingredients.length ? `- Ingredients/components: ${sku.ingredients.join(', ')}` : ''}
+${sku.theme ? `- Theme: ${sku.theme}` : ''}
+${sku.bestMoment ? `- Best moment: ${sku.bestMoment}` : ''}
+${sku.pitch ? `- Pitch: ${sku.pitch}` : ''}
 ${bevBlock}
 
-TARGET PERSON: ${segment.name} (${segment.age}), tension: "${segment.tension}"
+${isLitMatrix
+  ? `TARGET PERSON: ${segment.name} (${segment.age}), tension: "${segment.tension}"
 
 ONE REASON TO BUY: "${rtb.label}"
 
@@ -219,7 +325,17 @@ USP ANCHOR (what this post proves):
 - Claim-safe phrasing: "${usp.caption}"
 - Image must show: ${usp.imageRule}
 
-NARRATIVE STRUCTURE: ${narrative.label} — hook: "${narrative.hook}"
+NARRATIVE STRUCTURE: ${narrative.label} — hook: "${narrative.hook}"`
+  : `TARGET PERSON: the brand's core customer — infer from the BRAND STRATEGY above; never assume another industry's customer.
+
+ONE REASON TO BUY: "${sku.pitch || sku.theme || `what makes ${sku.name} genuinely worth buying — state it concretely`}"
+
+USP ANCHOR (what this post proves):
+- Label: ${sku.theme || sku.name}
+- Claim-safe phrasing: "${sku.pitch || `describe ${sku.name} honestly, no unverifiable claims`}"
+- Image must show: the real product with its key differentiating detail clearly visible
+
+NARRATIVE STRUCTURE: ${narrative.label} — write your own pattern-interrupt hook that fits THIS product and its customer (do NOT borrow hooks from other industries).`}
 
 SCENE/CONTEXT: ${context.label} — ${context.light}
 
@@ -233,7 +349,7 @@ Write the Instagram caption following this EXACT 4-beat structure:
 3. HERITAGE VOICE (1 line) — Warmly Wise + Proudly Vietnamese, no health claims
 4. CTA (1 line) — the exact CTA above
 
-Then write a brief IMAGE PROMPT (2-3 sentences) describing the photo that proves the same USP. The product (LoveinTea box/tea bag) must be visible. ${bevLock ? `MANDATORY: brew in ${bevLock.vessel}, ${bevLock.color} brew color, ${bevLock.cue}.` : ''} Use: ${context.label}, ${context.light}.
+Then write a brief IMAGE PROMPT (2-3 sentences) describing the photo that proves the same USP. The product (${brandLabel} "${sku.productName}" packaging) must be visible. ${bevLock ? `MANDATORY: brew in ${bevLock.vessel}, ${bevLock.color} brew color, ${bevLock.cue}.` : ''} Use: ${context.label}, ${context.light}.
 
 Return as JSON: { "caption": "...", "imagePrompt": "..." }`;
 
@@ -252,7 +368,7 @@ Return as JSON: { "caption": "...", "imagePrompt": "..." }`;
   return {
     caption:     parsed.caption,
     imagePrompt: parsed.imagePrompt,
-    hashtags:    BRAND.hashtags.join(' '),
+    hashtags:    brand.hashtags.join(' '),
     cellId,
     briefId:     config.briefId,
     ruleVersion,
@@ -268,38 +384,53 @@ export function buildImageEditPrompt(opts: {
   contextId: string;
   uspId: string;
   extraNotes?: string;
+  brandId?: string;
 }): string {
-  const sku     = SKUS.find(s => s.id === opts.skuId);
+  const brandId = opts.brandId || '';
+  const brand   = getBrandIdentity(brandId);
+  const sku     = resolveProduct(brandId, opts.skuId);
   const context = CONTEXTS.find(c => c.id === opts.contextId);
   const usp     = USP_ANCHORS.find(u => u.id === opts.uspId);
 
   if (!sku || !context || !usp) throw new Error('Invalid image prompt config');
 
-  const bev = SKU_BEVERAGE_LOCK[opts.skuId];
+  // Khoá đồ uống + chi tiết túi trà/tag trắng + USP tĩnh là danh tính loveintea —
+  // gate theo brand; brand khác dùng USP suy từ chính sản phẩm (L4).
+  const isLitMatrix = !brandId || brandId === 'loveintea';
+  const bev = isLitMatrix
+    ? (SKU_BEVERAGE_LOCK[sku.id] || SKU_BEVERAGE_LOCK[opts.skuId])
+    : undefined;
+  const brandLabel = brand.name || 'the brand';
   const bevInstructions = bev
-    ? `The brew must be ${bev.color} in a ${bev.vessel}. Include: ${bev.cue}.`
+    ? `The triangular pyramid tea bag should be visible steeping in a clear glass vessel. The white square tag with "${brandLabel}" wordmark must be legible. The brew must be ${bev.color} in a ${bev.vessel}. Include: ${bev.cue}.`
     : '';
 
-  return `Editorial lifestyle photo for LoveinTea ${sku.name} herbal tea.
+  // Bảng màu lấy từ brand_dna.colors_json; camelCase key → nhãn đọc được.
+  const colorEntries = Object.entries(brand.colors);
+  const paletteLine = colorEntries.length
+    ? `- Color palette: ${colorEntries.map(([k, v]) => `${k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase())} (${v})`).join(', ')}`
+    : '- Color palette: warm, premium tones consistent with the product packaging';
+
+  return `Editorial lifestyle photo for ${brandLabel} — "${sku.productName}"${sku.pitch ? ` (${sku.pitch})` : ''}.
 
 SCENE: ${context.label}. ${context.light}.
 
-THE PRODUCT (keep perfectly intact — DO NOT alter label, logo, or text on box):
-The LoveinTea ${sku.name} tea box (${sku.color} color) should appear naturally in the scene — placed on a surface, partially in frame, or held. The triangular pyramid tea bag should be visible steeping in a clear glass vessel. The white square tag with "LoveinTea" wordmark must be legible.
+THE PRODUCT (keep perfectly intact — DO NOT alter label, logo, or text on packaging):
+The ${brandLabel} "${sku.name}" product packaging${sku.color ? ` (${sku.color} color)` : ''} should appear naturally in the scene — placed on a surface, partially in frame, or held. Reproduce the packaging design, printed text and logo exactly as in the reference image.
 ${bevInstructions}
 
-IMAGE MUST PROVE THIS USP: ${usp.label}
-Required visual element: ${usp.imageRule}
+IMAGE MUST PROVE THIS USP: ${isLitMatrix ? usp.label : (sku.theme || sku.pitch || sku.name)}
+Required visual element: ${isLitMatrix ? usp.imageRule : "the real product with its key differentiating detail clearly visible — never props from another industry"}
 
 VISUAL STYLE:
-- Color palette: Cotton Cream (#FFF8F0) base, Heritage Green (#1A5632) accents
+${paletteLine}
 - Warm temperature grade, low contrast, lifted shadows
-- Real tactile materials: linen, ceramic, wood, glass, fresh herbs
+- Real tactile materials and textures true to the product's world
 - Shallow depth of field, editorial quality
 - Natural human element (hands, partial figure) — real skin texture, no AI artifacts
-- 2-4 supporting props max (candle, linen, book, dried flowers)
-- NO health claim visuals, NO text overlays
-- Tag: 1 white LoveinTea logo tag — NOT red, NOT kraft
+- 2-4 supporting props max, all plausible for this product's category
+- NO health claim visuals, NO text overlays, NO invented logos
+${bev ? `- Tag: 1 white ${brandLabel} logo tag — NOT red, NOT kraft` : ''}
 
 ${opts.extraNotes ? `ADDITIONAL: ${opts.extraNotes}` : ''}
 
@@ -420,7 +551,10 @@ export interface Brief {
 
 export async function generateBrief(config: BriefConfig): Promise<Brief> {
   const { version: ruleVersion, rules } = getActiveRules(config.brandId);
-  const sku = SKUS.find(s => s.id === config.skuId);
+  const brand = getBrandIdentity(config.brandId);
+  const sku = resolveProduct(config.brandId, config.skuId);
+  // Ma trận O3 tĩnh là dữ liệu riêng loveintea — brand khác dùng dữ liệu sản phẩm (L4).
+  const briefLitMatrix = !config.brandId || config.brandId === 'loveintea';
   const segment = SEGMENTS.find(s => s.id === config.segmentId);
   const rtb = RTBS.find(r => r.id === config.rtbId);
   const usp = USP_ANCHORS.find(u => u.id === config.uspId);
@@ -430,16 +564,20 @@ export async function generateBrief(config: BriefConfig): Promise<Brief> {
     ? `\nActive Rules (v${ruleVersion}):\n${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}`
     : '';
 
-  const prompt = `You are the brief builder for LoveinTea.
+  const prompt = `You are the brief builder for ${brand.name || 'this brand'}${brand.throughLine ? ` — ${brand.throughLine}` : ''}.
 Input: 1 content slot.
 ${rulesText}
 
 Slot:
 - Channel: ${config.channel}
-- Product: ${sku?.name ?? config.skuId}
-- Segment: ${segment?.name ?? config.segmentId} — tension: "${segment?.tension ?? ''}"
+- Product: ${sku?.name ?? config.skuId}${sku?.pitch ? ` — ${sku.pitch}` : ''}
+${briefLitMatrix
+  ? `- Segment: ${segment?.name ?? config.segmentId} — tension: "${segment?.tension ?? ''}"
 - RTB: ${rtb?.label ?? config.rtbId}
-- USP: ${usp?.label ?? config.uspId}
+- USP: ${usp?.label ?? config.uspId}`
+  : `- Segment: the brand's core customer (infer from brand strategy; never assume another industry's customer)
+- RTB: ${sku?.pitch || sku?.theme || 'state concretely why this product is worth buying'}
+- USP: ${sku?.theme || sku?.name || config.skuId}`}
 - Context: ${context?.label ?? config.contextId}
 
 Generate 1 brief with EXACTLY:
@@ -451,8 +589,7 @@ Generate 1 brief with EXACTLY:
 
 Constraints:
 - Copy must be claim-safe (FDA structure/function)
-- Use theme/moment language, not health promises
-- Tag: 1 white LoveinTea logo tag
+- Use theme/moment language, not health promises${briefLitMatrix && sku && SKU_BEVERAGE_LOCK[sku.id] ? `\n- Tag: 1 white ${brand.name || 'brand'} logo tag` : ''}
 
 Return JSON: { "purpose": "...", "variable_cell": "...", "copy_direction": "...", "visual_direction": "...", "format": "..." }`;
 

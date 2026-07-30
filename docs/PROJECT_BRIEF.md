@@ -61,6 +61,7 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 
 
 
+- [session 2026-07-30b] fix(o3-engine) L4: gỡ HẾT danh tính LoveinTea viết cứng trong caption/image/brief prompt — brand name+voice+compliance+hashtags+palette bơm từ brands/brand_dna, sản phẩm resolve DB-first theo brand_id; ma trận O3 tĩnh (SEGMENTS/RTBS/USP/NARRATIVES hook + bev lock + tag trắng) gate riêng loveintea, brand khác thay bằng dữ liệu sản phẩm; route generate lấy brand từ getBrandId, route image nhận sản phẩm DB (hết 400 Invalid SKU cho brand khác). Test tsx 12/12: gossby (mũ chó) ra đúng nội dung pet-gift, loveintea giữ nguyên bev lock/tag/palette [LIT-FIX-0730G]
 - [session 2026-07-30] 5 commit — docs(brief) · feat(domain)
 - [session 2026-07-29] 17 commit — fix(kanban) · docs(brief) · feat(quota) · fix(orphan) · tools(disk) · SEC(cost) · docs(arch) · feat(tenant) · SEC(fb)
 - [session 2026-07-29b] KHOÁ HẠN MỨC theo khách — `brand_quotas`+`usage_counters`, gác 4 route AI (reel ×versions, 2 route ảnh, plan ×số item), 2 lớp: hạn mức đơn vị + trần chi tiêu; `/api/usage` cho khách (CHỈ số lượng) · `/api/admin/quotas` nội bộ. Verified prod: videos=0 → 429, 0 USD tiêu; ảnh 1/1 → lần 2 chặn. Đã đặt: loveintea 20/200/500 trần $80; gossby+bazan+rootin trial 4/40/150 trần $20 [LIT-QUOTA-0729A]
