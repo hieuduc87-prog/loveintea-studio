@@ -156,6 +156,14 @@ export async function generateTemplateImages(opts: {
       .replace(/\s{2,}/g, ' ')
       .trim();
   };
+  // Verify-gate 30/07 (test thật ra người-cầm-túi-trà thay vì HỘP): danh từ bao bì
+  // trong mô tả template ("gói cà phê", pouch/sachet) ép model đổi DẠNG bao bì
+  // của mình theo template. Trung hoà chúng — FORM chỉ được lấy từ ảnh tham chiếu.
+  const neutralizePackForm = (t: string): string => t
+    .replace(/\b(gói|túi|hộp|chai|lọ|lon|pouch|sachet|packet|bottle|jar|can|box|bag)\b(\s*(cà\s*phê|trà|coffee|tea))?/gi, 'sản phẩm')
+    .replace(/\s{2,}/g, ' ').trim();
+  const FORM_LOCK = 'The reference image defines the product\'s REAL packaging form — keep that exact form and shape (if it is a rectangular box, it STAYS a rectangular box); NEVER convert it into a pouch, sachet, loose tea bag or any other packaging format.';
+
   // Người dùng nêu màu cụ thể (hex hoặc từ chỉ màu) → bảng màu của template phải
   // nhường, nếu không "đổi nền thành #8BBF5C" thua "nền màu cam" của template.
   const userSetsColor = /#[0-9a-f]{3,8}\b|\b(mau|màu|color|background|nền)\b/i.test(customPrompt || '');
@@ -175,9 +183,16 @@ export async function generateTemplateImages(opts: {
     //   CHỈ hiện nguyên liệu của sản phẩm, TUYỆT ĐỐI không hộp/bao bì → carousel cân bằng nguyên liệu ↔ sản phẩm.
     const showProduct = noteNoPack ? false
       : Boolean(productId) && (noteWithPack || slideShowsProduct(role));
+    // Verify-gate 30/07 (gossby mũ chó ra cảnh đồ ăn): sản phẩm KHÔNG có
+    // ingredients mà base = ảnh template (cảnh đồ ăn) + lệnh "giữ bố cục" thì
+    // đồ ăn không thể biến mất. Hàng không-tiêu-hoá: base = ảnh THẬT của sản
+    // phẩm, template chỉ còn vai trò mood/màu.
+    const nonConsumable = Boolean(product) && !product!.ingredients;
     const base = showProduct
       ? (refPath || packshotPath || tplSlidePath)
-      : (tplSlidePath || refPath || packshotPath);
+      : (nonConsumable
+          ? (refPath || packshotPath || tplSlidePath)
+          : (tplSlidePath || refPath || packshotPath));
     const usingProductBase = showProduct && Boolean(refPath || packshotPath);
 
     const prompt = [
@@ -189,7 +204,7 @@ export async function generateTemplateImages(opts: {
       // Slide sản phẩm: bỏ qua thương hiệu của template nhưng THAY bằng hộp mình.
       meta.content
         ? (showProduct
-            ? `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${stripBrandNouns(meta.content)}. Any product/brand the layout mentions belongs to a DIFFERENT company — REPLACE it with OUR product from the reference image; never copy the layout's own branding, wording or packaging design.`
+            ? `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${neutralizePackForm(stripBrandNouns(meta.content))}. Any product/brand the layout mentions belongs to a DIFFERENT company — REPLACE it with OUR product from the reference image; never copy the layout's own branding, wording or packaging design. ${FORM_LOCK}`
             : `Use the following ONLY as a LAYOUT reference — object arrangement, framing and camera angle: ${stripBrandNouns(meta.content)}. IGNORE every brand name, product name, printed wording and colour mentioned in it; those belong to a DIFFERENT product and must NOT appear.`)
         : '',
       meta.visual ? `Camera angle/layout/style: ${stripBrandNouns(meta.visual)}.` : '',
@@ -200,9 +215,9 @@ export async function generateTemplateImages(opts: {
             // tea, bowls") → bài MŨ CHÓ ra bát gia vị. Luật L4: prompt không được
             // giả định ngành — đạo cụ suy từ CHÍNH dữ liệu sản phẩm; hàng không
             // ăn-uống thì slide này là chi tiết chất liệu / cận cảnh đang dùng.
-            ? `This is a DETAIL / lifestyle slide for "${product.name}"${product.theme ? ` (${product.theme})` : ''} — keep the template slide's composition. ${product.ingredients
-                ? `Feature its actual components/ingredients ONLY: ${product.ingredients} — arranged naturally.`
-                : 'Feature a close-up of the product\'s real materials, texture, craft details, or the product being used in real life.'} NEVER add food ingredients, herbs, spices, bowls or produce unless they are explicitly listed as this product's components. Do NOT show the product's box, packaging, sachet, pouch, printed label or any logo in this slide.`
+            ? (product.ingredients
+                ? `This is a DETAIL / lifestyle slide for "${product.name}"${product.theme ? ` (${product.theme})` : ''} — keep the template slide's composition. Feature its actual components/ingredients ONLY: ${product.ingredients} — arranged naturally. NEVER add food ingredients, herbs, spices, bowls or produce beyond that list. Do NOT show the product's box, packaging, sachet, pouch, printed label or any logo in this slide.`
+                : `This is a DETAIL / lifestyle slide for "${product.name}"${product.theme ? ` (${product.theme})` : ''}. The reference image shows the REAL product — show it being used/worn in real life, or a close-up of its materials and craft details. Borrow ONLY the template's mood, lighting and colour palette — NOT its objects. This product is NOT food: NEVER show food, ingredients, herbs, spices, bowls, produce or cooking scenes. Avoid close-up printed logos.`)
             : ''),
       // Bảng màu template nhường khi người dùng chỉ định màu (card 1be7fe0e).
       styleBits && !userSetsColor ? `Match the template aesthetic: ${styleBits}.` : '',
