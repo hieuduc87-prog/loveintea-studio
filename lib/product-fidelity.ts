@@ -25,24 +25,30 @@ export interface FidelityVerdict {
 
 interface RawVerdict {
   product_text_visible?: boolean;
-  reference_text?: string;
-  generated_text?: string;
-  text_matches_exactly?: boolean;
+  reference_text_spelled?: string;
+  generated_text_spelled?: string;
   reference_has_retail_packaging?: boolean;
   generated_has_retail_packaging?: boolean;
   note?: string;
 }
 
+/** "B-E-L-L-A" / "BELLA " / "bella" → "BELLA" để CODE so sánh. */
+const normText = (t: string | undefined): string =>
+  String(t ?? '').replace(/[-\s._]/g, '').toUpperCase();
+
+// LLM chỉ làm MẮT (đánh vần), CODE làm quan toà — bản đầu tin trường
+// text_matches_exactly và bị qua mặt ngay lần hai: ảnh "BELEA" được phán đạt.
+// Đánh vần từng ký tự có gạch nối ép model nhìn kỹ từng chữ cái.
 const PROMPT = `IMAGE 1 is a REAL reference photo of a product. IMAGE 2 is an AI-generated marketing image that is supposed to show the SAME product.
+Read all printed/embroidered/label text ON THE PRODUCT in each image. Spell it CHARACTER BY CHARACTER separated by hyphens (e.g. "B-E-L-L-A"). Look extremely carefully at every letter.
 Answer ONLY this JSON (no prose):
 {
- "product_text_visible": true|false,        // any printed/embroidered/label text readable on the product in IMAGE 2?
- "reference_text": "text readable on the product in IMAGE 1, empty if none",
- "generated_text": "text readable on the product in IMAGE 2, empty if none",
- "text_matches_exactly": true|false,        // letter-for-letter identical (ignore case/line breaks)?
- "reference_has_retail_packaging": true|false,  // IMAGE 1 shows a retail box/carton/pouch as packaging?
- "generated_has_retail_packaging": true|false,  // IMAGE 2 shows a retail box/carton/pouch?
- "note": "one short sentence on any mismatch"
+ "product_text_visible": true|false,
+ "reference_text_spelled": "characters on the product in IMAGE 1, hyphen-separated, empty if none",
+ "generated_text_spelled": "characters on the product in IMAGE 2, hyphen-separated, empty if none",
+ "reference_has_retail_packaging": true|false,
+ "generated_has_retail_packaging": true|false,
+ "note": "one short sentence"
 }`;
 
 export async function verifyProductFidelity(
@@ -51,26 +57,35 @@ export async function verifyProductFidelity(
   opts?: { refHasPackaging?: boolean },
 ): Promise<FidelityVerdict> {
   try {
-    const v = await imagesVerdictJSON<RawVerdict>(
-      [
-        { data: refImage, mimeType: 'image/png' },
-        { data: generated, mimeType: 'image/png' },
-      ],
-      PROMPT,
-    );
-    // CODE quyết verdict từ từng trường:
-    const textMismatch = Boolean(v.product_text_visible) && v.text_matches_exactly === false;
+    const imgs = [
+      { data: refImage, mimeType: 'image/png' },
+      { data: generated, mimeType: 'image/png' },
+    ];
+    // OCR HAI LẦN độc lập — hai lần đọc lệch nhau = mắt không chắc = KHÔNG pass
+    // (gate 1 phiếu từng bị qua mặt: "BELEA" được phán đạt ở lần chạy thứ hai).
+    const [v, v2] = await Promise.all([
+      imagesVerdictJSON<RawVerdict>(imgs, PROMPT),
+      imagesVerdictJSON<RawVerdict>(imgs, PROMPT),
+    ]);
+    const refText  = normText(v.reference_text_spelled);
+    const refText2 = normText(v2.reference_text_spelled);
+    const genText  = normText(v.generated_text_spelled);
+    const genText2 = normText(v2.generated_text_spelled);
+    // CODE quyết verdict: chuỗi ĐÃ CHUẨN HOÁ phải trùng ở CẢ hai lần đọc.
+    const anyVisible = Boolean(v.product_text_visible) || Boolean(v2.product_text_visible);
+    const ocrUnstable = refText !== refText2 || genText !== genText2;
+    const textMismatch = anyVisible && Boolean(refText) && (genText !== refText || ocrUnstable);
     // Bịa bao bì = ảnh sinh có bao bì trong khi cả ảnh ref lẫn kho ảnh đều không có
-    const refHasPack = Boolean(v.reference_has_retail_packaging) || Boolean(opts?.refHasPackaging);
-    const inventedPackaging = Boolean(v.generated_has_retail_packaging) && !refHasPack;
+    const refHasPack = Boolean(v.reference_has_retail_packaging) || Boolean(v2.reference_has_retail_packaging) || Boolean(opts?.refHasPackaging);
+    const inventedPackaging = (Boolean(v.generated_has_retail_packaging) || Boolean(v2.generated_has_retail_packaging)) && !refHasPack;
     return {
       ok: !textMismatch && !inventedPackaging,
       checked: true,
       textMismatch,
       inventedPackaging,
-      expectedText: String(v.reference_text ?? ''),
-      generatedText: String(v.generated_text ?? ''),
-      note: String(v.note ?? ''),
+      expectedText: refText,
+      generatedText: ocrUnstable && genText === refText ? genText2 : genText,
+      note: `${ocrUnstable ? 'OCR hai lần lệch nhau; ' : ''}${String(v.note ?? '')}`,
     };
   } catch (e) {
     // Gate không được chặn việc thật — nhưng phải nói rõ là CHƯA kiểm.
