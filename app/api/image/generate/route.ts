@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     } else {
       raw = basePath
         ? await editProductImage({ productImagePath: basePath, prompt: `${finalPrompt} ${USAGE_LOCK}`, size: '1024x1536', brandId })
-        : await generateImage({ prompt: finalPrompt, size: '1024x1536', brandId });
+        : await generateImage({ prompt: productId ? `${finalPrompt} ${USAGE_LOCK}` : finalPrompt, size: '1024x1536', brandId });
     }
     const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
     finishJob(jobId, { url });

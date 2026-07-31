@@ -4,6 +4,7 @@
  * engine (which needs all 6 variable IDs) — plan items rarely carry all of them.
  */
 import fs from 'fs';
+import { currentBrandId } from './tenant-context';
 import path from 'path';
 import { getDb } from './db';
 import { generateJSON } from './gemini';
@@ -44,10 +45,25 @@ export function planItemDateToISO(dateStr: string, refYear = new Date().getFullY
 /** Resolve a product image_url to a readable local file path (for edit-mode image gen). */
 export function resolveProductImagePath(imageUrl: string | null | undefined): string | null {
   if (!imageUrl) return null;
-  let p: string | null = null;
-  if (imageUrl.startsWith('/api/images/')) p = path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'images', imageUrl.replace('/api/images/', ''));
-  else if (imageUrl.startsWith('/')) p = path.join(process.cwd(), 'public', imageUrl);
-  return p && fs.existsSync(p) ? p : null;
+  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+  if (imageUrl.startsWith('/api/images/')) {
+    const rel = imageUrl.replace('/api/images/', '').split('?')[0];
+    // P3 DB-per-tenant (gossby 31/07: ảnh sản phẩm nằm data/tenants/<brand>/images
+    // → resolver mù tenant trả null → ảnh gen TRƯỢT hết mọi lớp gác sản phẩm).
+    // Ưu tiên thư mục tenant theo brand context, fallback kho chung (file cũ).
+    const brand = currentBrandId();
+    if (brand) {
+      const own = path.join(dataDir, 'tenants', brand.replace(/[^a-zA-Z0-9_-]/g, ''), 'images', rel);
+      if (fs.existsSync(own)) return own;
+    }
+    const legacy = path.join(dataDir, 'images', rel);
+    return fs.existsSync(legacy) ? legacy : null;
+  }
+  if (imageUrl.startsWith('/')) {
+    const pub = path.join(process.cwd(), 'public', imageUrl);
+    return fs.existsSync(pub) ? pub : null;
+  }
+  return null;
 }
 
 export async function generateFromPlanItem(item: PlanItemRow, templateGuide?: { structure?: string; skeleton?: string }): Promise<GeneratedContent> {
