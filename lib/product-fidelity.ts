@@ -18,6 +18,11 @@ export interface FidelityVerdict {
   checked: boolean;          // false = gate không chạy được (đừng nhầm với pass)
   textMismatch: boolean;
   inventedPackaging: boolean;
+  /** Gossby 31/07: mũ CHO CHÓ bị đội lên đầu NGƯỜI — sản phẩm phải được dùng
+   *  bởi đúng loại chủ thể như trong ảnh thật (pet ↔ pet, người ↔ người). */
+  wrongWearer: boolean;
+  expectedWearer: string;
+  generatedWearer: string;
   expectedText: string;
   generatedText: string;
   note: string;
@@ -29,6 +34,8 @@ interface RawVerdict {
   generated_text_spelled?: string;
   reference_has_retail_packaging?: boolean;
   generated_has_retail_packaging?: boolean;
+  reference_worn_by?: string;
+  generated_worn_by?: string;
   note?: string;
 }
 
@@ -48,6 +55,8 @@ Answer ONLY this JSON (no prose):
  "generated_text_spelled": "characters on the product in IMAGE 2, hyphen-separated, empty if none",
  "reference_has_retail_packaging": true|false,
  "generated_has_retail_packaging": true|false,
+ "reference_worn_by": "who/what wears or uses the product in IMAGE 1: dog|cat|pet|person|child|nobody",
+ "generated_worn_by": "who/what wears or uses the product in IMAGE 2: dog|cat|pet|person|child|nobody",
  "note": "one short sentence"
 }`;
 
@@ -78,11 +87,24 @@ export async function verifyProductFidelity(
     // Bịa bao bì = ảnh sinh có bao bì trong khi cả ảnh ref lẫn kho ảnh đều không có
     const refHasPack = Boolean(v.reference_has_retail_packaging) || Boolean(v2.reference_has_retail_packaging) || Boolean(opts?.refHasPackaging);
     const inventedPackaging = (Boolean(v.generated_has_retail_packaging) || Boolean(v2.generated_has_retail_packaging)) && !refHasPack;
+    // NGƯỜI DÙNG SẢN PHẨM: pet-group (dog/cat/pet) vs người — khác nhóm = sai.
+    const wearerGroup = (w?: string) => {
+      const x = String(w ?? '').toLowerCase();
+      if (/dog|cat|pet|animal/.test(x)) return 'pet';
+      if (/person|child|human|man|woman/.test(x)) return 'person';
+      return '';
+    };
+    const refWearer = wearerGroup(v.reference_worn_by) || wearerGroup(v2.reference_worn_by);
+    const genWearer = wearerGroup(v.generated_worn_by) || wearerGroup(v2.generated_worn_by);
+    const wrongWearer = Boolean(refWearer) && Boolean(genWearer) && refWearer !== genWearer;
     return {
-      ok: !textMismatch && !inventedPackaging,
+      ok: !textMismatch && !inventedPackaging && !wrongWearer,
       checked: true,
       textMismatch,
       inventedPackaging,
+      wrongWearer,
+      expectedWearer: refWearer,
+      generatedWearer: genWearer,
       expectedText: refText,
       generatedText: ocrUnstable && genText === refText ? genText2 : genText,
       note: `${ocrUnstable ? 'OCR hai lần lệch nhau; ' : ''}${String(v.note ?? '')}`,
@@ -91,6 +113,7 @@ export async function verifyProductFidelity(
     // Gate không được chặn việc thật — nhưng phải nói rõ là CHƯA kiểm.
     return {
       ok: true, checked: false, textMismatch: false, inventedPackaging: false,
+      wrongWearer: false, expectedWearer: '', generatedWearer: '',
       expectedText: '', generatedText: '',
       note: `gate không chạy được: ${String(e instanceof Error ? e.message : e).slice(0, 120)}`,
     };
@@ -105,6 +128,9 @@ export function fidelityRetryClause(v: FidelityVerdict): string {
   }
   if (v.inventedPackaging) {
     parts.push('do NOT draw any retail box, carton or packaging — the real product is sold WITHOUT one; show only the product itself.');
+  }
+  if (v.wrongWearer) {
+    parts.push(`the product must be worn/used by a ${v.expectedWearer === 'pet' ? 'PET (the animal itself)' : 'PERSON'} exactly as in the reference photos — previous attempt put it on a ${v.generatedWearer}. NEVER transfer the product onto a different kind of wearer.`);
   }
   return parts.join(' ');
 }

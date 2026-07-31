@@ -14,6 +14,7 @@ import { createJob, logJob, finishJob, failJob } from '@/lib/jobs';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { getBrandId, canAccessBrand } from '@/lib/brand-guard';
 import { reserveQuota } from '@/lib/quota';
+import { generateProductImageGated, USAGE_LOCK } from '@/lib/product-image-gen';
 
 export async function POST(req: NextRequest) {
   const limited = enforceRateLimit(req, { scope: 'ai:image', limit: 20, windowMs: 60_000 });
@@ -82,9 +83,21 @@ export async function POST(req: NextRequest) {
       : '\n\nCRITICAL: Do NOT render text/letters/words in the image. If any text is unavoidable, ENGLISH only — never Vietnamese.';
 
     logJob(jobId, basePath ? `Edit từ ảnh gốc${templateId ? ' + template' : ''}…` : 'Generate ảnh mới…');
-    const raw = basePath
-      ? await editProductImage({ productImagePath: basePath, prompt: finalPrompt, size: '1024x1536', brandId })
-      : await generateImage({ prompt: finalPrompt, size: '1024x1536', brandId });
+    // Cổng gác chung (gossby 31/07: mũ chó thành mũ người): có sản phẩm → QA
+    // chữ + bao bì + đúng-người-dùng, tự gen lại khi fail.
+    let raw: string;
+    if (productId && editingProductBase) {
+      const g = await generateProductImageGated({
+        brandId, productId, prompt: finalPrompt,
+        baseImagePath: basePath || undefined, log: m => logJob(jobId, m),
+      });
+      raw = g.dataUri;
+      for (const w of g.warnings) logJob(jobId, w);
+    } else {
+      raw = basePath
+        ? await editProductImage({ productImagePath: basePath, prompt: `${finalPrompt} ${USAGE_LOCK}`, size: '1024x1536', brandId })
+        : await generateImage({ prompt: finalPrompt, size: '1024x1536', brandId });
+    }
     const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
     finishJob(jobId, { url });
     return NextResponse.json({ ok: true, url });

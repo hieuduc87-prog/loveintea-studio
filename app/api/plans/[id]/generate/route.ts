@@ -21,6 +21,7 @@ import { autoTagPost, PostTag } from '@/lib/post-tags';
 import { createJob, logJob, progressJob, finishJob, failJob } from '@/lib/jobs';
 import { assertResourceBrand } from '@/lib/brand-guard';
 import { reserveQuota, refundQuota } from '@/lib/quota';
+import { generateProductImageGated, USAGE_LOCK } from '@/lib/product-image-gen';
 
 function surfaceToFormat(surface: string): string | undefined {
   const s = (surface || '').toLowerCase();
@@ -136,9 +137,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               const ti = db.prepare('SELECT image_url FROM content_templates WHERE id=?').get(templateId) as { image_url?: string } | undefined;
               basePath = resolveProductImagePath((ti?.image_url || '').split('?')[0]);
             }
-            const raw = basePath
-              ? await editProductImage({ productImagePath: basePath, prompt: imagePrompt, size: '1024x1536', brandId: plan.brand_id })
-              : await generateImage({ prompt: imagePrompt, size: '1024x1536', brandId: plan.brand_id });
+            // Gossby 31/07: mũ CHO CHÓ bị đội lên đầu NGƯỜI — mọi ảnh có sản
+            // phẩm phải qua cổng gác chung (khoá cách dùng + QA chữ/bao bì/người đội).
+            let raw: string;
+            if (item.product_id) {
+              const g = await generateProductImageGated({
+                brandId: plan.brand_id, productId: item.product_id, prompt: imagePrompt,
+                baseImagePath: basePath || undefined, log: m => logJob(jobId, `  ${m}`),
+              });
+              raw = g.dataUri;
+              for (const w of g.warnings) logJob(jobId, `  ${w}`);
+            } else {
+              raw = basePath
+                ? await editProductImage({ productImagePath: basePath, prompt: `${imagePrompt} ${USAGE_LOCK}`, size: '1024x1536', brandId: plan.brand_id })
+                : await generateImage({ prompt: imagePrompt, size: '1024x1536', brandId: plan.brand_id });
+            }
             imageUrl = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
           }
         }

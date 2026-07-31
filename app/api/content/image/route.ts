@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { reserveQuota } from '@/lib/quota';
+import { generateProductImageGated, USAGE_LOCK } from '@/lib/product-image-gen';
 import { buildImageEditPrompt } from '@/lib/o3-engine';
 import { SKUS } from '@/lib/brand-dna';
 import { getDb } from '@/lib/db';
@@ -56,9 +57,14 @@ export async function POST(req: NextRequest) {
     const productImagePath = (refUrl ? resolveProductImagePath(refUrl) : null)
       || (sku ? path.join(process.cwd(), 'public', 'brand', 'products', path.basename(sku.image)) : null);
     if (useEdit && productImagePath) {
-      imageUrl = await editProductImage({ productImagePath, prompt, size: '1024x1536', brandId });
+      // Cổng gác chung: QA chữ/bao bì/đúng-người-dùng + tự gen lại (gossby 31/07)
+      const pid = dbProduct?.id || skuId;
+      const g = await generateProductImageGated({
+        brandId, productId: pid, prompt, baseImagePath: productImagePath,
+      });
+      imageUrl = g.dataUri;
     } else {
-      imageUrl = await generateImage({ prompt, size: '1024x1536', brandId });
+      imageUrl = await generateImage({ prompt: `${prompt} ${USAGE_LOCK}`, size: '1024x1536', brandId });
     }
 
     // Save to file if base64

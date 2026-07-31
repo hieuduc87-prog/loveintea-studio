@@ -87,7 +87,7 @@ ${getExpertKnowledgeBlock(brandId)}
 REQUIREMENTS:
 1. caption: write in ${langName} (do NOT mix languages), on-brand voice, benefit-led. Open with a STRONG scroll-stopping hook, then follow the copy direction, obey compliance neverSay/alwaysSay. Natural length for the surface (Reel cover = short; feed = 2-4 short paragraphs). Include 1 clear CTA.
 2. hashtags: 5-10 relevant ${langName} hashtags, space-separated, each starting with #.
-3. image_prompt: a 50-90 word English prompt for an image generator matching the visual direction — describe the product scene, lighting, mood, composition (vertical). NO text/letters in the image.
+3. image_prompt: a 50-90 word English prompt for an image generator matching the visual direction — describe the product scene, lighting, mood, composition (vertical). The product MUST be used by its intended wearer/subject (a pet product is worn by the pet itself, NEVER by a human). NO text/letters in the image.
 4. targeting: which audience SEGMENT this post speaks to, the INSIGHT it leverages, and the BEHAVIOR it targets — short Vietnamese phrases drawn from the brand's strategy${dna?.target_audience ? `\n   (Khách hàng: ${dna.target_audience})` : ''}${dna?.insight ? `\n   (Insight brand: ${dna.insight})` : ''}${dna?.behavior ? `\n   (Hành vi: ${dna.behavior})` : ''}.
 
 Return ONLY JSON: {"caption":"...","hashtags":"#a #b","image_prompt":"...","targeting":{"segment":"...","insight":"...","behavior":"..."}}`;
