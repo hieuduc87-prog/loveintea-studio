@@ -53,6 +53,10 @@ export function pickProductRefUrl(
     'SELECT image_url, ref_role, is_hero, angle, ai_label, analysis_json FROM product_images WHERE product_id=? ORDER BY is_hero DESC, sort_order ASC'
   ).all(pid) as PImg[];
   if (imgs.length) {
+    // LỆNH FOUNDER 31/07: ảnh HERO (nhân viên đánh dấu ⭐) là ảnh tham chiếu
+    // BẮT BUỘC cho mọi hệ tạo ảnh — thắng tuyệt đối mọi heuristic role/góc.
+    const hero = imgs.find(i => i.is_hero === 1);
+    if (hero) return hero.image_url;
     const prefs = ROLE_PREF[(role || '').toLowerCase()] ?? ['packshot', 'lifestyle'];
     for (const pref of prefs) {
       let group = imgs.filter(i => (i.ref_role || '') === pref);

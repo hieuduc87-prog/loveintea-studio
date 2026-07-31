@@ -158,11 +158,31 @@ async function engineEdit(heroBuf: Buffer, instruction: string, work: string, jo
 
 /** Ảnh HERO của video — nguồn continuity duy nhất. Cache theo (sku, heroPrompt). */
 async function getHeroImage(plan: ReelPlan, jobId: string): Promise<{ buf: Buffer; key: string }> {
-  const key = sha(`hero|${imageEngine()}|${plan.sku}|${plan.heroPrompt}`);
+  // LỆNH FOUNDER 31/07: MỌI hệ tạo ảnh (kể cả ảnh cho video) phải dùng ẢNH HERO
+  // THẬT của sản phẩm làm tham chiếu — t2i thuần là BỊA. Prompt giữ nguyên đầy đủ,
+  // ảnh thật quyết định danh tính/bao bì.
+  const { pickProductRefUrl } = await import('../product-ref');
+  const { resolveProductImagePath } = await import('../plan-generate');
+  const pid = plan.profile?.productId || '';
+  const refUrl = pid ? pickProductRefUrl(pid, 'product') : null;
+  const refPath = refUrl ? resolveProductImagePath(refUrl.split('?')[0]) : null;
+  const key = sha(`hero|${imageEngine()}|${plan.sku}|${plan.heroPrompt}|${refPath ? path.basename(refPath) : 'no-ref'}`);
   const cached = path.join(clipCacheRoot(), `img_hero_${key}.png`);
   if (fs.existsSync(cached)) return { buf: fs.readFileSync(cached), key };
-  logJob(jobId, `HERO: tạo ảnh gốc continuity (${imageEngine()})…`);
-  const buf = await engineT2I(plan.heroPrompt || '', jobId, 'HERO');
+  let buf: Buffer;
+  if (refPath) {
+    logJob(jobId, `HERO: edit từ ảnh sản phẩm thật (${path.basename(refPath)})…`);
+    const { editProductImage } = await import('../openai-image');
+    const dataUrl = await editProductImage({
+      productImagePath: refPath,
+      prompt: `${plan.heroPrompt || ''} The product in the reference image is REAL — reproduce its appearance, colours, materials and any printed/embroidered text 100% identical; never redesign or invent a variant.`,
+      size: '1024x1536', quality: 'medium',
+    });
+    buf = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
+  } else {
+    logJob(jobId, `HERO: ⚠ sản phẩm chưa có ảnh ref cục bộ — t2i (${imageEngine()}) không kiểm chứng được danh tính`);
+    buf = await engineT2I(plan.heroPrompt || '', jobId, 'HERO');
+  }
   fs.writeFileSync(cached, buf);
   return { buf, key };
 }
