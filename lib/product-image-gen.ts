@@ -44,8 +44,11 @@ export async function generateProductImageGated(opts: {
   const prompt = `${opts.prompt} ${USAGE_LOCK}${productHasBox ? '' : ' This product has NO retail box/packaging — never draw one.'}`;
 
   if (!refPath) {
-    // Không có ảnh sản phẩm → không có gì để đối chiếu; vẫn sinh nhưng nói rõ.
-    const dataUri = await editProductImage({ productImagePath: opts.baseImagePath || '', prompt, size: opts.size, brandId });
+    // Không có ảnh sản phẩm cục bộ → generate thuần nhưng VẪN khoá cách dùng,
+    // và nói rõ cho nhân viên là chưa kiểm được độ trung thực.
+    const { generateImage } = await import('./openai-image');
+    const dataUri = await generateImage({ prompt, size: opts.size, brandId });
+    log?.('⚠ sản phẩm chưa có ảnh tham chiếu cục bộ — sinh không kiểm chứng được, kiểm tra kỹ');
     return { dataUri, warnings: ['sản phẩm chưa có ảnh tham chiếu — không kiểm được độ trung thực'], gate: 'skipped' };
   }
 

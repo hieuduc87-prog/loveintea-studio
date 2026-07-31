@@ -67,9 +67,16 @@ export async function POST(req: NextRequest) {
     let editingProductBase = false;
     if (refImageUrl) { basePath = resolveProductImagePath(refImageUrl.split('?')[0]); editingProductBase = Boolean(basePath); }
     if (!basePath && productId) {
-      const p = db.prepare('SELECT image_url FROM products WHERE brand_id=? AND (id=? OR slug=?)')
-        .get(brandId, productId, productId) as { image_url: string } | undefined;
-      basePath = resolveProductImagePath(p?.image_url);
+      // Gossby 31/07: products.image_url có thể là LINK NGOÀI (imagekit) → resolve
+      // null → rơi đường không gác. Ref ĐÃ PHÂN LOẠI trong kho phải được hỏi trước.
+      const { pickProductRefUrl } = await import('@/lib/product-ref');
+      const refUrl = pickProductRefUrl(productId, 'product');
+      if (refUrl) basePath = resolveProductImagePath(refUrl.split('?')[0]);
+      if (!basePath) {
+        const p = db.prepare('SELECT image_url FROM products WHERE brand_id=? AND (id=? OR slug=?)')
+          .get(brandId, productId, productId) as { image_url: string } | undefined;
+        basePath = resolveProductImagePath(p?.image_url);
+      }
       editingProductBase = Boolean(basePath);
     }
     if (!basePath && templateImageUrl) basePath = resolveProductImagePath(templateImageUrl.split('?')[0]);
@@ -86,7 +93,7 @@ export async function POST(req: NextRequest) {
     // Cổng gác chung (gossby 31/07: mũ chó thành mũ người): có sản phẩm → QA
     // chữ + bao bì + đúng-người-dùng, tự gen lại khi fail.
     let raw: string;
-    if (productId && editingProductBase) {
+    if (productId) { // LUÔN qua cổng gác khi có sản phẩm — wrapper tự lo ref/fallback
       const g = await generateProductImageGated({
         brandId, productId, prompt: finalPrompt,
         baseImagePath: basePath || undefined, log: m => logJob(jobId, m),
