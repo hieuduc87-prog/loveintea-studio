@@ -19,7 +19,7 @@ import { generateTemplateImages } from '@/lib/template-generate';
 import { pickProductRefUrl } from '@/lib/product-ref';
 import { autoTagPost, PostTag } from '@/lib/post-tags';
 import { createJob, logJob, progressJob, finishJob, failJob } from '@/lib/jobs';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 import { reserveQuota, refundQuota } from '@/lib/quota';
 import { generateProductImageGated, USAGE_LOCK } from '@/lib/product-image-gen';
 
@@ -33,6 +33,7 @@ function surfaceToFormat(surface: string): string | undefined {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id: planId } = await params;
   const db = getDb();
   let jobId = '';

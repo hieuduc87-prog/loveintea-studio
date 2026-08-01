@@ -10,7 +10,7 @@ import { v4 as uuid } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 const IMAGES_DIR = path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'images');
 
@@ -46,6 +46,7 @@ function persist(db: ReturnType<typeof getDb>, id: string, slides: Slide[], thum
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   try {
     const denied = guardTemplate(req, params.id);
     if (denied) return denied;
@@ -107,6 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   try {
     const denied = guardTemplate(req, params.id);
     if (denied) return denied;

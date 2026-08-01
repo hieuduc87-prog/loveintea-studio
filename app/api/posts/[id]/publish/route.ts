@@ -3,9 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
 import { postToFacebook, postToInstagram, hasIgCreds, PostResult } from '@/lib/facebook';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const db = getDb();
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(params.id) as Record<string, string> | undefined;
   if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });

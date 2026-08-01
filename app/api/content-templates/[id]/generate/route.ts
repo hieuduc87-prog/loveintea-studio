@@ -12,9 +12,10 @@ import { getDb } from '@/lib/db';
 import { recordTemplateUse } from '@/lib/template-picker';
 import { generateTemplateImages } from '@/lib/template-generate';
 import { createJob, logJob, progressJob, finishJob, failJob } from '@/lib/jobs';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id } = params;
   const { productId, customPrompt } = await req.json().catch(() => ({})) as { productId?: string; customPrompt?: string };
   const db = getDb();

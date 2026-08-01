@@ -9,9 +9,10 @@ export const maxDuration = 120;
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { fileToText, extractKnowledge, summarizeKnowledge } from '@/lib/product-knowledge';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   try {
     const db = getDb();
     const product = db.prepare('SELECT name, brand_id FROM products WHERE id=?').get(params.id) as { name: string; brand_id: string } | undefined;

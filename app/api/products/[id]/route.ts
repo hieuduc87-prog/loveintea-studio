@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id } = await params;
   const db = getDb();
   const product = db.prepare('SELECT * FROM products WHERE id=?').get(id) as { brand_id?: string } | undefined;
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id } = await params;
   const db = getDb();
   const row = db.prepare('SELECT brand_id FROM products WHERE id=?').get(id) as { brand_id?: string } | undefined;

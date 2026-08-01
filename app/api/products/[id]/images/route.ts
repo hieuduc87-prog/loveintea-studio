@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import { getDb } from '@/lib/db';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 /** Load the product's brand and 403 if the caller isn't a member of it. */
 function guardProduct(req: NextRequest, productId: string): NextResponse | null {
@@ -14,6 +14,7 @@ function guardProduct(req: NextRequest, productId: string): NextResponse | null 
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id } = await params;
   const denied = guardProduct(req, id);
   if (denied) return denied;
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id: productId } = await params;
   const denied = guardProduct(req, productId);
   if (denied) return denied;
@@ -80,6 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 // PATCH — set an image's shot type (for shot-list coverage) or hero flag.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id: productId } = await params;
   const denied = guardProduct(req, productId);
   if (denied) return denied;
@@ -96,6 +99,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 // DELETE — remove an image (?imageId=)
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id: productId } = await params;
   const denied = guardProduct(req, productId);
   if (denied) return denied;

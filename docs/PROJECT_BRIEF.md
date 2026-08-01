@@ -29,46 +29,47 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 
 ## Cập nhật gần nhất (phiên sau ghi đè, giữ ≤5 dòng)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- [session 2026-07-31] 19 commit — fix(hero-ref) · fix(usage-lock) · fix(tenant-path) · docs(brief) · feat(tenant-db) · feat(mask-lock) · docs(tenant) · fix(product-ref) · fix(fidelity-gate)
 - [session 2026-07-31e] **P3 DB-PER-TENANT LIVE** (mô hình dlsamz): mỗi brand 1 file `data/tenants/<brand>/studio.db` (40 bảng nghiệp vụ) + ATTACH global (18 bảng platform) — SQL cũ chạy nguyên; brand context = AsyncLocalStorage (brand-guard enterBrandContext, scheduler/provision runWithBrand), `getDb()` = proxy late-binding; auto-migration boot + 2 backup + bảng cũ `zz_legacy_*`; global giữ bảng tenant RỖNG (thiếu context → 404 fail-closed) + AUDIT cảnh báo dòng lạ; kill-switch `TENANT_DB_SPLIT=0`. Tiện thể fix bug đăng hẹn giờ gãy (publish_log 7 giá trị/8 cột). Test: suite 30/30 + write-test rơi đúng file tenant + E2E prod 4 brand (bazan caption Fine Robusta durian). LƯU Ý VẬN HÀNH: mọi script/tool mở file tenant PHẢI `pragma foreign_keys=OFF`; KHÔNG rm thư mục tenant khi app đang chạy (handle ma); backup = copy folder brand [LIT-P3-0731E]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-- [session 2026-07-31] 12 commit — docs(brief) · docs(tenant) · fix(product-ref) · feat(mask-lock) · fix(fidelity-gate) · feat(fidelity-gate) · fix(reel-engine) · refactor(reel-engine) · fix(tenant-map)
 - [session 2026-07-31d] (data-only) Bazan đủ dây cót: import 8 sản phẩm + 32 ảnh + DNA (voice/colors) từ DLS AutoMedia (`/Volumes/SSD/projects/BigAiAutoMediaPOD/data/dls_automedia.db`) vào prod, verified API 200; chạy lại pipeline Recipe Batch với clip AUTO POST thật (`/Volumes/SSD/donload/template ba zan/`) — Blueberry Iced Latte render 14.8s QA pass, frames verify mắt. Mac gotcha: brew reinstall ffmpeg (thiếu zscale → eq fallback, prod Alpine vẫn đúng màu), Puppeteer cần path Chrome [LIT-BAZ-0731D]
 - [session 2026-07-31c] refactor(reel-engine) TÁCH TẦNG Reel Machine chuẩn SaaS: ENGINE (timeline/render/QA/cache) trung lập ngành — template iced_summer chuyển thành DATA riêng của loveintea (BRAND_SEED_TEMPLATES, brand khác không thấy/không mượn được); thêm template builtin `product_universal_v01` (blocks trung lập, mọi chữ ngành là placeholder); ProductProfile v2 category-aware (Gemini classify + anchorNoun/setting/styleBlock, cache v1 tự đúc lại); director/render/QA gates/palette end-card đều đọc từ profile+brand_dna (visionGate/consistencyGate theo anchor, hết "herbal tea reel"/"the glass"); route+UI reel meta-driven (videoTypes/templates/skus theo brand, sku legacy chỉ loveintea). Test 15/15: gossby ra plan universal sạch beverage (profile "pet accessory", anchor "custom dog bandana"), loveintea giữ nguyên iced_summer ruby/glass/ICED [LIT-REEL-0731C]
 - [session 2026-07-31b] fix(tenant-map) audit "sát + đồng đều": resolveProduct CHẶN fallback SKU tĩnh cho brand ≠ loveintea (id trùng 'hibiscus' → null); generateO3Content/buildImageEditPrompt/generateBrief gate nốt context/Heritage-Voice tĩnh (brand khác dùng best_moment sản phẩm, usp/context thành tùy chọn); 6 view UI (Workshop/ImageStudio/ImageLibrary/BlogFactory/Queue/Schedule) bỏ SKUS tĩnh → useBrandProducts từ DB theo brand, ma trận O3 + USP/Scene picker chỉ hiện cho loveintea, CTA lọc câu LoveinTea, mọi fetch gắn ?brand=. Test tsx 19/19 + cross-tenant 30/30 + build pass. Reel Machine vẫn là pipeline riêng đồ uống (giới hạn cấu trúc, chưa dùng cho brand khác ngành); bazan/rootin chưa có products/DNA → cần nhập liệu [LIT-FIX-0731B]

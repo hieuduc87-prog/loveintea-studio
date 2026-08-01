@@ -10,9 +10,10 @@ import fs from 'fs';
 import { getDb } from '@/lib/db';
 import { resolveProductImagePath } from '@/lib/plan-generate';
 import { classifyProductImage } from '@/lib/product-image-classify';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   try {
     const { id } = params;
     const db = getDb();

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'kanban');
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id } = await params;
   const fp = path.join(DATA_DIR, id, 'card.json');
   try {
@@ -21,6 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id } = await params;
   try {
     const card = JSON.parse(await fs.readFile(path.join(DATA_DIR, id, 'card.json'), 'utf8'));

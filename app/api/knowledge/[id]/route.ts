@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { assertResourceBrand, isAllBrands } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand, isAllBrands } from '@/lib/brand-guard';
 
 // GET /api/knowledge/[id] — return full doc content
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   try {
     const db = getDb();
     const doc = db
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 // PATCH /api/knowledge/[id] — Promote/hạ scope (platform ↔ brand). CHỈ super-admin.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   try {
     if (!isAllBrands(req)) return NextResponse.json({ error: 'Chỉ super-admin được Promote lên toàn hệ' }, { status: 403 });
     const { scope } = await req.json() as { scope?: string };
@@ -42,6 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 // DELETE /api/knowledge/[id] — xoá tri thức (card 3fa4e238: UI thiếu nút xoá).
 // Guard theo brand của chính doc; doc scope='platform' chỉ super-admin được xoá.
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   try {
     const db = getDb();
     const doc = db.prepare('SELECT brand_id, scope FROM knowledge_docs WHERE id=?')

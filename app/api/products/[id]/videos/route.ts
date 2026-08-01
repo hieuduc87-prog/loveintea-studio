@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
 import { IMAGES_DIR } from '@/lib/video/ffmpeg';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 /** 403 unless the caller is a member of the product's brand. */
 function guardProduct(req: NextRequest, productId: string): NextResponse | null {
@@ -15,6 +15,7 @@ function guardProduct(req: NextRequest, productId: string): NextResponse | null 
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const denied = guardProduct(req, params.id);
   if (denied) return denied;
   const clips = getDb().prepare(
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const denied = guardProduct(req, params.id);
   if (denied) return denied;
   const clipId = req.nextUrl.searchParams.get('clipId');

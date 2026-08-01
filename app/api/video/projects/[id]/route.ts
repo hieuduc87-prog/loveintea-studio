@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { assertResourceBrand } from '@/lib/brand-guard';
+import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const p = getDb().prepare('SELECT * FROM video_projects WHERE id=?').get(params.id) as { brand_id?: string } | undefined;
   if (!p) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const denied = assertResourceBrand(req, p.brand_id);
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 const PATCHABLE = new Set(['title', 'purpose', 'script_json', 'bgm_url', 'target_duration_s', 'status']);
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const own = getDb().prepare('SELECT brand_id FROM video_projects WHERE id=?').get(params.id) as { brand_id?: string } | undefined;
   if (!own) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const denied = assertResourceBrand(req, own.brand_id);
@@ -33,6 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const own = getDb().prepare('SELECT brand_id FROM video_projects WHERE id=?').get(params.id) as { brand_id?: string } | undefined;
   if (!own) return NextResponse.json({ ok: true });
   const denied = assertResourceBrand(req, own.brand_id);

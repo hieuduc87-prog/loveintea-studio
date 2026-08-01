@@ -164,6 +164,9 @@ export function PlanCalendarView({ brandId }: { brandId?: string } = {}) {
   const loadDetail = useCallback(async (planId: string) => {
     if (!planId) { setDetail(null); return; }
     const r = await fetch(`/api/plans/${planId}`);
+    // Card 52672e19: 404/500 mà vẫn setDetail(body lỗi) → render đọc .plan/.items
+    // trên undefined → sập cả cây React. Lỗi thì bỏ chọn plan, không sập.
+    if (!r.ok) { setDetail(null); setSelectedPlanId(''); return; }
     setDetail(await r.json() as PlanDetail);
   }, []);
 
