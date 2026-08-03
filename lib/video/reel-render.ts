@@ -268,7 +268,7 @@ async function getSceneImage(scene: ReelSceneSpec, plan: ReelPlan, work: string,
 }
 
 /** Gen 1 scene clip (cache theo hash prompt + ẢNH GỐC — đổi ảnh là clip mới). */
-async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: string, jobId: string, brandId: string): Promise<string> {
+async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: string, jobId: string, brandId: string): Promise<{ path: string; degraded?: string }> {
   const cacheDir = clipCacheRoot();
   const skuName = plan.profile?.productName || SKUS[plan.sku]?.name || plan.sku;
   const qaCtx: QaCtx = {
@@ -287,7 +287,7 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
     if (attempt === 0) baseClipPath = cached; // alias đích khi retry pass — rerun sau hit cache attempt-0
     if (attempt === 0 && fs.existsSync(cached) && fs.statSync(cached).size > 100_000) {
       logJob(jobId, `${scene.blockId}: dùng cache ${key}`);
-      return cached;
+      return { path: cached };
     }
     logJob(jobId, `${scene.blockId}: image→video (${ve})${attempt ? ' — retry' : ''}…`);
     let video: Buffer;
@@ -308,12 +308,19 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
       // rerun sau attempt-0 miss → regen tốn tiền. Alias về key gốc.
       if (attempt === 1 && baseClipPath && baseClipPath !== cached) fs.copyFileSync(tmp, baseClipPath);
       logJob(jobId, `${scene.blockId}: QA pass${qa.reason === 'gate-skipped' ? ' (vision gate offline)' : ''}`);
-      return cached;
+      return { path: cached };
     }
     logJob(jobId, `${scene.blockId}: QA FAIL — ${qa.reason}`);
     // RUN→LEARN→FIX→LOOP tự động: mỗi fail đúc thành luật, áp mọi video sau
     learnFromFailure(brandId, scene.blockId, scene.prompt, qa.reason || '').catch(() => {});
-    if (attempt === 1) throw new Error(`${scene.blockId}: clip AI fail QA 2 lần (${qa.reason})`);
+    if (attempt === 1) {
+      // Card d6d89f9d (03/08): 1 scene không qua QA sau 2 lần KHÔNG được giết cả
+      // video — 6/7 scene + tiền AI đã tiêu > vứt hết làm lại. Giữ bản tốt nhất,
+      // đánh dấu degraded để nhân viên soi. (Lỗi HẠ TẦNG fal vẫn throw ở nhánh trên.)
+      try { fs.copyFileSync(tmp, cached); if (baseClipPath && baseClipPath !== cached) fs.copyFileSync(tmp, baseClipPath); } catch { /* */ }
+      logJob(jobId, `${scene.blockId}: ⚠ giữ bản chưa-đạt-QA (${qa.reason}) — video vẫn dựng, nhân viên kiểm cảnh này`);
+      return { path: baseClipPath || cached, degraded: `${scene.blockId}: ${qa.reason}` };
+    }
   }
   throw new Error('unreachable');
 }
@@ -592,6 +599,7 @@ export async function renderReelProject(projectId: string): Promise<void> {
     // M2 — gen clip AI (tuần tự — server 2 vCPU, tránh RAM spike; cache làm version 2-3 gần free)
     const aiScenes = plan.scenes.filter(s => s.kind === 'ai');
     const segs: Array<{ file: string; dur: number; transitionOut: string }> = [];
+    const degradedScenes: string[] = []; // scene giữ-bản-chưa-đạt-QA (card d6d89f9d)
     let done = 0;
     for (const scene of plan.scenes) {
       const segOut = path.join(work, `seg_${scene.blockId}.mp4`);
@@ -602,7 +610,9 @@ export async function renderReelProject(projectId: string): Promise<void> {
       } else {
         let src: string;
         try {
-          src = await generateSceneClip(scene, plan, work, jobId, brandId);
+          const r = await generateSceneClip(scene, plan, work, jobId, brandId);
+          src = r.path;
+          if (r.degraded) degradedScenes.push(r.degraded);
         } catch (e) {
           throw new Error(`${scene.blockId}: ${friendlyFalError(e)}`);
         }
@@ -613,6 +623,12 @@ export async function renderReelProject(projectId: string): Promise<void> {
       done++;
       progressJob(jobId, Math.round((done / plan.scenes.length) * 55));
     }
+    // Quá NỬA scene AI không đạt QA → video thật sự không dùng được, fail để khỏi
+    // tốn công dựng + đăng rác (vẫn giữ cache phần đã xong, chạy lại đỡ tốn).
+    if (degradedScenes.length > Math.floor(aiScenes.length / 2)) {
+      throw new Error(`quá nhiều cảnh chưa đạt QA (${degradedScenes.length}/${aiScenes.length}): ${degradedScenes.join('; ')} — đổi đề bài scene cho khớp sản phẩm rồi chạy lại`);
+    }
+    if (degradedScenes.length) log(`⚠ ${degradedScenes.length} cảnh giữ bản chưa-đạt-QA: ${degradedScenes.join('; ')} — KIỂM TRA trước khi đăng`);
 
     // M3 — assembly
     const bg = path.join(work, 'assembled.mp4');
