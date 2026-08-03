@@ -10,6 +10,11 @@
 import { test, describe, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 
+// File test này TỰ dựng môi trường của nó và phải làm chủ hoàn toàn — kể cả
+// khi bên ngoài đã đặt sẵn biến. CI đặt ALERT_ENABLED=0 làm van an toàn chung
+// (để không có test nào lỡ bắn Telegram thật); nếu không gỡ ở đây thì 8 ca
+// dưới thấy "0 tin gửi đi" và đỏ vì đúng cái van bảo vệ chúng.
+delete process.env.ALERT_ENABLED;
 process.env.ALERT_TELEGRAM_TOKEN = 'test-token';
 process.env.ALERT_TELEGRAM_CHAT_ID = '12345';
 process.env.LOG_LEVEL = 'fatal'; // im tiếng stdout để output test đọc được
