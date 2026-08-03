@@ -18,6 +18,7 @@ import {
 } from './facebook';
 import { processVideoSchedules, onScheduledProjectDone } from './video/schedule';
 import { recomputeScoreboard } from './scoreboard-engine';
+import { log } from './logger';
 
 const PUBLISH_INTERVAL_MS = 60_000;
 const METRICS_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -43,30 +44,34 @@ export function startScheduler() {
   globalThis.__loveinteaSchedulerStarted = true;
   console.log('[scheduler] started — publish check 60s, metrics sync 6h');
 
+  // Vòng lặp nền hỏng = hệ CHẾT ÂM THẦM (bài hẹn giờ không đăng, video không
+  // render) mà UI vẫn xanh. Đây là lớp lỗi duy nhất không ai phát hiện được từ
+  // trong app — nên mọi catch ở tầng này phải ĐÁNH THỨC NGƯỜI, không chỉ ghi log.
   setInterval(() => {
-    publishDuePosts().catch(e => console.error('[scheduler] publish error:', e));
+    publishDuePosts().catch(e => log.error('scheduler.publish', 'vòng đăng bài lỗi', { err: e }));
   }, PUBLISH_INTERVAL_MS);
 
   setInterval(() => {
-    syncMetrics().catch(e => console.error('[scheduler] metrics error:', e));
-    refreshTokenHealth().catch(e => console.error('[scheduler] token health error:', e));
+    syncMetrics().catch(e => log.error('scheduler.metrics', 'đồng bộ chỉ số lỗi', { err: e }));
+    refreshTokenHealth().catch(e => log.error('scheduler.token', 'kiểm tra token lỗi', { err: e }));
   }, METRICS_INTERVAL_MS);
 
   setInterval(() => {
-    processVideoQueue().catch(e => console.error('[scheduler] video queue error:', e));
+    processVideoQueue().catch(e => log.error('scheduler.video', 'hàng đợi video lỗi', { err: e }));
   }, VIDEO_QUEUE_INTERVAL_MS);
 
   setInterval(async () => {
     // P3: video_schedules per-brand
     for (const b of listBrandIds()) {
-      await runWithBrand(b, () => processVideoSchedules()).catch((e: unknown) => console.error(`[scheduler] video schedule error [${b}]:`, e));
+      await runWithBrand(b, () => processVideoSchedules())
+        .catch((e: unknown) => log.error('scheduler.video-schedule', 'lịch video lỗi', { brand: b, err: e }));
     }
   }, VIDEO_SCHEDULE_INTERVAL_MS);
 
   // First metrics sync 2 min after boot (let the server settle)
   setTimeout(() => {
-    syncMetrics().catch(e => console.error('[scheduler] initial metrics error:', e));
-    refreshTokenHealth().catch(e => console.error('[scheduler] initial token health error:', e));
+    syncMetrics().catch(e => log.error('scheduler.metrics', 'đồng bộ chỉ số lần đầu lỗi', { err: e }));
+    refreshTokenHealth().catch(e => log.error('scheduler.token', 'kiểm tra token lần đầu lỗi', { err: e }));
   }, 120_000);
 }
 
@@ -97,10 +102,10 @@ export async function processVideoQueue() {
       await renderProject(chosen.id);
       console.log(`[scheduler] video render done: ${chosen.id}`);
       // Project thuộc lịch định kỳ → tạo bài đăng mang video (draft/scheduled)
-      try { onScheduledProjectDone(chosen.id); } catch (e) { console.error('[scheduler] schedule post error:', e); }
+      try { onScheduledProjectDone(chosen.id); } catch (e) { log.error('scheduler.schedule-post', 'tạo bài từ video lịch lỗi', { project: chosen.id, err: e }); }
     });
   } catch (e) {
-    console.error(`[scheduler] video render failed: ${chosen.id}:`, e);
+    log.error('scheduler.video', 'render video thất bại', { project: chosen.id, brand: chosen.brandId, err: e });
   } finally {
     videoRendering = false;
   }
@@ -116,9 +121,10 @@ export async function refreshTokenHealth() {
   const health = await checkTokenHealth();
   upsertSetting('fb_token_health', JSON.stringify(health));
   if (health.configured && !health.valid) {
-    console.error(`[scheduler] FB token INVALID: ${health.error}`);
+    // Token chết = MỌI bài hẹn giờ sẽ fail cho tới khi người vào nối lại tay.
+    log.error('facebook.token', 'token Facebook KHÔNG hợp lệ — bài hẹn giờ sẽ không đăng được', { err: health.error });
   } else if (health.daysLeft !== null && health.daysLeft < 7) {
-    console.warn(`[scheduler] FB token expires in ${health.daysLeft} day(s)`);
+    log.warn('facebook.token', `token Facebook còn ${health.daysLeft} ngày`, { daysLeft: health.daysLeft });
   }
 }
 
@@ -186,7 +192,7 @@ async function publishDueForBrand() {
         if (fb.ok) {
           db.prepare('UPDATE posts SET fb_post_id = ? WHERE id = ?').run(fb.postId, post.id);
           anyOk = true;
-        } else { anyFail = true; console.error(`[scheduler] FB publish failed for ${post.id}: ${fb.error}`); }
+        } else { anyFail = true; log.error('publish.facebook', 'đăng Facebook thất bại', { post: post.id, brand: brandId, err: fb.error }); }
       }
     }
 
@@ -203,7 +209,7 @@ async function publishDueForBrand() {
         if (ig.ok) {
           db.prepare('UPDATE posts SET ig_post_id = ? WHERE id = ?').run(ig.postId, post.id);
           anyOk = true;
-        } else { anyFail = true; console.error(`[scheduler] IG publish failed for ${post.id}: ${ig.error}`); }
+        } else { anyFail = true; log.error('publish.instagram', 'đăng Instagram thất bại', { post: post.id, brand: brandId, err: ig.error }); }
       }
     }
 

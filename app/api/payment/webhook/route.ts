@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { extractOrderId, fulfillOrder } from '@/lib/payment';
 import { getDb } from '@/lib/db';
 import { safeEqual } from '@/lib/crypto';
+import { enforceRateLimit } from '@/lib/rate-limit';
+import { log } from '@/lib/logger';
 
 const CASSO_TOKEN = process.env.CASSO_SECURE_TOKEN || '';
 
@@ -50,15 +52,20 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Middleware KHÔNG gác route này (ngân hàng phải gọi được) → tự phanh, nếu
+  // không thì CASSO_SECURE_TOKEN có thể bị dò với tốc độ không giới hạn.
+  const limited = enforceRateLimit(req, { scope: 'casso:webhook', limit: 120, windowMs: 60_000 });
+  if (limited) return limited;
+
   if (!verifyToken(req)) {
-    console.error('[CASSO] Token rejected');
+    log.warn('payment.casso', 'webhook bị từ chối token', { ip: req.headers.get('cf-connecting-ip') || 'unknown' });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
     const body = await req.json();
     const transactions = parseTxs(body);
-    console.log(`[CASSO] ${transactions.length} transaction(s)`, JSON.stringify(body).slice(0, 300));
+    log.info('payment.casso', `nhận ${transactions.length} giao dịch`);
 
     const db = getDb();
     let processed = 0;
@@ -83,7 +90,11 @@ export async function POST(req: NextRequest) {
       }
 
       if (tx.amount < order.amount) {
-        console.warn(`[CASSO] Amount mismatch ${orderId}: expected ${order.amount}, got ${tx.amount}`);
+        // Khách CHUYỂN THIẾU: tiền đã vào tài khoản nhưng đơn treo mãi ở
+        // 'pending' — khách tưởng đã mua, mình tưởng chưa ai trả. Phải có người biết.
+        log.error('payment.casso', 'chuyển khoản THIẾU tiền — đơn treo, cần xử lý tay', {
+          orderId, expected: order.amount, got: tx.amount,
+        });
         continue;
       }
 
@@ -95,13 +106,17 @@ export async function POST(req: NextRequest) {
 
       if (ok) {
         processed++;
-        console.log(`[CASSO] Fulfilled: ${orderId} amount=${tx.amount}`);
+        log.info('payment.casso', 'fulfil thành công', { orderId, amount: tx.amount });
+      } else {
+        // Tiền vào đủ mà fulfil trả false = đơn đã đổi trạng thái giữa chừng
+        // hoặc plan bị xoá. Tiền đã cầm, dịch vụ chưa cấp → không được im lặng.
+        log.error('payment.casso', 'ĐÃ NHẬN TIỀN NHƯNG FULFIL HỎNG — phải cấp gói bằng tay', { orderId, amount: tx.amount });
       }
     }
 
     return NextResponse.json({ ok: true, processed });
   } catch (err) {
-    console.error('[CASSO] Error:', err);
+    log.error('payment.casso', 'webhook nổ giữa chừng — giao dịch có thể mất fulfil', { err });
     return NextResponse.json({ ok: true, processed: 0 }); // Always 200 to prevent Casso retries
   }
 }

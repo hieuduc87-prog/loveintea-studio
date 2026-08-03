@@ -1,0 +1,126 @@
+name: CI
+
+# Vì sao có file này: repo đã có 2 cổng gác thật (tenant-guard-check +
+# cross-tenant-test) nhưng chúng chỉ chạy KHI NGƯỜI NHỚ CHẠY — tức là chúng
+# bảo vệ đúng những lúc không cần, và vắng mặt đúng lúc vội. Ở đây chúng chạy
+# mỗi lần push, không cần ai nhớ.
+#
+# Thứ tự các bước là CỐ Ý: rẻ và nhanh trước (typecheck ~30s), đắt sau
+# (build + test cách ly ~5 phút). Lỗi thường gặp nhất phải nổ sớm nhất.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# Push liên tiếp: huỷ lượt cũ, chỉ chạy lượt mới nhất.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # Giá trị GIẢ, chỉ để build/boot chạy được. Không có secret thật nào ở đây:
+      # CI không gọi ra dịch vụ ngoài, và không được phép có khả năng đó.
+      NEXTAUTH_SECRET: ci-test-secret-not-real
+      NEXTAUTH_URL: http://localhost:3202
+      TOKEN_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+      GEMINI_API_KEY: ci-dummy
+      OPENAI_API_KEY: ci-dummy
+      # Báo động PHẢI tắt trong CI — nếu không mỗi lần test lỗi có chủ đích sẽ
+      # bắn Telegram thật và dạy người chủ phớt lờ thông báo.
+      ALERT_ENABLED: '0'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'   # khớp node:20-alpine trong Dockerfile
+          cache: npm
+
+      - name: Cài dependency
+        run: npm ci
+
+      # ── Rẻ và nhanh: chạy trước ─────────────────────────────────────────
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Cú pháp script vận hành
+        # Script deploy/rollback/backup hỏng cú pháp chỉ lộ ra lúc prod đang cháy.
+        run: |
+          bash -n deploy.sh
+          bash -n rollback.sh
+          bash -n scripts/backup-db.sh
+          bash -n scripts/ops/disk-guard.sh
+
+      - name: Cổng gác tenant (tĩnh)
+        # Bắt lớp lỗi đa-brand ngay từ lúc viết code: bảng thiếu brand_id,
+        # settings key toàn cục, default-tenant viết cứng.
+        run: npm run check:tenant
+
+      - name: Test đơn vị
+        # Hạn mức, thanh toán, rate limit, báo động — logic mà sai thì mất tiền.
+        run: npm test
+
+      # ── Đắt: build rồi kiểm cách ly trên app chạy thật ───────────────────
+      - name: Build production
+        run: npm run build
+
+      - name: Khởi động server
+        run: |
+          mkdir -p /tmp/ci-data
+          NODE_ENV=production DATA_DIR=/tmp/ci-data \
+            npx next start -p 3202 > /tmp/server.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS -m 3 http://localhost:3202/api/health/live >/dev/null 2>&1; then
+              echo "server sống sau $((i*2))s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Server không khởi động được trong 80s"
+          cat /tmp/server.log
+          exit 1
+
+      - name: Liveness phải CÔNG KHAI (không đăng nhập vẫn gọi được)
+        # Máy dò uptime bên ngoài không có session. Nếu một thay đổi middleware
+        # vô tình kéo endpoint này vào sau cổng đăng nhập, mắt canh prod sẽ mù
+        # mà không ai biết — cho tới lần sập tiếp theo.
+        run: |
+          code=$(curl -s -o /tmp/live.json -w '%{http_code}' http://localhost:3202/api/health/live)
+          cat /tmp/live.json; echo
+          if [ "$code" != "200" ] && [ "$code" != "503" ]; then
+            echo "::error::/api/health/live trả $code — endpoint đã bị đưa ra sau cổng đăng nhập"
+            exit 1
+          fi
+
+      - name: Chờ app THỰC SỰ sẵn sàng (không chỉ "sống")
+        # "Trả lời được" ≠ "dùng được". Sau boot có một cửa sổ ~60s: schema khởi
+        # tạo lười + migration DB-per-tenant chưa xong, vài route trả 500 thay vì
+        # 404. Chạy test cách ly trong cửa sổ đó cho kết quả NGẪU NHIÊN — và một
+        # cổng gác lúc xanh lúc đỏ sẽ bị người ta học cách bấm "chạy lại".
+        # Mốc sẵn sàng = scheduler đã tick lần đầu.
+        run: |
+          for i in $(seq 1 60); do
+            s=$(curl -fsS -m 3 http://localhost:3202/api/health/live | grep -o '"scheduler":"[a-z]*"' || true)
+            if [ "$s" = '"scheduler":"ok"' ]; then echo "app sẵn sàng sau $((i*3))s"; exit 0; fi
+            sleep 3
+          done
+          echo "::error::App không đạt trạng thái sẵn sàng trong 180s"
+          curl -s http://localhost:3202/api/health/live; echo
+          tail -50 /tmp/server.log
+          exit 1
+
+      - name: Cách ly tenant (chạy thật, store A vs store B)
+        # Cổng gác mạnh nhất của repo: đăng nhập thật bằng NextAuth với tài khoản
+        # store A rồi gọi mọi route [id] bằng id của store B, đòi 403/404.
+        run: DATA_DIR=/tmp/ci-data BASE_URL=http://localhost:3202 npm run test:security
+
+      - name: Log server khi hỏng
+        if: failure()
+        run: tail -100 /tmp/server.log || true

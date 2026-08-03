@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { getDb } from '@/lib/db';
 import { runWithBrand } from '@/lib/tenant-context';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
 /** P3: video_projects nằm trong DB từng brand — quét mọi brand (tool nội bộ). */
 function eachBrand<T>(fn: () => T): T[] {
@@ -49,6 +50,10 @@ function deployedRev(): string {
 }
 
 export async function GET(req: NextRequest) {
+  // Middleware exclude route này (agent gọi bằng token riêng, không có session)
+  // → không có phanh nào khác: AGENT_KANBAN_TOKEN sẽ bị dò không giới hạn.
+  const limited = enforceRateLimit(req, { scope: 'autofix', limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
   if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const id = req.nextUrl.searchParams.get('id');
   const video = req.nextUrl.searchParams.get('video');
@@ -80,6 +85,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const limited = enforceRateLimit(req, { scope: 'autofix', limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
   if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => ({})) as {
     id?: string; status?: string; fixResult?: string; requeueVideo?: string;

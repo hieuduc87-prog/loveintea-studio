@@ -35,7 +35,17 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
   if (!cur || cur.resetAt <= now) {
     const resetAt = now + windowMs;
     buckets.set(key, { count: 1, resetAt });
-    return { ok: true, remaining: limit - 1, resetAt, retryAfterSec: 0 };
+    // Bản đầu trả cứng ok:true ở nhánh này — tức request ĐẦU của mỗi cửa sổ
+    // không bao giờ bị đối chiếu với limit. Vô hại khi limit ≥ 1, nhưng khiến
+    // limit=0 (công tắc khoá) vẫn lọt 1 request/cửa sổ và remaining ra số âm
+    // đi thẳng vào header. So sánh tường minh, hành vi limit ≥ 1 giữ nguyên.
+    const ok = limit >= 1;
+    return {
+      ok,
+      remaining: Math.max(0, limit - 1),
+      resetAt,
+      retryAfterSec: ok ? 0 : Math.ceil(windowMs / 1000),
+    };
   }
   cur.count += 1;
   const ok = cur.count <= limit;

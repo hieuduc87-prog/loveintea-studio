@@ -19,6 +19,10 @@ npm-debug.log*
 
 # Build
 dist/
+# Cache tăng dần của tsc — sinh lại mỗi lần typecheck. Để trong git thì mọi
+# commit đính kèm 170KB nhiễu, và cây làm việc luôn bẩn ⇒ chặn cổng "cây phải
+# sạch" của deploy.sh.
+tsconfig.tsbuildinfo
 .gstack/
 vbsec-reports/
 .vbsec-tmp/

@@ -7,8 +7,11 @@
     "build": "next build",
     "start": "next start -p 3202",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.mts",
     "test:security": "node scripts/security/cross-tenant-test.mjs",
     "check:tenant": "node scripts/security/tenant-guard-check.mjs",
+    "verify": "npm run typecheck && npm run check:tenant && npm test",
     "tenant:export": "node scripts/tenant/tenant-db.mjs export-all"
   },
   "dependencies": {
@@ -39,6 +42,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.5",
     "typescript": "^5"
   }
 }

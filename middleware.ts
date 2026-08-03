@@ -175,7 +175,10 @@ export const config = {
   matcher: [
     // Public (no auth): api/auth (NextAuth), api/webhooks (FB deauthorize),
     // api/images (FB/IG servers must fetch published images),
-    // api/payment/webhook + momo-callback (bank/MoMo IPN callbacks)
-    '/((?!api/auth|api/autofix|api/webhooks|api/images|api/payment/webhook|api/payment/momo-callback|login|about|_next/static|_next/image|favicon.ico|brand/|public/).*)',
+    // api/payment/webhook + momo-callback (bank/MoMo IPN callbacks),
+    // api/health/live (máy dò uptime BÊN NGOÀI — process chết thì báo động
+    //   trong process cũng chết, chỉ con mắt đứng ngoài mới thấy; endpoint tự
+    //   gác bằng rate limit và không trả dữ liệu khách nào)
+    '/((?!api/auth|api/autofix|api/webhooks|api/images|api/health/live|api/payment/webhook|api/payment/momo-callback|login|about|_next/static|_next/image|favicon.ico|brand/|public/).*)',
   ],
 };
