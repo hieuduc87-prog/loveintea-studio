@@ -173,14 +173,19 @@ async function publishDueForBrand() {
     }
 
     // FB: if fb_post_id already set, FB published it natively at the scheduled
+    // Card 7128c7ab: 274 post cũ có video_url là UUID rác (migration cũ ghi sai
+    // cột) — KHÔNG phải video. video_url != .mp4 mà đi đường Reel/Video thì IG
+    // xử lý ảnh như video → treo → timeout → failed. Chỉ coi là video khi
+    // video_url THẬT trỏ tới file video.
+    const isVideoPost = Boolean(post.video_url) && /\.(mp4|mov|m4v|webm)(\?|$)/i.test(String(post.video_url));
     // time — nothing to do. Otherwise post now.
     if (platforms.includes('facebook')) {
       if (post.fb_post_id) {
         anyOk = true;
       } else {
         // Bài video (từ Video Studio / lịch định kỳ) → đăng qua /videos thay vì /feed ảnh.
-        const fb = post.video_url
-          ? await postVideoToFacebook({ caption, videoUrl: post.video_url, brandId })
+        const fb = isVideoPost
+          ? await postVideoToFacebook({ caption, videoUrl: post.video_url!, brandId })
           : await postToFacebook({ caption, imageUrls, brandId });
         logInsert.run(uuid(), brandId, post.id, 'facebook', fb.ok ? 'ok' : 'failed', fb.postId ?? null, fb.error ?? null);
         if (fb.ok) {
@@ -196,8 +201,8 @@ async function publishDueForBrand() {
       if (!hasIgCreds(brandId)) {
         logInsert.run(uuid(), brandId, post.id, 'instagram', 'skipped', null, 'IG chưa kết nối — bỏ qua, chỉ đăng các kênh khác.');
       } else {
-        const ig = post.video_url
-          ? await postReelToInstagram({ caption, videoUrl: post.video_url, brandId })
+        const ig = isVideoPost
+          ? await postReelToInstagram({ caption, videoUrl: post.video_url!, brandId })
           : await postToInstagram({ caption, imageUrls, brandId });
         logInsert.run(uuid(), brandId, post.id, 'instagram', ig.ok ? 'ok' : 'failed', ig.postId ?? null, ig.error ?? null);
         if (ig.ok) {
