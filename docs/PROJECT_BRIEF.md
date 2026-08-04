@@ -70,7 +70,8 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 
 
 
-- [session 2026-08-03] 1 commit — fix(reel-render)
+
+- [session 2026-08-03] 2 commit — fix(scheduler) · fix(reel-render)
 - [session 2026-08-01] 1 commit — fix(p3-context)
 - [session 2026-07-31] 19 commit — fix(hero-ref) · fix(usage-lock) · fix(tenant-path) · docs(brief) · feat(tenant-db) · feat(mask-lock) · docs(tenant) · fix(product-ref) · fix(fidelity-gate)
 - [session 2026-07-31e] **P3 DB-PER-TENANT LIVE** (mô hình dlsamz): mỗi brand 1 file `data/tenants/<brand>/studio.db` (40 bảng nghiệp vụ) + ATTACH global (18 bảng platform) — SQL cũ chạy nguyên; brand context = AsyncLocalStorage (brand-guard enterBrandContext, scheduler/provision runWithBrand), `getDb()` = proxy late-binding; auto-migration boot + 2 backup + bảng cũ `zz_legacy_*`; global giữ bảng tenant RỖNG (thiếu context → 404 fail-closed) + AUDIT cảnh báo dòng lạ; kill-switch `TENANT_DB_SPLIT=0`. Tiện thể fix bug đăng hẹn giờ gãy (publish_log 7 giá trị/8 cột). Test: suite 30/30 + write-test rơi đúng file tenant + E2E prod 4 brand (bazan caption Fine Robusta durian). LƯU Ý VẬN HÀNH: mọi script/tool mở file tenant PHẢI `pragma foreign_keys=OFF`; KHÔNG rm thư mục tenant khi app đang chạy (handle ma); backup = copy folder brand [LIT-P3-0731E]

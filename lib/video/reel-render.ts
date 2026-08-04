@@ -57,7 +57,7 @@ function esc(s: string): string {
 
 interface ClipQa { ok: boolean; reason?: string }
 /** Ngữ cảnh QA per-video — tên sản phẩm + vật neo continuity, bơm từ profile. */
-interface QaCtx { skuName: string; anchor: string; isBev: boolean }
+interface QaCtx { skuName: string; anchor: string; isBev: boolean; validSubjects: string }
 
 /** Gemini vision gate cho 1 frame clip AI — CODE quyết verdict theo checklist
  *  (VERIFY-GATE law: không tin verdict tổng của LLM). */
@@ -66,7 +66,7 @@ async function visionGate(framePath: string, scene: ReelSceneSpec, ctx: QaCtx): 
     const raw = await analyzeImage(fs.readFileSync(framePath), 'image/jpeg',
       `Inspect this AI-generated frame for a premium product reel (${ctx.skuName}). Answer ONLY JSON:
 {"has_text_or_logo":bool,          // any readable letters, words, watermark, logo
- "wrong_subject":bool,             // subject clearly NOT: ${scene.prompt.slice(0, 140)}
+ "wrong_subject":bool,             // TRUE only if the subject is clearly UNRELATED to this product. Accept ANY real element of the product as valid: ${ctx.validSubjects || scene.prompt.slice(0,140)}. This scene aims for ${scene.prompt.slice(0, 110)}, but another REAL ingredient of the SAME product is NOT wrong.
  "unnatural":bool,                 // melted/warped ${ctx.anchor}, deformed hands, physically impossible material or liquid
  "implausible_physics":bool,       // effect WITHOUT visible cause: motion or swirl with no visible actor or source; objects floating; pour with no source
  "neon_or_soda":bool,              // garish neon oversaturated look${''}
@@ -275,11 +275,19 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
     skuName,
     anchor: plan.profile?.anchorNoun || 'glass',
     isBev: plan.profile?.isBeverage !== false,
+    validSubjects: [plan.profile?.ingredientsAll, plan.profile?.ingredient, plan.profile?.garnish, plan.profile?.heroSubject, plan.profile?.productName].filter(Boolean).join('; '),
   };
 
   let baseClipPath = '';
+  let prevQaReason = ''; // lý do QA fail vòng trước → retry NHẮM đúng lỗi (không mù)
   for (let attempt = 0; attempt < 2; attempt++) {
-    const strengthen = attempt === 1 ? ' STRICTLY: no letters of any kind, natural realistic product, physically correct.' : '';
+    // Fix gốc (founder 05/08: mỗi lỗi QA phải sửa ở tầng hệ thống): retry KHÔNG
+    // mù. Feed lý do fail cụ thể + TÁI KHẲNG ĐỊNH chủ thể đúng của SP này, để
+    // model sửa đúng chỗ sai thay vì bốc lại nội dung sai (gừng cho Dandelion).
+    const correction = attempt === 1 && prevQaReason
+      ? ` PREVIOUS ATTEMPT FAILED QA (${prevQaReason}). Fix EXACTLY this. The subject MUST strictly be: ${scene.prompt.slice(0, 160)}. The only allowed subject/ingredient is ${qaCtx.skuName}'s own (${plan.profile?.ingredient || 'the product itself'}); do NOT introduce any other ingredient, object or vessel.`
+      : '';
+    const strengthen = (attempt === 1 ? ' STRICTLY: no letters of any kind, natural realistic product, physically correct.' : '') + correction;
     const img = await getSceneImage(scene, plan, work, jobId, strengthen, attempt === 1);
     const ve = videoEngine();
     const key = sha(`i2v|${ve}|${img.key}|${scene.prompt}`);
@@ -311,6 +319,7 @@ async function generateSceneClip(scene: ReelSceneSpec, plan: ReelPlan, work: str
       return { path: cached };
     }
     logJob(jobId, `${scene.blockId}: QA FAIL — ${qa.reason}`);
+    prevQaReason = qa.reason || '';
     // RUN→LEARN→FIX→LOOP tự động: mỗi fail đúc thành luật, áp mọi video sau
     learnFromFailure(brandId, scene.blockId, scene.prompt, qa.reason || '').catch(() => {});
     if (attempt === 1) {

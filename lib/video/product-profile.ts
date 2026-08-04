@@ -24,6 +24,7 @@ export interface ProductProfile {
   isBeverage?: boolean;
   /** Chủ thể macro hook — texture/chất liệu/chi tiết đắt nhất của sản phẩm (English, giàu texture). */
   ingredient: string;
+  ingredientsAll?: string;
   /** Chi tiết điểm xuyết (beverage: garnish hợp lệ; ngành khác: prop/chi tiết phụ). */
   garnish: string;
   /** Beverage-only: mô tả màu nước tự nhiên. '' với ngành khác. */
@@ -48,8 +49,22 @@ export interface ProductProfile {
 export async function getProductProfile(brandId: string, productId: string): Promise<ProductProfile> {
   const rel = `PROMPTS/product_profiles/${productId}.json`;
   const cached = readLibJson<ProductProfile>(brandId, rel);
-  if (cached?.heroSubject && cached.category) return cached;
+  if (cached?.heroSubject && cached.category) {
+    if (!cached.ingredientsAll) {
+      // Backfill rẻ (05/08): profile cache cũ thiếu danh sách nguyên liệu → đọc DB
+      // 1 lần, KHÔNG gọi lại Gemini. QA gate cần cả list để không báo sai chủ thể.
+      try {
+        const row = getDb().prepare('SELECT ingredients FROM products WHERE id=? AND brand_id=?').get(productId, brandId) as { ingredients?: string } | undefined;
+        let x = String(row?.ingredients || '').trim();
+        if (x.charAt(0) === '[') { try { x = (JSON.parse(x) as unknown[]).map(String).filter(Boolean).join(', '); } catch { x = x.replace(/[[\]"]/g, ''); } }
+        cached.ingredientsAll = x.trim() || cached.ingredient;
+        writeLibJson(brandId, rel, cached);
+      } catch { cached.ingredientsAll = cached.ingredient; }
+    }
+    return cached;
+  }
 
+  const parseIng = (raw: string | undefined): string => { let x = String(raw || '').trim(); if (x.charAt(0) === '[') { try { x = JSON.parse(x).map(String).filter(Boolean).join(', '); } catch { x = x.replace(/[\[\]"]/g, ''); } } return x.trim(); };
   const db = getDb();
   const p = db.prepare(
     'SELECT id, name, slug, ingredients, pitch, theme, best_moment, color_name, knowledge_json FROM products WHERE id=? AND brand_id=?'
@@ -111,6 +126,7 @@ RULES: only details that truly belong to this product; never invent components; 
       serveStyle: (['hot', 'iced', 'both'].includes(String((r as { serveStyle?: string }).serveStyle)) ? (r as { serveStyle?: string }).serveStyle : 'both') as 'hot' | 'iced' | 'both',
     };
   }
+  profile.ingredientsAll = parseIng(p.ingredients) || profile.ingredient;
   writeLibJson(brandId, rel, profile);
   return profile;
 }
