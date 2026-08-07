@@ -71,6 +71,9 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 
 
 
+
+- [session 2026-08-07] `fa0b2cb` fix(P3-colshift) [LIT-FIX-0807A]: card blocker "mất template + ko tạo được template Collection". Root cause: `migrateToTenantDbs` chép `INSERT ... SELECT *` (theo VỊ TRÍ) giữa global cũ & tenant mới khác thứ tự cột → LỆCH 4 bảng loveintea: content_templates (analysis↔is_active↔usage_count↔created_at → 46/53 template ẩn oan vì is_active thành usage_count≠1), posts 525 (video_url↔template/content_type — gốc mục 27), brand_dna 6 cột, video_projects (video_code↔grade_json); brand_dna bazan/rootin/gossby cũng lệch. Vá: (1) UPDATE theo TÊN cột từ zz_legacy (chỉ id legacy, giữ post-split, foreign_keys=OFF); (2) sửa gốc lib/db.ts sharedColList copy theo tên; (3) createShell báo lỗi thay vì im lặng. Verify prod admin JWT: GET=53 template (trước 7), POST Collection ra id. Backup .pre-colfix.bak. LUẬT: cấm SELECT * khi migrate — cùng tên cột ≠ cùng vị trí; migration verify phải đối chiếu NỘI DUNG mẫu, không chỉ đếm dòng.
+- [session 2026-08-05] 1 commit — fix(reel-QA)
 - [session 2026-08-03] 2 commit — fix(scheduler) · fix(reel-render)
 - [session 2026-08-01] 1 commit — fix(p3-context)
 - [session 2026-07-31] 19 commit — fix(hero-ref) · fix(usage-lock) · fix(tenant-path) · docs(brief) · feat(tenant-db) · feat(mask-lock) · docs(tenant) · fix(product-ref) · fix(fidelity-gate)
