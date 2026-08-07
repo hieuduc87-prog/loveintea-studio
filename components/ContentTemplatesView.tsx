@@ -113,8 +113,8 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
         kind: type === 'collection' ? 'collection' : 'single',
       }),
     });
-    const d = await r.json() as { id?: string };
-    if (!d.id) return;
+    const d = await r.json() as { id?: string; error?: string };
+    if (!r.ok || !d.id) { alert(d.error || 'Không tạo được template — thử lại hoặc báo kỹ thuật.'); return; } // trước đây im lặng → user thấy "back về màn hình ban đầu"
     const list = await fetch(`/api/content-templates?brand=${bid}&active=1&limit=200`).then(x => x.json()) as { templates: Template[] };
     setTemplates(list.templates ?? []);
     const created = (list.templates ?? []).find(t => t.id === d.id);

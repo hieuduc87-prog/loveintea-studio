@@ -139,19 +139,32 @@ function migrateToTenantDbs(global_: Database.Database): void {
   const hasBrandCol = (t: string) =>
     (global_.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).some(c => c.name === 'brand_id');
 
+  // CỘT THEO TÊN, KHÔNG `SELECT *`: global cũ và tenant mới có thể khác THỨ TỰ cột
+  // (cột thêm sau bằng ALTER dồn về cuối) → copy positional làm LỆCH dữ liệu sang
+  // ô sai (sự cố card c86897f4: content_templates/posts/brand_dna/video_projects
+  // của loveintea bị xoay 4-6 cột — analysis↔is_active↔usage_count↔created_at, v.v.).
+  // Liệt kê cột theo TÊN ở cả INSERT-list lẫn SELECT-list = ánh xạ theo tên, độc lập vị trí.
+  const brandsLead = brands[0];
+  const sharedColList = (tbl: string): string => {
+    const gCols = new Set((global_.prepare(`PRAGMA table_info(${tbl})`).all() as Array<{ name: string }>).map(c => c.name));
+    const tCols = (getTenantDb(brandsLead).prepare(`PRAGMA main.table_info(${tbl})`).all() as Array<{ name: string }>).map(c => c.name);
+    return tCols.filter(c => gCols.has(c)).map(c => `"${c}"`).join(',');
+  };
+
   for (const brandId of brands) {
     const t = getTenantDb(brandId); // đã ATTACH g = global
     const copyAll = t.transaction(() => {
       for (const tbl of tenantTables) {
+        const cols = sharedColList(tbl);
         if (hasBrandCol(tbl)) {
-          t.prepare(`INSERT OR IGNORE INTO main.${tbl} SELECT * FROM g.${tbl} WHERE brand_id=?`).run(brandId);
+          t.prepare(`INSERT OR IGNORE INTO main.${tbl} (${cols}) SELECT ${cols} FROM g.${tbl} WHERE brand_id=?`).run(brandId);
         } else if (tbl === 'batch_runs') {
-          t.prepare(`INSERT OR IGNORE INTO main.batch_runs SELECT * FROM g.batch_runs
+          t.prepare(`INSERT OR IGNORE INTO main.batch_runs (${cols}) SELECT ${cols} FROM g.batch_runs
             WHERE id IN (SELECT DISTINCT batch_id FROM g.image_jobs WHERE brand_id=? AND batch_id IS NOT NULL)`).run(brandId);
         } else if (brandId === 'loveintea') {
           // bảng không brand_id = di sản đơn-tenant → thuộc loveintea
           console.warn(`[db] P3 split: bảng ${tbl} không có brand_id — gán legacy cho loveintea`);
-          t.prepare(`INSERT OR IGNORE INTO main.${tbl} SELECT * FROM g.${tbl}`).run();
+          t.prepare(`INSERT OR IGNORE INTO main.${tbl} (${cols}) SELECT ${cols} FROM g.${tbl}`).run();
         }
       }
     });
