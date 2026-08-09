@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { v4 as uuid } from 'uuid';
 import path from 'path';
 import fs from 'fs';
@@ -8,6 +9,8 @@ import { analyzeTemplateLayout } from '@/lib/gemini';
 import { getBrandId } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest) {
+  const _rl = enforceRateLimit(req, { scope: 'ai:tpl-upload', limit: 20, windowMs: 60_000 }); // SEC (vbsec H3): chống spam đốt tiền Gemini
+  if (_rl) return _rl;
   try {
     const fd = await req.formData();
     // Collection = multiple ordered images (carousel); single = one image/video

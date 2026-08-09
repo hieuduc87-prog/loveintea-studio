@@ -35,11 +35,8 @@ export function extractOrderId(description: string): string | null {
   return match ? match[0].toUpperCase() : null;
 }
 
-// ── Verify Casso webhook token ────────────────────────────────────────────────
-export function verifyCassoToken(header: string | null): boolean {
-  if (!CASSO_TOKEN || !header) return false;
-  return header.replace('Bearer ', '').trim() === CASSO_TOKEN;
-}
+// SEC (vbsec LOW): verifyCassoToken (so sánh === không timing-safe) ĐÃ XOÁ — dead code,
+// route webhook thật tự verify bằng safeEqual. Giữ lại = bẫy tái phát lỗi cũ nếu nối nhầm.
 
 // ── Bank display info (masked) ────────────────────────────────────────────────
 export function getBankInfo() {
@@ -100,7 +97,7 @@ export function fulfillOrder(
       UPDATE bank_transfers
       SET status = 'paid', paid_at = datetime('now'),
           casso_tid = ?, sender_name = ?, sender_account = ?
-      WHERE order_id = ?
+      WHERE order_id = ? AND status = 'pending'
     `).run(
       txData?.cassoTid || null,
       txData?.senderName || null,

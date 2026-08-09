@@ -1,11 +1,14 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { getDb } from '@/lib/db';
 import { generateCaption } from '@/lib/gemini';
 import { getBrandId } from '@/lib/brand-guard';
 
 // POST /api/learn — run learn engine: attribute performance, propose rules
 export async function POST(req: NextRequest) {
+  const _rl = enforceRateLimit(req, { scope: 'ai:learn', limit: 10, windowMs: 60_000 }); // SEC (vbsec H3): chống spam đốt tiền Gemini
+  if (_rl) return _rl;
   try {
     const { brandId } = await req.json() as { brandId?: string };
     const bid = getBrandId(req) || brandId || '';

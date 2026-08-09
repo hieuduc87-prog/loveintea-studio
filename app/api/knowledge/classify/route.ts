@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { generateJSON } from '@/lib/gemini';
 import { isAllBrands } from '@/lib/brand-guard';
 
@@ -9,6 +10,8 @@ import { isAllBrands } from '@/lib/brand-guard';
  * hay "brand" (DNA/đặc thù riêng của 1 thương hiệu). Người dùng duyệt bằng toggle.
  */
 export async function POST(req: NextRequest) {
+  const _rl = enforceRateLimit(req, { scope: 'ai:knowledge-classify', limit: 30, windowMs: 60_000 }); // SEC (vbsec H3): chống spam đốt tiền Gemini
+  if (_rl) return _rl;
   try {
     const { type, title, content } = await req.json() as { type?: string; title?: string; content?: string };
     const text = `${title ?? ''}\n${content ?? ''}`.trim();

@@ -22,9 +22,9 @@ function typeRank(type: string): number {
 // ─── GET /api/knowledge?brandId=loveintea ─────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const brandId = searchParams.get('brandId');
-
+    // SEC (vbsec MEDIUM): TRƯỚC đọc brandId từ query (client tự set → nguyên tắc IDOR
+    // + đang trả rỗng ở prod vì không vào brand context). Dùng brand TIN CẬY từ middleware.
+    const brandId = getBrandId(req);
     if (!brandId) {
       return NextResponse.json({ error: 'brandId is required' }, { status: 400 });
     }

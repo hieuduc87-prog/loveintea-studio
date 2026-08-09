@@ -15,6 +15,6 @@ export async function POST(req: NextRequest) {
     const { id, slug } = createStore({ name: body.name, slug: body.slug, logo_url: body.logo_url, domain: body.domain });
     return NextResponse.json({ ok: true, id, slug });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message || 'Không tạo được store' }, { status: 400 });
+    return NextResponse.json({ error: (console.error('[api]',e),'Không tạo được store') }, { status: 400 });
   }
 }

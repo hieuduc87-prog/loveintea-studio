@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { getDb } from '@/lib/db';
 import { generateJSON, analyzeImage } from '@/lib/gemini';
 import { getBrandId } from '@/lib/brand-guard';
@@ -20,6 +21,8 @@ import { renderOverlayToUrl, imageRefToBuffer } from '@/lib/text-overlay-render'
 const LAYOUTS: OverlayLayout[] = ['bottom-headline', 'top-banner', 'center-quote', 'benefit-list', 'promo-badge'];
 
 export async function POST(req: NextRequest) {
+  const _rl = enforceRateLimit(req, { scope: 'ai:overlay-auto', limit: 20, windowMs: 60_000 }); // SEC (vbsec H3): chống spam đốt tiền Gemini
+  if (_rl) return _rl;
   try {
     const brandId = getBrandId(req);
     const body = await req.json() as { baseImageUrl?: string; productId?: string; referenceId?: string; layout?: string; brandName?: string };

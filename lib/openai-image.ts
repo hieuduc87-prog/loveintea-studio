@@ -18,6 +18,18 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { recordCost } from './cost-ledger';
+import { currentBrandId } from './tenant-context';
+
+// SEC (vbsec H2): TRƯỚC đây chỉ fal.ts ghi sổ → lưới an toàn cap_usd MÙ với gpt-image-2.
+// Ghi cost ước theo chất lượng (đối chiếu dashboard OpenAI). brandId ưu tiên tham số,
+// fallback context AsyncLocalStorage. recordCost tự no-op nếu không có brand/usd.
+function logGptImageCost(brandId: string | undefined, size: string, quality: string, feature: 'image_gen' | 'image_edit') {
+  const base = quality === 'low' ? 0.02 : quality === 'high' ? 0.19 : 0.06;
+  const mult = size === '1024x1024' ? 0.85 : 1;
+  recordCost({ brandId: brandId || currentBrandId(), feature, provider: 'openai',
+    model: 'gpt-image-2', usd: Math.round(base * mult * 10000) / 10000, qty: `${size} ${quality}` });
+}
 import sharp from 'sharp';
 import { withPhotoreal } from './photoreal';
 import { falRembg } from './video/fal';
@@ -128,6 +140,7 @@ export async function editProductImage(opts: {
 
   const imageData = response.data?.[0];
   if (!imageData) throw new Error('No image returned from OpenAI');
+  logGptImageCost(brandId, size, quality, 'image_edit');
 
   if (imageData.b64_json) {
     return `data:image/png;base64,${imageData.b64_json}`;
@@ -158,6 +171,7 @@ export async function generateImage(opts: {
 
   const imageData = response.data?.[0];
   if (!imageData) throw new Error('No image returned from OpenAI');
+  logGptImageCost(brandId, size, quality, 'image_gen');
 
   if (imageData.b64_json) {
     return `data:image/png;base64,${imageData.b64_json}`;
@@ -275,5 +289,6 @@ export async function editWithProductLock(opts: {
   } as Parameters<typeof client.images.edit>[0]));
   const imageData = response.data?.[0];
   if (!imageData?.b64_json) throw new Error('No image returned from OpenAI (mask edit)');
+  logGptImageCost(opts.brandId, size, quality, 'image_edit');
   return `data:image/png;base64,${imageData.b64_json}`;
 }

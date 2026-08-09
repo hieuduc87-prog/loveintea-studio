@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { getDb } from '@/lib/db';
 import { generateJSON } from '@/lib/gemini';
 import { getBrandId } from '@/lib/brand-guard';
@@ -22,6 +23,8 @@ interface TemplateRow {
 
 // POST /api/content-templates/match — AI-powered template selection
 export async function POST(req: NextRequest) {
+  const _rl = enforceRateLimit(req, { scope: 'ai:tpl-match', limit: 30, windowMs: 60_000 }); // SEC (vbsec H3): chống spam đốt tiền Gemini
+  if (_rl) return _rl;
   try {
     const body = await req.json() as MatchRequest;
     const brandId = getBrandId(req) || body.brandId || '';

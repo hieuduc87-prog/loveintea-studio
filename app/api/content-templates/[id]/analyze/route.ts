@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { getDb } from '@/lib/db';
 import { analyzeTemplateLayout, analyzeTemplateCollection } from '@/lib/gemini';
 import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
@@ -20,6 +21,8 @@ function readImg(url: string): { data: Buffer; mimeType: string } | null {
 
 // POST /api/content-templates/[id]/analyze — Gemini analysis of the WHOLE template
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const _rl = enforceRateLimit(req, { scope: 'ai:tpl-analyze', limit: 20, windowMs: 60_000 }); // SEC (vbsec H3): chống spam đốt tiền Gemini
+  if (_rl) return _rl;
   getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   try {
     const { id } = params;

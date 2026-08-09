@@ -1,13 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
+import { canAccessBrand } from '@/lib/brand-guard';
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'flows');
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const raw = await fs.readFile(path.join(DATA_DIR, `${params.id}.json`), 'utf8');
     const w = JSON.parse(raw);
+    // SEC (vbsec H7): flow lưu brandId — chặn đọc workflow/prompt của brand khác.
+    if (!canAccessBrand(req, w.brandId || '')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const lines: string[] = [];
     lines.push(`# Workflow: ${w.name}`);

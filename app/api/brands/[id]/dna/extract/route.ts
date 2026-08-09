@@ -11,6 +11,7 @@ export const maxDuration = 120;
  * Returns the synthesised fields (NOT saved — UI reviews then PATCHes).
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { getDb } from '@/lib/db';
 import { generateJSON } from '@/lib/gemini';
 import { SEGMENTS } from '@/lib/brand-dna';
@@ -18,6 +19,8 @@ import { fileToText } from '@/lib/product-knowledge';
 import { canAccessBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const _rl = enforceRateLimit(req, { scope: 'ai:dna-extract', limit: 10, windowMs: 60_000 }); // SEC (vbsec H3): chống spam đốt tiền Gemini
+  if (_rl) return _rl;
   const { id: brandId } = await params;
   // TENANT ISOLATION: brandId đến từ URL path (middleware chỉ validate ?brand=
   // query) — không check thì editor brand khác đọc được knowledge_docs qua DNA synth.

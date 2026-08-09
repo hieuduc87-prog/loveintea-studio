@@ -91,6 +91,6 @@ Trả ONLY JSON: {"slides":[{"headline":"...","sub":"...","cta":"","badge":""}, 
     return NextResponse.json({ ok: true, layout, urls, slides });
   } catch (e) {
     console.error('[overlay-carousel]', e);
-    return NextResponse.json({ error: (e as Error).message || 'Lỗi tạo carousel' }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]',e),'Lỗi tạo carousel') }, { status: 500 });
   }
 }

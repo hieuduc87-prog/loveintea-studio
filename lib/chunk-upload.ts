@@ -12,7 +12,7 @@ export async function chunkedUpload(
   extra: Record<string, string> = {},
   onProgress?: (pct: number) => void,
 ): Promise<ChunkResult> {
-  const uploadId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const uploadId = (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`); // SEC (vbsec LOW): CSPRNG thay Math.random
   const total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
 
   let last: ChunkResult = {};

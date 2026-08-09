@@ -23,6 +23,6 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, url });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message || 'Render lỗi' }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]',e),'Render lỗi') }, { status: 500 });
   }
 }

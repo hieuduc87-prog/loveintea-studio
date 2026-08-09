@@ -1,4 +1,13 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { recordCost } from './cost-ledger';
+import { currentBrandId } from './tenant-context';
+
+// SEC (vbsec H2): ghi sổ cost Gemini để lưới cap_usd không mù (brand từ AsyncLocalStorage).
+// Ước theo bảng giá 2.5-flash (text rẻ, vision cao hơn); recordCost no-op nếu thiếu brand.
+function logGeminiCost(kind: 'text' | 'vision') {
+  recordCost({ brandId: currentBrandId(), feature: kind === 'vision' ? 'vision' : 'text_gen',
+    provider: 'google', model: 'gemini-2.5-flash', usd: kind === 'vision' ? 0.002 : 0.0006 });
+}
 
 let _client: GoogleGenerativeAI | null = null;
 
@@ -77,16 +86,19 @@ async function tryGenerate(prompt: string, jsonMode: boolean): Promise<string> {
 }
 
 export async function generateCaption(prompt: string): Promise<string> {
+  logGeminiCost('text');
   return tryGenerate(prompt, false);
 }
 
 export async function generateJSON<T>(prompt: string): Promise<T> {
+  logGeminiCost('text');
   const text = await tryGenerate(prompt, true);
   return JSON.parse(text) as T;
 }
 
 // ─── Vision: analyze image with text prompt ─────────────────
 export async function analyzeImage(imageBuffer: Buffer, mimeType: string, prompt: string): Promise<string> {
+  logGeminiCost('vision');
   let lastError: unknown;
   for (const modelName of MODELS) {
     try {
@@ -146,6 +158,7 @@ export interface TemplateAnalysis {
 }
 
 export async function analyzeTemplateLayout(imageBuffer: Buffer, mimeType: string): Promise<TemplateAnalysis> {
+  logGeminiCost('vision');
   const prompt = `You are a professional graphic designer analyzing a content template image for a beverage brand (tea/herbal drinks).
 
 Analyze this template image in detail and return structured JSON describing:
@@ -207,6 +220,7 @@ export async function imagesVerdictJSON<T = Record<string, unknown>>(
   images: Array<{ data: Buffer; mimeType: string }>,
   prompt: string,
 ): Promise<T> {
+  logGeminiCost('vision');
   const parts: Array<{ inlineData: { data: string; mimeType: string } } | string> = images.map(img => ({
     inlineData: { data: img.data.toString('base64'), mimeType: img.mimeType },
   }));
@@ -229,6 +243,7 @@ export async function imagesVerdictJSON<T = Record<string, unknown>>(
 }
 
 export async function analyzeTemplateCollection(images: Array<{ data: Buffer; mimeType: string }>): Promise<CollectionAnalysis> {
+  logGeminiCost('vision');
   const prompt = `Bạn là giám đốc sáng tạo. Đây là MỘT template content gồm ${images.length} ảnh THEO THỨ TỰ (ảnh 1 → ${images.length}).
 Phân tích CHI TIẾT để hiểu cấu trúc template và rút ra KHUNG SƯỜN tái sử dụng được cho sản phẩm khác.
 

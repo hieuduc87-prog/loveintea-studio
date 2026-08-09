@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { getDb } from '@/lib/db';
 import { generateJSON } from '@/lib/gemini';
 import { getBrandId } from '@/lib/brand-guard';
@@ -15,6 +16,8 @@ import { resolveLangName } from '@/lib/brand-lang';
 const LAYOUTS = ['bottom-headline', 'top-banner', 'center-quote', 'benefit-list', 'promo-badge'];
 
 export async function POST(req: NextRequest) {
+  const _rl = enforceRateLimit(req, { scope: 'ai:overlay-suggest', limit: 20, windowMs: 60_000 }); // SEC (vbsec H3): chống spam đốt tiền Gemini
+  if (_rl) return _rl;
   try {
     const brandId = getBrandId(req);
     const body = await req.json() as { productId?: string; templateId?: string; topic?: string; layout?: string };
@@ -77,6 +80,6 @@ Trả ONLY JSON: {"layout":"...","headline":"...","sub":"...","cta":"...","badge
       badge: String(o.badge ?? '').trim(),
     });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message || 'Lỗi gợi ý' }, { status: 500 });
+    return NextResponse.json({ error: (console.error('[api]',e),'Lỗi gợi ý') }, { status: 500 });
   }
 }

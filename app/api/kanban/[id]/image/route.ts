@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     card.updatedAt = new Date().toISOString();
     await fs.writeFile(fp, JSON.stringify(card, null, 2));
     return NextResponse.json(card);
-  } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
+  } catch (e) { console.error('[api] kanban image', e); return NextResponse.json({ error: 'Có lỗi hệ thống' }, { status: 500 }); }
 }
 
 // DELETE /api/kanban/[id]/image?name=<filename> — xoá ảnh screenshot upload nhầm
