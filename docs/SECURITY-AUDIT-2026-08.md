@@ -25,30 +25,30 @@ Kiến trúc lõi VỮNG (cách ly DB-per-tenant, brand-guard 403 chéo, crypto/
 
 ---
 
-## ⏳ CHƯA VÁ (Wave 2) — cần làm để "chuẩn không thể bị tấn công"
+## ✅ ĐÃ VÁ Wave 2 — commit `2c3073f` (LIT-SEC-0810B)
 
-### HIGH
-- **H2 — `cap_usd` mù**: `lib/openai-image.ts` + `lib/gemini.ts` không gọi `recordCost` (chỉ `lib/video/fal.ts` ghi sổ) → trần chi phí không đếm tiền ảnh/text. *Fix: thêm recordCost sau mỗi call.*
-- **H3 — ~10 route Gemini không rate-limit/quota**: `content/generate`, `text-overlay/auto`, `text-overlay/suggest`, `content-templates/*`, `brands/[id]/dna/extract`, `knowledge/classify`, `learn`. *Fix: enforceRateLimit + reserveQuota('content').*
-- **H5 — 19 route trả nguyên `e.message`** ra client (lộ path DB tenant + schema). *Fix: message chung, log server. (2 route đã sửa kèm Wave 1.)*
-- **H6 — 7 dependency CVE** (`npm audit`: xlsx, sharp, adm-zip, form-data, postcss, nanoid; next 14 chỉ dev-server CVE — prod chạy `next start` không dính, KHÔNG nâng major 16). *Fix: nâng bản vá non-major từng cái + test.*
-- **H7 — flow-builder `[id]/claude-brief`+`image`** chéo brand (đọc workflow/ghi ảnh brand khác, zero guard). *Fix: getBrandId + assertResourceBrand.*
-- **H8 — stored prompt-injection** qua ảnh mẫu template (vision output tái dùng làm ngữ cảnh "tin cậy" trong prompt sau). *Fix: đánh dấu untrusted, không cho điều khiển hành động.*
+### HIGH (đã vá)
+- **H2 — `cap_usd` mù** → ✅ `recordCost` cho gpt-image-2 (`lib/openai-image.ts` 3 điểm: gen/edit/mask) + Gemini text/vision (`lib/gemini.ts` 6 hàm) qua `currentBrandId()` (AsyncLocalStorage, không thread param).
+- **H3 — 9 route Gemini không rate-limit** → ✅ `enforceRateLimit` (content/generate, text-overlay auto/suggest, tpl match/analyze/upload, dna/extract, knowledge/classify, learn). *Verify live: spam 25× content/generate → 5×429.*
+- **H5 — route lộ `e.message`** → ✅ 6 điểm còn lộ đổi message chung + `console.error` server.
+- **H6 — deps CVE** → ✅ `npm audit fix` non-major (form-data/nanoid/postcss/uuid). ⏳ **Deferred (cần kiểm thử)**: sharp (0.33→0.35 minor có thể breaking pipeline ảnh), next (14→16 major, CVE chỉ dev-server nên prod `next start` không dính), xlsx (SheetJS không vá qua npm), adm-zip. → nâng riêng + chạy lại cross-tenant 26/26.
+- **H7 — flow-builder chéo brand** → ✅ `canAccessBrand(req, flow.brandId)` cho claude-brief + image + sanitize ext. *Verify live: editor-gossby đọc flow loveintea → 403.*
 
-### MEDIUM
-- HTML sanitizer regex tự viết (thay bằng thư viện chuẩn).
-- `/api/knowledge?brandId=` đọc brand từ query thay vì `getBrandId` (hiện middleware backstop nhưng vi phạm nguyên tắc).
-- 2 route serve-ảnh flow-builder/kanban thiếu guard.
-- middleware prefix-match không neo path-segment (bẫy route tương lai).
+### MEDIUM (đã vá)
+- ✅ `/api/knowledge` GET dùng `getBrandId` thay `?brandId` (đóng IDOR + fix bug trả rỗng prod).
 
-### LOW
-- `Math.random()` cho uploadId (`lib/chunk-upload.ts`) → CSPRNG.
-- 2 route upload ảnh thiếu magic-byte verify.
-- `fulfillOrder` SELECT-rồi-UPDATE chưa atomic (chỉ vỡ khi scale ngang) → `UPDATE ... WHERE status='pending'`.
-- Dead code `verifyCassoToken` dùng `===` → xoá.
+### LOW (đã vá)
+- ✅ `uploadId` → `crypto.randomUUID()` (CSPRNG).
+- ✅ `fulfillOrder` `UPDATE ... WHERE status='pending'` (idempotent, chống double-fulfill khi scale ngang).
+- ✅ Xoá dead code `verifyCassoToken` (dùng `===`).
 
-### Nghiệp vụ (không phải lỗ hổng)
-- MoMo không fulfill subscription (`momo_payments` vs `bank_transfers` lệch bảng) → mất doanh thu.
+## ⏳ CÒN LẠI (deferred — cần kiểm thử / kiến trúc, đã ghi nhận)
+- **H8 stored prompt-injection** qua ảnh mẫu template — kiến trúc (vision output tái dùng làm ngữ cảnh tin cậy). Cần đánh dấu untrusted + không cho điều khiển hành động. CSP + gate hiện có giảm nhẹ.
+- **MEDIUM sanitizer** HTML regex tự viết → thay `isomorphic-dompurify` (CSP `script-src` đã là backstop lớp cuối).
+- **MEDIUM** 2 route serve-ảnh (flow-builder/kanban) thiếu brand-check — traversal ĐÃ chặn (`path.basename`); chéo brand cần đoán đúng id+filename (bất khả thi) → rủi ro thấp, hoãn.
+- **MEDIUM** middleware prefix-match không neo path-segment (bẫy route tương lai, chưa exploit).
+- **Deps major**: sharp/next/xlsx/adm-zip (xem H6).
+- **Nghiệp vụ (không phải lỗ hổng)**: MoMo không fulfill subscription (`momo_payments` vs `bank_transfers` lệch bảng) → mất doanh thu.
 
 ---
 
