@@ -72,7 +72,9 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 
 
 
-- [session 2026-08-07] `fa0b2cb` fix(P3-colshift) [LIT-FIX-0807A]: card blocker "mất template + ko tạo được template Collection". Root cause: `migrateToTenantDbs` chép `INSERT ... SELECT *` (theo VỊ TRÍ) giữa global cũ & tenant mới khác thứ tự cột → LỆCH 4 bảng loveintea: content_templates (analysis↔is_active↔usage_count↔created_at → 46/53 template ẩn oan vì is_active thành usage_count≠1), posts 525 (video_url↔template/content_type — gốc mục 27), brand_dna 6 cột, video_projects (video_code↔grade_json); brand_dna bazan/rootin/gossby cũng lệch. Vá: (1) UPDATE theo TÊN cột từ zz_legacy (chỉ id legacy, giữ post-split, foreign_keys=OFF); (2) sửa gốc lib/db.ts sharedColList copy theo tên; (3) createShell báo lỗi thay vì im lặng. Verify prod admin JWT: GET=53 template (trước 7), POST Collection ra id. Backup .pre-colfix.bak. LUẬT: cấm SELECT * khi migrate — cùng tên cột ≠ cùng vị trí; migration verify phải đối chiếu NỘI DUNG mẫu, không chỉ đếm dòng.
+
+- [session 2026-08-10] `5084543` **AUDIT BẢO MẬT TOÀN DIỆN** [LIT-SEC-0810A]: 6 agent quét 135 route + pen-test THẬT prod. Lõi vững (DB-per-tenant 403 chéo, crypto/password/thanh-toán chuẩn). Vá+verify-live **6 CRITICAL + 3 HIGH**: FB OAuth start/callback thiếu session (chiếm kênh publish)→requireAdminSession; kanban/claude-brief đọc ?brand client dump mọi brand→getBrandId; inbox PII không gác→admin+context; 2 route video render fal.ai zero-quota (cost-DoS)→reserveQuota; next-auth 4.24.14→15 (CVE); /api/cost rò COGS/P&L cho editor→admin-only; hub/assets/upload path-traversal→isValidBrandSlug; +CSP. Verify: editor /api/cost 200→403, claude-brief 0 rò, FB start anon 401. **Sự cố hạ tầng**: deploy BUILD FAIL vì ổ 100% (2 tarball ảnh 16.7G cùng-ổ) → xoá + tắt tar-ảnh-cùng-ổ trong backup.sh (→58%). Còn Wave 2: cap_usd recordCost, ~10 Gemini rate-limit, 19 e.message, deps CVE, prompt-injection — `docs/SECURITY-AUDIT-2026-08.md`. LUẬT: guard KHÔNG kế thừa tự động, mỗi route mới phải copy pattern + CI grep bắt buộc; backup cùng-ổ ≠ DR.
+- [session 2026-08-07] 2 commit — docs(brief) · fix(P3-colshift)
 - [session 2026-08-05] 1 commit — fix(reel-QA)
 - [session 2026-08-03] 2 commit — fix(scheduler) · fix(reel-render)
 - [session 2026-08-01] 1 commit — fix(p3-context)
@@ -84,4 +86,3 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 - [session 2026-07-30b] fix(o3-engine) L4: gỡ danh tính LoveinTea viết cứng trong caption/image/brief prompt — brand bơm từ brands/brand_dna, sản phẩm DB-first; ma trận O3 tĩnh gate riêng loveintea. Test tsx 12/12 [LIT-FIX-0730G]
 - [session 2026-07-30] 5 commit — docs(brief) · feat(domain)
 - [session 2026-07-29] 17+2 commit — quota theo khách (LIT-QUOTA-0729A) · backup server + dọn ổ · SEC(cost/fb) · feat(tenant)
-- [session 2026-07-28] 15 commit — feat(reel) · fix(reel) · feat(autofix) · docs(brief)
