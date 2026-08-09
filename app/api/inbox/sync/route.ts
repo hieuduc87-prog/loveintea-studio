@@ -1,11 +1,18 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getPageInbox } from '@/lib/facebook';
+import { getBrandId } from '@/lib/brand-guard';
+import { requireAdminSession } from '@/lib/api-auth';
 import { v4 as uuid } from 'uuid';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
+    // SEC (vbsec C3): gác admin + vào brand context. LƯU Ý: getPageInbox dùng FB page
+    // env (loveintea) — chỉ chạy đúng cho loveintea; brand khác cần getChannelCreds (TODO).
+    const auth = await requireAdminSession();
+    if ('error' in auth) return auth.error;
+    getBrandId(req);
     const db   = getDb();
     const data = await getPageInbox(50) as {
       data?: Array<{

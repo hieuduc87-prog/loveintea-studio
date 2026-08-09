@@ -10,6 +10,7 @@ import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
 import { getBrandId } from '@/lib/brand-guard';
 import { enforceRateLimit } from '@/lib/rate-limit';
+import { reserveQuota, refundQuota } from '@/lib/quota';
 import { buildRecipeStoryboard, PRODUCT_GROUP } from '@/lib/video/recipe-workflow';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -34,7 +35,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: `AI đang phân loại ${tagging.c} clip — chờ xong rồi dựng (tự refresh sau ~1 phút)` }, { status: 409 });
     }
 
+    // SEC (vbsec C5): mỗi version = 1 video render fal.ai TỐN TIỀN → phải trừ hạn mức
+    // TRƯỚC khi tạo, nếu không đốt tiền vô hạn (cost-DoS).
+    const overQuota = reserveQuota(brandId, 'video', versions);
+    if (overQuota) return NextResponse.json({ error: overQuota.error }, { status: 429 });
+
     const created: string[] = [];
+    try {
     for (let v = 0; v < versions; v++) {
       const board = await buildRecipeStoryboard({ batchId: params.id, brandId, dish, version: v, language: body.language });
       const projectId = uuid();
@@ -49,9 +56,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           params.id, board.title, label, batch.grade_json);
       created.push(projectId);
     }
+    } catch (e) {
+      refundQuota(brandId, 'video', versions - created.length); // hoàn hạn mức phần chưa tạo được
+      throw e;
+    }
     return NextResponse.json({ ok: true, projects: created });
   } catch (e) {
     console.error('[api recipe generate]', e);
-    return NextResponse.json({ error: String(e).slice(0, 300) }, { status: 500 });
+    return NextResponse.json({ error: 'Có lỗi hệ thống' }, { status: 500 }); // SEC (vbsec H5): không lộ e.message ra client
   }
 }

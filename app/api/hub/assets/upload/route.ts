@@ -5,13 +5,18 @@ import path from 'path';
 import fs from 'fs';
 import { getDb } from '@/lib/db';
 import { getBrandId } from '@/lib/brand-guard';
+import { isValidBrandSlug } from '@/lib/tenant-context';
 
 export async function POST(req: NextRequest) {
   try {
     const db = getDb();
     const fd = await req.formData();
     const files   = fd.getAll('files') as File[];
-    const brandId = getBrandId(req) || (fd.get('brand_id') as string);
+    // SEC (vbsec H4): TRƯỚC dùng fallback fd.get('brand_id') (client-controlled) rồi
+    // path.join → brand_id='../../..' ghi file ra ngoài DATA_DIR. Chỉ nhận brand TIN CẬY
+    // từ middleware + bắt buộc là slug hợp lệ (không / .. ký tự lạ).
+    const brandId = getBrandId(req);
+    if (!isValidBrandSlug(brandId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const productId = (fd.get('product_id') as string) || null;
 
     if (!files.length) return NextResponse.json({ error: 'No files' }, { status: 400 });
@@ -30,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     for (const file of files) {
       if (!file.type.startsWith('image/')) continue;
-      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const ext = (file.name.split('.').pop()?.toLowerCase() ?? 'jpg').replace(/[^a-z0-9]/g, '').slice(0, 5) || 'jpg'; // SEC (vbsec H4): chặn ../ trong ext
       const id  = uuid();
       const filename = `${id}.${ext}`;
       const filePath = path.join(assetsDir, filename);

@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { APP_ID } from '@/lib/facebook';
+import { requireAdminSession } from '@/lib/api-auth';
 
 // Full scopes for page + IG publishing. In Development Mode these work for
 // app admins/developers/testers WITHOUT App Review. For external customers
@@ -35,6 +36,12 @@ const FB_SCOPES = [
 ].join(',');
 
 export async function GET(req: Request) {
+  // SEC (vbsec C1): middleware loại trừ /api/auth khỏi withAuth → route này PHẢI tự
+  // gác. Thiếu → attacker vô danh khởi tạo OAuth bằng Page của hắn, callback ghi token
+  // vào settings global → chiếm kênh publish FB nền tảng.
+  const auth = await requireAdminSession();
+  if ('error' in auth) return auth.error;
+
   const redirectUri = process.env.FB_REDIRECT_URI;
   if (!redirectUri) {
     return NextResponse.json({ error: 'FB_REDIRECT_URI env var not set' }, { status: 500 });

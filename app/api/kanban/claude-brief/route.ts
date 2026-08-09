@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
+import { getBrandId, isAllBrands } from '@/lib/brand-guard';
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'kanban');
 
 export async function GET(req: NextRequest) {
   try {
-    // Optional ?brand=X filters to one project; default = ALL projects (each card
-    // tagged with its Brand) so the auto-fix loop knows which brand a task belongs to.
-    const only = req.nextUrl.searchParams.get('brand') || '';
+    // SEC (vbsec C2): TRƯỚC đây đọc ?brand từ query (client-controlled), mặc định DUMP
+    // MỌI brand → editor brand X gọi không tham số thấy card + error log brand khác.
+    // Vá: brand TIN CẬY từ middleware; chỉ admin (__all__) mới xem gộp — như /api/kanban.
+    const brand = getBrandId(req);
+    const aggregate = isAllBrands(req) && (brand === '__all__' || !brand);
     const entries = await fs.readdir(DATA_DIR, { withFileTypes: true }).catch(() => []);
     const cards: any[] = [];
     for (const e of entries) {
@@ -16,7 +19,7 @@ export async function GET(req: NextRequest) {
       try {
         const c = JSON.parse(await fs.readFile(path.join(DATA_DIR, e.name, 'card.json'), 'utf8'));
         c.brandId = c.brandId || '';
-        if (c.status !== 'approved' && (!only || c.brandId === only)) cards.push(c);
+        if (c.status !== 'approved' && (aggregate || c.brandId === brand)) cards.push(c);
       } catch {}
     }
     if (cards.length === 0) return new NextResponse('# No pending tasks\nAll clear!\n', { headers: { 'Content-Type': 'text/plain' } });
@@ -36,5 +39,5 @@ export async function GET(req: NextRequest) {
       out += '\n';
     }
     return new NextResponse(out, { headers: { 'Content-Type': 'text/plain' } });
-  } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
+  } catch (e: any) { console.error('[api] kanban/claude-brief', e); return NextResponse.json({ error: 'Có lỗi hệ thống' }, { status: 500 }); }
 }

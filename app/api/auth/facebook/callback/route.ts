@@ -10,6 +10,7 @@ import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import { getDb } from '@/lib/db';
 import { getBrandId } from '@/lib/brand-guard';
+import { requireAdminSession } from '@/lib/api-auth';
 import { encrypt } from '@/lib/crypto';
 import {
   exchangeCodeForToken,
@@ -39,6 +40,11 @@ export async function GET(req: NextRequest) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3202';
   const successUrl = `${siteUrl}/?tab=publisher&fb_success=1`;
   const errorUrl   = (reason: string) => `${siteUrl}/?tab=publisher&fb_error=${reason}`;
+
+  // SEC (vbsec C1): bắt buộc admin session — chặn attacker vô danh hoàn tất OAuth để
+  // ghi token FB của hắn vào settings global (chiếm kênh publish nền tảng).
+  const auth = await requireAdminSession();
+  if ('error' in auth) return NextResponse.redirect(errorUrl('unauthorized'));
 
   if (error) {
     return NextResponse.redirect(errorUrl('denied'));
