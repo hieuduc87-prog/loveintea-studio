@@ -1,9 +1,15 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
+# Build tools cho native module (better-sqlite3) — alpine không có sẵn gcc/make/python.
+# TRƯỚC đây dựa vào prebuild-install (download binary) + cache layer; khi cache bị
+# `docker builder prune` xoá giữa deploy, rebuild fail âm thầm (`2>/dev/null || true`)
+# → image THIẾU .node → mọi truy cập DB văng, login/publish gãy (sự cố 10/08).
+RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 RUN npm ci --ignore-scripts
-# Copy prebuilt better-sqlite3 binary for alpine
-RUN npm rebuild better-sqlite3 2>/dev/null || true
+# Compile better-sqlite3 từ nguồn — FAIL-LOUD: thiếu .node thì DỪNG build, KHÔNG ship image hỏng.
+RUN npm rebuild better-sqlite3 --build-from-source \
+ && test -f node_modules/better-sqlite3/build/Release/better_sqlite3.node
 COPY . .
 RUN npm run build
 
