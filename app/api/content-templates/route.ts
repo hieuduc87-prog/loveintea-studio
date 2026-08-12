@@ -7,6 +7,7 @@ import { getBrandId } from '@/lib/brand-guard';
 // POST — create an EMPTY template shell (metadata only); images added later via /[id]/slides
 export async function POST(req: NextRequest) {
   try {
+    const brandId = getBrandId(req); // P3: VÀO CONTEXT TRƯỚC getDb() — nếu để trong .run() args thì proxy bind GLOBAL, INSERT rơi vào global mồ côi (card a93d659d). Proxy nay đã defer-execute nhưng giữ dòng này cho rõ + phòng thủ.
     const b = await req.json() as { brandId?: string; name?: string; category?: string; format?: string; aspect_ratio?: string; purpose?: string; kind?: string; file_type?: string };
     const fileType = b.file_type === 'video' ? 'video' : 'image';
     const kind = b.kind === 'collection' ? 'collection' : 'single';
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     getDb().prepare(`INSERT INTO content_templates
       (id, brand_id, name, category, purpose, format, aspect_ratio, image_url, thumbnail_url, kind, slides_json, file_type)
       VALUES (?,?,?,?,?,?,?, '', '', ?, '[]', ?)`)
-      .run(id, getBrandId(req) || b.brandId, b.name?.trim() || 'Template mới', b.category || 'general',
+      .run(id, brandId || b.brandId, b.name?.trim() || 'Template mới', b.category || 'general',
         b.purpose || '', b.format || (fileType === 'video' ? 'reel_cover' : 'post'), b.aspect_ratio || '2:3', kind, fileType);
     return NextResponse.json({ ok: true, id });
   } catch (e) {

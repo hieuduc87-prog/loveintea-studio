@@ -112,13 +112,54 @@ function resolveDb(): Database.Database {
  *  handle tại THỜI ĐIỂM gọi .prepare/.exec/... nên thứ tự khai báo không còn
  *  quan trọng. LƯU Ý: đừng cache statement prepare() ở module-scope (bind theo
  *  context lúc prepare) — prepare trong hàm như hiện tại là đúng. */
+// Cache statement theo (connection, sql) — tránh re-parse mỗi lần execute mà vẫn
+// bind ĐÚNG connection. WeakMap theo Database → tự dọn khi connection bị GC.
+const _stmtCache = new WeakMap<Database.Database, Map<string, Database.Statement>>();
+function _prepOn(db: Database.Database, sql: string): Database.Statement {
+  let m = _stmtCache.get(db);
+  if (!m) { m = new Map(); _stmtCache.set(db, m); }
+  let s = m.get(sql);
+  if (!s) { s = db.prepare(sql); m.set(sql, s); }
+  return s;
+}
+
+// Các method THỰC THI của Statement — resolve DB tại THỜI ĐIỂM GỌI (không phải lúc
+// .prepare). Nhờ vậy route kiểu `getDb().prepare(SQL).run(id, getBrandId(req), …)` —
+// getBrandId nằm trong .run() args nên vào context TRƯỚC khi .run chạy — vẫn bind
+// đúng DB tenant. Trước đây bind ở .prepare (trước args) → rơi vào GLOBAL → INSERT
+// mồ côi (sự cố card a93d659d: tạo content_template rơi vào global, tenant không thấy).
+// Method thực thi phải defer tới lúc GỌI: nếu resolve DB lúc TRUY CẬP `.run` thì vẫn
+// trước khi args (chứa getBrandId) chạy. Trả closure → resolve khi execute.
+const _STMT_EXEC = new Set(['run', 'get', 'all', 'iterate', 'raw', 'pluck', 'expand', 'bind', 'columns', 'safeIntegers']);
+function _lazyStatement(sql: string): Database.Statement {
+  return new Proxy({} as Record<string | symbol, unknown>, {
+    get(_t, m) {
+      if (typeof m === 'string' && _STMT_EXEC.has(m)) {
+        return (...args: unknown[]) => {
+          const stmt = _prepOn(resolveDb(), sql) as unknown as Record<string, (...a: unknown[]) => unknown>;
+          return stmt[m](...args); // DB resolve TẠI ĐÂY (sau khi args như getBrandId đã vào context)
+        };
+      }
+      // Thuộc tính đọc (source/reader/busy…): lấy từ statement theo context hiện tại.
+      const stmt = _prepOn(resolveDb(), sql) as unknown as Record<string | symbol, unknown>;
+      const v = stmt[m];
+      return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(stmt) : v;
+    },
+  }) as unknown as Database.Statement;
+}
+
 const _dbProxy = new Proxy({} as Record<string | symbol, unknown>, {
   get(_t, prop) {
+    // prepare() trả LAZY statement (bind lúc execute) — xem giải thích trên.
+    if (prop === 'prepare') {
+      return (sql: string) => _lazyStatement(sql);
+    }
     const real = resolveDb() as unknown as Record<string | symbol, unknown>;
     const v = real[prop];
     return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(real) : v;
   },
 }) as unknown as Database.Database;
+void _STMT_EXEC;
 
 export function getDb(): Database.Database {
   return _dbProxy;
