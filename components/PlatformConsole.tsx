@@ -119,7 +119,18 @@ export function PlatformConsole() {
       const d = await r.json();
       if (!r.ok) { setInviteMsg('❌ ' + (d.error || 'Lỗi')); return; }
       setInviteMsg(d.created ? '✅ Đã tạo & gán khách mới' : '✅ Đã gán vào store');
-      if (d.tempPassword) { setTempPw({ email: inviteEmail.trim(), password: d.tempPassword }); setCopied(false); }
+      // Hiện welcome panel FULL đủ tin (URL+email+tempPass+options Google) — giống wizard onboard
+      if (d.welcomeMessage) {
+        setWelcomePanel({
+          url: d.storeUrl || `https://${stores.find(s => s.id === selected)?.slug || selected}.easycreativehub.com`,
+          ownerEmail: inviteEmail.trim(),
+          tempPassword: d.tempPassword ?? null,
+          welcomeMessage: d.welcomeMessage,
+          planNote: 'invite',
+          expiresAt: null,
+        });
+        setWelcomeCopied(false);
+      }
       setInviteEmail('');
       await loadMembers(selected); await loadStores();
     } finally { setInviting(false); }
@@ -134,8 +145,22 @@ export function PlatformConsole() {
     });
     const d = await r.json();
     if (!r.ok) { alert(d.error || 'Lỗi'); return; }
-    setTempPw({ email: m.email, password: d.tempPassword });
-    setCopied(false);
+    // Reset password → hiện welcome panel full (giống invite/onboard) để founder copy Zalo gửi
+    if (d.welcomeMessage) {
+      setWelcomePanel({
+        url: d.storeUrl || `https://${stores.find(s => s.id === selected)?.slug || selected}.easycreativehub.com`,
+        ownerEmail: m.email,
+        tempPassword: d.tempPassword ?? null,
+        welcomeMessage: d.welcomeMessage,
+        planNote: 'reset',
+        expiresAt: null,
+      });
+      setWelcomeCopied(false);
+    } else {
+      // Fallback nếu route cũ (chưa deploy welcomeMessage): giữ hiển thị đơn giản
+      setTempPw({ email: m.email, password: d.tempPassword });
+      setCopied(false);
+    }
   }
 
   function copyTempPw() {

@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { createStore, inviteToStore } from '@/lib/provision';
 import { requireAdminSession } from '@/lib/api-auth';
+import { buildWelcomeMessage } from '@/lib/welcome-message';
 
 // Định nghĩa các gói mặc định — founder có thể sửa sau trong /api/admin/quotas.
 // Trial-30d: theo lệnh founder 2026-08-20 — 30 ngày / 30 ảnh (video+content scale theo).
@@ -22,27 +23,6 @@ const PLANS: Record<string, { videos: number; images: number; content: number; c
   'pro':       { videos: 20, images: 200, content: 500, cap_usd: 80, note: 'pro' },
   'enterprise':{ videos: -1, images: -1, content: -1, cap_usd: 500, note: 'enterprise' },
 };
-
-function buildWelcomeMessage(opts: { storeName: string; slug: string; ownerEmail: string; tempPassword: string; planNote: string; expiresAt?: string }): string {
-  const url = `https://${opts.slug}.easycreativehub.com`;
-  return `🎉 Chào mừng bạn đến với Easy Creative Hub!
-
-Shop của bạn: ${opts.storeName}
-Link đăng nhập: ${url}
-
-Tài khoản admin: 📧 ${opts.ownerEmail}
-
-Có 2 cách đăng nhập, chọn 1:
-  ✨ CÁCH NHANH — bấm "Đăng nhập bằng Google" trên trang login, chọn account Google
-     chính là email này (${opts.ownerEmail}). Vào tức thì, không cần mật khẩu.
-  🔑 CÁCH THƯỜNG — dùng email trên + mật khẩu tạm: ${opts.tempPassword}
-     Hệ thống sẽ yêu cầu đổi mật khẩu ngay lần đầu.
-${opts.expiresAt ? `\n⏰ Gói ${opts.planNote} — hết hạn ngày ${opts.expiresAt}` : ''}
-
-Sau khi vào: wizard 3 bước tự dẫn dắt bạn setup (đổi mật khẩu → Brand DNA cơ bản → kết nối FB/IG). Bấm "?" ở góc mỗi màn hình để xem hướng dẫn nhanh, hoặc hỏi chatbot ở góc phải dưới.
-
-Cần hỗ trợ, xem "Hướng dẫn A-Z" trong menu app, hoặc hỏi chatbot ở góc phải.`;
-}
 
 export async function POST(req: NextRequest) {
   const auth = await requireAdminSession();
@@ -86,9 +66,10 @@ export async function POST(req: NextRequest) {
       storeName: name,
       slug,
       ownerEmail,
-      tempPassword: invite.tempPassword || '(bạn đã có tài khoản cũ — dùng mật khẩu cũ hoặc Google Login)',
+      tempPassword: invite.tempPassword ?? null, // null → helper render "Bạn đã có tài khoản trước…"
       planNote: plan.note,
       expiresAt: expires?.toISOString().slice(0, 10),
+      scenario: 'new-shop',
     });
 
     return NextResponse.json({
