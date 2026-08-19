@@ -34,8 +34,12 @@ export function PlatformConsole() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newSlug, setNewSlug] = useState('');
+  const [newOwnerEmail, setNewOwnerEmail] = useState('');
+  const [newPlan, setNewPlan] = useState<'trial-30d' | 'pro' | 'enterprise'>('trial-30d');
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState('');
+  const [welcomePanel, setWelcomePanel] = useState<null | { url: string; ownerEmail: string; tempPassword: string | null; welcomeMessage: string; planNote: string; expiresAt: string | null }>(null);
+  const [welcomeCopied, setWelcomeCopied] = useState(false);
 
   // invite form
   const [inviteEmail, setInviteEmail] = useState('');
@@ -69,16 +73,39 @@ export function PlatformConsole() {
   async function createStore() {
     setCreating(true); setCreateErr('');
     try {
-      const r = await fetch('/api/admin/stores', {
+      // Wizard 60s: gộp createStore + inviteToStore + set brand_quotas + welcomeMessage
+      const r = await fetch('/api/admin/onboard', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName, slug: newSlug || undefined }),
+        body: JSON.stringify({
+          name: newName.trim(),
+          slug: newSlug.trim() || undefined,
+          ownerEmail: newOwnerEmail.trim(),
+          plan: newPlan,
+        }),
       });
       const d = await r.json();
       if (!r.ok) { setCreateErr(d.error || 'Lỗi'); return; }
-      setNewName(''); setNewSlug(''); setShowCreate(false);
+      // Hiện panel welcome cho founder copy gửi khách qua Zalo/Messenger
+      setWelcomePanel({
+        url: d.store.url,
+        ownerEmail: d.owner.email,
+        tempPassword: d.owner.tempPassword,
+        welcomeMessage: d.welcomeMessage,
+        planNote: d.plan.note,
+        expiresAt: d.plan.expires_at,
+      });
+      setWelcomeCopied(false);
+      setNewName(''); setNewSlug(''); setNewOwnerEmail(''); setNewPlan('trial-30d'); setShowCreate(false);
       await loadStores();
-      setSelected(d.id);
+      setSelected(d.store.id);
     } finally { setCreating(false); }
+  }
+
+  function copyWelcomeMessage() {
+    if (!welcomePanel) return;
+    navigator.clipboard.writeText(welcomePanel.welcomeMessage);
+    setWelcomeCopied(true);
+    setTimeout(() => setWelcomeCopied(false), 2500);
   }
 
   async function invite() {
@@ -186,16 +213,69 @@ export function PlatformConsole() {
           </div>
 
           {showCreate && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4 space-y-2">
-              <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Tên store (vd: Bazan)"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm" />
-              <input value={newSlug} onChange={e => setNewSlug(e.target.value)} placeholder="Slug (tùy chọn, vd: bazan)"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm" />
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4 space-y-3">
+              <div className="text-xs text-brand-300 font-semibold">🚀 Wizard onboard shop mới — 60 giây</div>
+              <div>
+                <label className="text-[11px] text-gray-500 mb-1 block">TÊN SHOP</label>
+                <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="vd: Cà phê Bảo Anh"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-[11px] text-gray-500 mb-1 block">SLUG (URL) — tùy chọn</label>
+                <input value={newSlug} onChange={e => setNewSlug(e.target.value)} placeholder="vd: ca-phe-bao-anh (auto-gen nếu để trống)"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm" />
+                {newSlug && <p className="text-[10px] text-gray-600 mt-1">→ https://{newSlug}.easycreativehub.com</p>}
+              </div>
+              <div>
+                <label className="text-[11px] text-gray-500 mb-1 block">EMAIL CHỦ SHOP</label>
+                <input type="email" value={newOwnerEmail} onChange={e => setNewOwnerEmail(e.target.value)} placeholder="vd: baoanh@shop.vn"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm" />
+                <p className="text-[10px] text-gray-600 mt-1">→ Hệ thống tạo user admin + password tạm cho email này</p>
+              </div>
+              <div>
+                <label className="text-[11px] text-gray-500 mb-1 block">GÓI</label>
+                <select value={newPlan} onChange={e => setNewPlan(e.target.value as 'trial-30d' | 'pro' | 'enterprise')}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm">
+                  <option value="trial-30d">🎁 Trial 30 ngày — 30 ảnh · 3 video · 25 content · trần $10</option>
+                  <option value="pro">💼 Pro — 200 ảnh · 20 video · 500 content · trần $80</option>
+                  <option value="enterprise">🏢 Enterprise — không giới hạn · trần $500</option>
+                </select>
+              </div>
               {createErr && <p className="text-xs text-red-400">{createErr}</p>}
-              <button onClick={createStore} disabled={creating || !newName.trim()}
-                className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm py-2 rounded-lg">
-                {creating ? 'Đang tạo…' : 'Tạo store'}
+              <button onClick={createStore} disabled={creating || !newName.trim() || !newOwnerEmail.trim()}
+                className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm py-2 rounded-lg font-semibold">
+                {creating ? '⏳ Đang tạo shop + user + gói…' : '🚀 Tạo shop + gửi welcome'}
               </button>
+            </div>
+          )}
+
+          {/* Welcome message panel — hiện sau khi onboard xong, founder copy gửi khách */}
+          {welcomePanel && (
+            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setWelcomePanel(null)}>
+              <div className="bg-gray-900 border border-brand-500 rounded-2xl p-6 max-w-2xl w-full space-y-4" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-white">🎉 Shop mới đã tạo xong!</h3>
+                  <button onClick={() => setWelcomePanel(null)} className="text-gray-500 hover:text-white text-sm">✕ Đóng</button>
+                </div>
+                <div className="text-xs text-gray-400 space-y-1">
+                  <div>🔗 URL: <a href={welcomePanel.url} target="_blank" rel="noreferrer" className="text-brand-300 hover:underline">{welcomePanel.url}</a></div>
+                  <div>📧 Email chủ: <code className="bg-gray-800 px-1.5 py-0.5 rounded">{welcomePanel.ownerEmail}</code></div>
+                  {welcomePanel.tempPassword && <div>🔑 Password tạm: <code className="bg-gray-800 px-1.5 py-0.5 rounded text-yellow-300">{welcomePanel.tempPassword}</code></div>}
+                  <div>📦 Gói: <span className="text-white">{welcomePanel.planNote}</span>{welcomePanel.expiresAt && <span className="text-gray-500"> (hết hạn {welcomePanel.expiresAt})</span>}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-1">TIN NHẮN WELCOME (paste vào Zalo/Messenger gửi khách):</div>
+                  <textarea readOnly value={welcomePanel.welcomeMessage}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs text-gray-300 font-mono h-56 resize-none" />
+                </div>
+                <button onClick={copyWelcomeMessage}
+                  className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${welcomeCopied ? 'bg-green-600 text-white' : 'bg-brand-600 hover:bg-brand-500 text-white'}`}>
+                  {welcomeCopied ? '✅ Đã copy — mở Zalo/Messenger paste gửi khách' : '📋 Copy toàn bộ tin nhắn'}
+                </button>
+                <div className="text-[10px] text-gray-600 border-t border-gray-800 pt-3">
+                  💡 <b>Bước tiếp theo cho khách</b>: (1) đăng nhập bằng email + password tạm ở trên → (2) đổi mật khẩu → (3) làm wizard 5 bước setup shop (Brand DNA + Logo + Sản phẩm + FB/IG). Đóng cửa sổ này để tạo shop tiếp theo hoặc chọn shop vừa tạo bên phải để invite thêm thành viên.
+                </div>
+              </div>
             </div>
           )}
 
