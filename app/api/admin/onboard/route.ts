@@ -30,14 +30,16 @@ function buildWelcomeMessage(opts: { storeName: string; slug: string; ownerEmail
 Shop của bạn: ${opts.storeName}
 Link đăng nhập: ${url}
 
-Tài khoản admin:
-  📧 Email: ${opts.ownerEmail}
-  🔑 Mật khẩu tạm: ${opts.tempPassword}
+Tài khoản admin: 📧 ${opts.ownerEmail}
+
+Có 2 cách đăng nhập, chọn 1:
+  ✨ CÁCH NHANH — bấm "Đăng nhập bằng Google" trên trang login, chọn account Google
+     chính là email này (${opts.ownerEmail}). Vào tức thì, không cần mật khẩu.
+  🔑 CÁCH THƯỜNG — dùng email trên + mật khẩu tạm: ${opts.tempPassword}
+     Hệ thống sẽ yêu cầu đổi mật khẩu ngay lần đầu.
 ${opts.expiresAt ? `\n⏰ Gói ${opts.planNote} — hết hạn ngày ${opts.expiresAt}` : ''}
 
-Bước 1: Bấm link → đăng nhập bằng email + mật khẩu tạm ở trên
-Bước 2: Hệ thống YÊU CẦU đổi mật khẩu ngay — chọn mật khẩu mới của bạn
-Bước 3: Làm theo wizard 5 bước để setup shop (Brand DNA + Logo + Sản phẩm + Kết nối FB/IG)
+Sau khi vào: wizard 3 bước tự dẫn dắt bạn setup (đổi mật khẩu → Brand DNA cơ bản → kết nối FB/IG). Bấm "?" ở góc mỗi màn hình để xem hướng dẫn nhanh, hoặc hỏi chatbot ở góc phải dưới.
 
 Cần hỗ trợ, xem "Hướng dẫn A-Z" trong menu app, hoặc hỏi chatbot ở góc phải.`;
 }
