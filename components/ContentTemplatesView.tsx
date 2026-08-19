@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { ViewHelpButton } from './ViewHelpButton';
 
 // ─── Types ──────────────────────────────────────────────────
 interface TemplateAnalysis {
@@ -190,9 +191,12 @@ export function ContentTemplatesView({ brandId }: { brandId?: string } = {}) {
       {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-shrink-0">
         <div>
-          <h2 className="text-sm font-semibold text-white">Content Templates</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-white">Content Templates</h2>
+            <ViewHelpButton viewId="content_templates" />
+          </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Upload visual templates for the system to reference when creating content
+            Upload visual templates for the system to reference when creating content. <b className="text-brand-300">AI Analyze giờ TỰ CHẠY sau upload</b> — chờ ~8s là dùng được.
           </p>
         </div>
         <div className="flex items-center gap-2">

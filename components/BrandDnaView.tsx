@@ -5,6 +5,7 @@ import { useRef, useState, useEffect } from 'react';
 import { KnowledgeHubView } from './KnowledgeHubView';
 import { RulesEngineView } from './RulesEngineView';
 import { KnowledgeMindmapView } from './KnowledgeMindmapView';
+import { ViewHelpButton } from './ViewHelpButton';
 
 interface BrandDna {
   tagline: string; archetype: string;
@@ -255,8 +256,11 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
             <span className="text-2xl">🏷️</span>
           )}
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-white">{brand.name} — Brand DNA</h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-white">{brand.name} — Brand DNA</h1>
+            <ViewHelpButton viewId="brand_dna" />
+          </div>
           <p className="text-gray-400 text-sm">{dna?.tagline || '—'} · {dna?.archetype || '—'}</p>
           {colorEntries.length > 0 && (
             <div className="flex items-center gap-2 mt-2">

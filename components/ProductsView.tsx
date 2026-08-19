@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { chunkedUpload } from '@/lib/chunk-upload';
 import { ProductKnowledgePanel } from './ProductKnowledgePanel';
+import { ViewHelpButton } from './ViewHelpButton';
 
 interface ProductVideo {
   id: string; url: string; duration_s: number; status: string; tags_json: string;
@@ -184,8 +185,11 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
     <div className="p-4 md:p-6 max-w-7xl mx-auto flex flex-col gap-6">
       <div className="flex items-center gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-white">Products & Asset Library</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Manage product catalog and original product photography</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-white">Products & Asset Library</h2>
+            <ViewHelpButton viewId="products" />
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5">Manage product catalog and original product photography. <b className="text-amber-300">Nhớ đánh dấu ⭐ HERO cho mỗi sản phẩm</b> — ảnh chuẩn vàng chống bịa bao bì.</p>
         </div>
         <button onClick={() => { setShowAddForm(s => !s); setAddMsg(''); }}
           className="ml-auto px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs rounded-lg transition-colors">
