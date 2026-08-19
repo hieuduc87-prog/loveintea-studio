@@ -22,7 +22,13 @@ function getClient() {
 
 // Stable GA models only — preview models get retired without notice
 // (gemini-2.0-flash deprecation already broke production once, commit 6e80b52)
-const MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+// Ngày 2026-08-19: gemini-2.5-flash* bị Google retire cho tài khoản mới (404
+// "no longer available to new users") → đổi sang aliases *-latest (auto-update
+// theo bản stable hiện tại, không cần đổi code khi Google phế model tiếp).
+// Ưu tiên LITE trước để tiết kiệm 3-6x chi phí (Lite $0.10/$0.40 vs Flash $0.30/$2.50 per 1M
+// token in/out) — hầu hết call là caption/JSON/classify, Lite đủ tốt; Flash là
+// fallback khi Lite gặp 503/429 (retryable) hoặc bị deprecate nhân dịp nào đó.
+const MODELS = ['gemini-flash-lite-latest', 'gemini-flash-latest'];
 
 /** Retryable = transient (503/429) OR model gone (404/deprecated) — fall through to next model */
 function isRetryable(e: unknown): boolean {
