@@ -101,10 +101,45 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       order++;
     }
     const r = persist(db, params.id, slides, slides.length && !tpl.slides_json ? newThumb : (tpl.thumbnail_url ? '' : newThumb));
-    return NextResponse.json({ ok: true, ...r });
+
+    // AUTO-ANALYZE fire-and-forget (card 3e2b6d1b: nhân viên quên bấm AI Analyze → template
+    // không có slidesMeta → gen bịa hộp). Bây giờ upload slide XONG → tự chạy nền, ~8s sau
+    // analysis xong. Route generate vẫn gate 400 nếu chưa xong (an toàn).
+    if (slides.length >= 1) triggerAutoAnalyze(params.id);
+    return NextResponse.json({ ok: true, ...r, autoAnalyzeQueued: slides.length >= 1 });
   } catch (e) {
     return NextResponse.json({ error: (console.error('[api]', e), 'Có lỗi hệ thống') }, { status: 500 });
   }
+}
+
+/** Fire-and-forget: gọi analyze route trên chính host này, không block response.
+ *  Dùng fetch nội bộ + AbortController 60s giới hạn — nếu Gemini overload không kẹt hàng chờ. */
+function triggerAutoAnalyze(templateId: string): void {
+  void (async () => {
+    try {
+      const { analyzeTemplateLayout, analyzeTemplateCollection } = await import('@/lib/gemini');
+      const { getDb } = await import('@/lib/db');
+      const db = getDb();
+      const tpl = db.prepare('SELECT slides_json, image_url FROM content_templates WHERE id=?').get(templateId) as { slides_json: string; image_url: string } | undefined;
+      if (!tpl) return;
+      const slides = readSlides(tpl.slides_json);
+      const fs = await import('fs');
+      const path = await import('path');
+      const urls = slides.length ? slides.slice(0, 12).map(s => s.url) : (tpl.image_url ? [tpl.image_url] : []);
+      const imgs: Array<{ data: Buffer; mimeType: string }> = [];
+      for (const u of urls) {
+        const fname = u.replace(/^\/api\/images\//, '');
+        const p = path.join(IMAGES_DIR, fname);
+        if (!fs.existsSync(p)) continue;
+        const ext = path.extname(fname).slice(1).toLowerCase();
+        imgs.push({ data: fs.readFileSync(p), mimeType: ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png' });
+      }
+      if (!imgs.length) return;
+      const analysis = imgs.length > 1 ? await analyzeTemplateCollection(imgs) : await analyzeTemplateLayout(imgs[0].data, imgs[0].mimeType);
+      db.prepare('UPDATE content_templates SET analysis=? WHERE id=?').run(JSON.stringify(analysis), templateId);
+      console.log('[auto-analyze] template', templateId.slice(0, 8), '→ done');
+    } catch (e) { console.warn('[auto-analyze] failed', templateId.slice(0, 8), String(e).slice(0, 120)); }
+  })();
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
