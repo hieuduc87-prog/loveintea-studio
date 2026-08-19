@@ -18,7 +18,8 @@ let _DOC_CACHE = '';
 function loadDocs(): string {
   if (_DOC_CACHE) return _DOC_CACHE;
   const docDir = path.join(process.cwd(), 'docs');
-  const files = ['huong-dan-su-dung-video.md']; // TODO: mở rộng docs khác khi có
+  // Tài liệu cho bot: HD tổng quan (mọi feature) + HD video chi tiết
+  const files = ['huong-dan-app.md', 'huong-dan-su-dung-video.md'];
   const chunks: string[] = [];
   for (const f of files) {
     try {
