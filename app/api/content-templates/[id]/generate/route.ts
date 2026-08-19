@@ -20,11 +20,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { productId, customPrompt } = await req.json().catch(() => ({})) as { productId?: string; customPrompt?: string };
   const db = getDb();
   // The brand is the TEMPLATE's brand — never body.brandId. Verify membership.
-  const tpl = db.prepare('SELECT name, brand_id FROM content_templates WHERE id=?').get(id) as { name?: string; brand_id: string } | undefined;
+  const tpl = db.prepare('SELECT name, brand_id, analysis, slides_json FROM content_templates WHERE id=?').get(id) as { name?: string; brand_id: string; analysis?: string; slides_json?: string } | undefined;
   if (!tpl) return NextResponse.json({ error: 'Template không tồn tại' }, { status: 404 });
   const denied = assertResourceBrand(req, tpl.brand_id);
   if (denied) return denied;
   const bid = tpl.brand_id;
+
+  // GATE (card 3e2b6d1b — Nighty Night bịa liên tục): template chưa AI Analyze → slidesMeta rỗng
+  // → template-generate không biết slide nào là "sản phẩm" (dùng ref hero) vs "lifestyle"
+  // (dùng ảnh template) → mọi slide fallback về "no packaging" lifestyle, nhưng gpt-image-2 vẫn
+  // vẽ hộp từ ảnh template + text ingredient (Perilla) → BỊA hộp hoàn toàn. Bắt buộc analyze
+  // trước — user thấy nút "AI Analyze" ở panel template.
+  if (!tpl.analysis || tpl.analysis.trim() === '') {
+    return NextResponse.json({
+      error: 'Template chưa được AI phân tích. Vào panel template, bấm "AI Analyze" trước rồi thử lại (để hệ thống biết slide nào là sản phẩm, slide nào là lifestyle).',
+      needs_analyze: true,
+    }, { status: 400 });
+  }
 
   const jobId = createJob({ brandId: bid, kind: 'carousel', source: 'Template', title: `Tạo ảnh từ template: ${tpl.name ?? id}`, meta: { templateId: id, productId } });
 
