@@ -17,6 +17,8 @@ import { InboxView }          from './InboxView';
 import { AnalyticsView }      from './AnalyticsView';
 import { PlanCalendarView }   from './PlanCalendarView';
 import { UserGuideView }      from './UserGuideView';
+import { OnboardingWizard }   from './OnboardingWizard';
+import { HelpChatbot }        from './HelpChatbot';
 import { VideoToolGuideView } from './VideoToolGuideView';
 import { HelpDrawer }         from './HelpDrawer';
 import { BrandMembersView } from './BrandMembersView';
@@ -582,6 +584,13 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
           })}
         </main>
       </div>
+
+      {/* P2 — Wizard 3 bước hiện tự động cho khách login lần đầu (đổi mật khẩu → Brand DNA → FB) */}
+      {brandsLoaded && bid && <OnboardingWizard activeBrandId={bid} />}
+
+      {/* P4 — Chatbot AI floating góc phải: khách hỏi bằng tiếng Việt, bot đọc docs/ trả lời;
+           không giải quyết được → 1-click tạo card kanban tự-fix (giảm nhân sự vận hành) */}
+      {brandsLoaded && bid && <HelpChatbot activeBrandId={bid} activeView={tab} />}
     </div>
   );
 }
