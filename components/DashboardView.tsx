@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { SetupProgressCard } from './SetupProgressCard';
 
 interface TokenHealth {
   configured: boolean; valid: boolean; expiresAt: string | null;
@@ -83,6 +84,9 @@ export function DashboardView({ brandId, onNavigate }: { brandId: string; onNavi
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-5">
+      {/* Setup progress — nổi bật ở top, tự ẩn khi 8/8 xong. User bỏ dở → quay lại vẫn thấy đúng chỗ, click bước dở → nhảy sang tab đúng để tiếp tục. */}
+      <SetupProgressCard brandId={brandId} onNavigate={go} />
+
       {/* ── Alert banner: anything broken shows here first ── */}
       {(!fbOk || !health.scheduler.alive || health.funnel.failed > 0 || aiWarn) && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 space-y-1">

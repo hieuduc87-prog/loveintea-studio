@@ -24,6 +24,13 @@ export function HelpChatbot({ activeBrandId, activeView }: Props) {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, open]);
 
+  // Cho phép component KHÁC mở chatbot qua CustomEvent: document.dispatchEvent(new CustomEvent('help-chatbot:open'))
+  useEffect(() => {
+    const openIt = () => setOpen(true);
+    document.addEventListener('help-chatbot:open', openIt);
+    return () => document.removeEventListener('help-chatbot:open', openIt);
+  }, []);
+
   async function send() {
     const q = input.trim();
     if (!q || busy) return;
