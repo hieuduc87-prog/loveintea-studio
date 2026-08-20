@@ -3,6 +3,16 @@ const nextConfig = {
   output: 'standalone',
   experimental: {
     instrumentationHook: true,
+    // FIX HỆ THỐNG: pdf-parse dùng lazy require() trong lib/product-knowledge.ts
+    // (side-effects load-time) → Next standalone TREE-SHAKE mất khỏi build. Explicitly
+    // đưa vào tracing để module thật sự có trong container standalone.
+    // Cùng đường adm-zip đã dùng cho docx.
+    serverComponentsExternalPackages: ['pdf-parse', 'adm-zip'],
+  },
+  // Đảm bảo lazy-require modules được INCLUDE trong .next/standalone output.
+  outputFileTracingIncludes: {
+    // Apply cho MỌI API route + component có thể touch parser.
+    '/api/**/*': ['./node_modules/pdf-parse/**/*'],
   },
   images: {
     remotePatterns: [
