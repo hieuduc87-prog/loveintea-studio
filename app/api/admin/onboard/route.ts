@@ -52,6 +52,18 @@ export async function POST(req: NextRequest) {
       // Trả thông tin, welcome vẫn có nhưng KHÔNG có password (khách dùng Google login).
     }
 
+    // 2b) AUTO-ADD partner co-founder (manhson) vào MỌI shop mới — theo lệnh founder 2026-08-20.
+    // Bằng cách này manhson thấy tất cả store trong Platform Console + có admin quyền hỗ trợ khi
+    // founder chính vắng. Idempotent (INSERT OR IGNORE) — không double-invite nếu chạy lại.
+    // Không sinh tempPassword cho manhson (đã có tài khoản); không đưa vào welcomeMessage khách.
+    try {
+      const CO_FOUNDER_EMAILS = ['manhson.nguyen@gmail.com'];
+      for (const coEmail of CO_FOUNDER_EMAILS) {
+        if (coEmail.toLowerCase() === ownerEmail.toLowerCase()) continue; // ownerEmail trùng co-founder
+        inviteToStore({ email: coEmail, brandId: id, role: 'admin', memberRole: 'member' });
+      }
+    } catch (e) { console.warn('[onboard] auto-add co-founder failed:', String(e).slice(0, 100)); }
+
     // 3) Set brand_quotas theo gói. Với trial: ghi thời hạn vào `note` để dashboard hiện.
     const db = getDb();
     const now = new Date();
