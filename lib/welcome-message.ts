@@ -6,6 +6,7 @@
  *
  * Founder copy tin nhắn này vào Zalo/Messenger gửi khách. Không cần email service.
  */
+import { SHARE_FB_INSTRUCTIONS_VI } from './share-fb-instructions';
 
 export interface WelcomeInput {
   storeName: string;
@@ -103,8 +104,10 @@ ${loginBlock}
        • Voice: 3-5 tính từ giọng thương hiệu
          (vd "ấm áp, chân thật, khoa học")
        → AI dựa vào 2 thông tin này để viết ĐÚNG giọng shop bạn
-  3️⃣ Kết nối Facebook Page + Instagram Business
-       → Từ giờ đăng bài tự động, không cần copy-paste
+  3️⃣ Kết nối Facebook Page + Instagram (chọn 1 trong 2 cách)
+       → Cách 1: menu Channels → "Đăng nhập Facebook" (nhanh, token ~60 ngày)
+       → Cách 2: share Business Portfolio cho ECH (chuẩn agency, không hết hạn)
+       → Chi tiết Cách 2 ở phần "CHIA SẺ FB/IG" dưới cùng tin nhắn này
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -144,6 +147,10 @@ ${loginBlock}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${planBlock}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${SHARE_FB_INSTRUCTIONS_VI}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

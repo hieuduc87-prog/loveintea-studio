@@ -55,10 +55,23 @@ Duyệt mọi bài AI tạo trước khi đăng.
 - Bấm bài để xem, sửa caption, đổi ảnh, chọn kênh (FB/IG) và lịch đăng.
 - Nút "Post Now" đăng ngay, "Đặt lịch" đăng theo giờ chọn (giờ VN, hệ tự convert UTC).
 
-## 9. Publisher / Channels (menu "Channels" + "Publisher")
-- Kết nối Facebook Page + Instagram Business một lần → đăng tự động sau đó.
-- Nếu chưa kết nối: bấm "Đăng nhập Facebook" → chọn Page → xong.
-- Nếu token hết hạn: badge "chưa nối FB" xuất hiện trên store → click "Kết nối lại".
+## 9. Publisher / Channels — KẾT NỐI FB + IG (chọn 1 trong 2 cách)
+
+### Cách 1 — Đăng nhập Facebook trực tiếp (nhanh, tự làm)
+- Vào menu **Channels** → bấm "Đăng nhập Facebook + Instagram"
+- Login FB → chọn Fanpage → cấp quyền → xong.
+- Token có hạn ~60 ngày, hết thì badge "chưa nối FB" xuất hiện → bấm "Kết nối lại".
+- **Phù hợp**: shop nhỏ, chủ shop tự làm content, không có agency riêng.
+
+### Cách 2 — Chia sẻ Business Portfolio cho ECH (chuẩn agency, không hết hạn)
+- Vào https://business.facebook.com → chọn Business Portfolio của shop
+- Accounts → **Pages** → click Fanpage → tab "Assign Partners" → nhập Business ID `247211154665626` → chọn quyền: Create content + Manage Page + Send messages + Insights → Save
+- Accounts → **Instagram accounts** → click IG → tab "Assign Partners" → cùng Business ID → chọn: Create content + Insights → Save
+- Nhắn tên Fanpage + tên IG cho admin ECH qua Zalo/Messenger → ECH verify và bật tính năng đăng bài trong ~2 phút
+- **Phù hợp**: shop có agency, không muốn share password FB, muốn token vĩnh viễn không phải xin lại.
+
+**Không có Business Portfolio?** business.facebook.com → "Create a business account" — miễn phí, 2 phút.
+**Không có IG Business?** App IG → Settings → Account → "Switch to Business account" → link Fanpage.
 
 ## 10. Analytics + Scoreboard (menu "Analytics" + "Scoreboard")
 - Analytics: xem lượt reach/engagement/comments từng bài.
