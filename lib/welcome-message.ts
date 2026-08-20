@@ -21,36 +21,136 @@ export function buildWelcomeMessage(opts: WelcomeInput): string {
   const url = `https://${opts.slug}.easycreativehub.com`;
   const scenario = opts.scenario || 'new-shop';
 
-  const header = scenario === 'reset-password'
-    ? `🔑 Mật khẩu tạm MỚI cho ${opts.storeName}`
-    : scenario === 'invite-member'
-      ? `🎉 Bạn được mời vào shop ${opts.storeName} trên Easy Creative Hub!`
-      : `🎉 Chào mừng bạn đến với Easy Creative Hub!`;
+  // Reset password: tin ngắn, chỉ URL + password mới + note đổi ngay
+  if (scenario === 'reset-password') {
+    return `🔑 Mật khẩu tạm MỚI cho ${opts.storeName}
 
-  const shopLine = scenario === 'reset-password'
-    ? `Link đăng nhập: ${url}`
-    : `Shop của bạn: ${opts.storeName}\nLink đăng nhập: ${url}`;
+Link: ${url}
+Email: ${opts.ownerEmail}
+Mật khẩu tạm: ${opts.tempPassword ?? '(dùng cũ hoặc Google Login)'}
 
-  const loginOptions = opts.tempPassword
-    ? `Tài khoản: 📧 ${opts.ownerEmail}
+Sau khi vào, hệ thống yêu cầu đổi lại mật khẩu mới.`;
+  }
 
-Có 2 cách đăng nhập, chọn 1:
-  ✨ CÁCH NHANH — bấm "Đăng nhập bằng Google" trên trang login, chọn account Google
-     chính là email này (${opts.ownerEmail}). Vào tức thì, không cần mật khẩu.
-  🔑 CÁCH THƯỜNG — dùng email trên + mật khẩu tạm: ${opts.tempPassword}
-     Hệ thống sẽ yêu cầu đổi mật khẩu ngay lần đầu.`
-    : `Tài khoản: 📧 ${opts.ownerEmail}
-Bạn đã có tài khoản trước đây — dùng mật khẩu cũ, hoặc bấm "Đăng nhập bằng Google"
-với chính email này.`;
+  // Invite member: tin trung — welcome ngắn, hướng dẫn login, nhắc wizard tự dẫn
+  if (scenario === 'invite-member') {
+    return `🎉 Bạn được mời vào shop ${opts.storeName} trên Easy Creative Hub!
 
-  const planLine = opts.expiresAt && opts.planNote
-    ? `\n⏰ Gói ${opts.planNote} — hết hạn ngày ${opts.expiresAt}`
+Link: ${url}
+Tài khoản: 📧 ${opts.ownerEmail}
+
+Có 2 cách đăng nhập:
+  ✨ Bấm "Đăng nhập bằng Google" với email trên (vào tức thì).
+  🔑 Hoặc email + mật khẩu tạm: ${opts.tempPassword ?? '(dùng mật khẩu cũ nếu đã có tài khoản)'}
+
+Sau khi vào, wizard 3 bước tự dẫn bạn setup. Bấm "?" ở mỗi màn để xem hướng dẫn, hoặc hỏi chatbot 💬 góc phải dưới.`;
+  }
+
+  // NEW SHOP: tin đầy đủ — giới thiệu + login + wizard + setup 15p + support + gói
+  // Founder copy nguyên khối này paste Zalo/Messenger/Email cho khách mới hoàn toàn.
+  const loginBlock = opts.tempPassword
+    ? `🚪 CÁCH ĐĂNG NHẬP (chọn 1)
+
+  ✨ CÁCH NHANH (khuyên dùng):
+     Bấm nút "Đăng nhập bằng Google" trên trang login
+     → Chọn tài khoản Google chính là ${opts.ownerEmail}
+     → Vào tức thì, không cần mật khẩu.
+
+  🔑 CÁCH THƯỜNG:
+     Nhập ${opts.ownerEmail} + mật khẩu tạm: ${opts.tempPassword}
+     → Hệ thống YÊU CẦU đổi mật khẩu ngay lần đầu.`
+    : `🚪 ĐĂNG NHẬP
+
+  Bấm "Đăng nhập bằng Google" trên trang login → chọn ${opts.ownerEmail}
+  (Bạn đã có tài khoản trước đây, dùng luôn — hoặc mật khẩu cũ nếu nhớ.)`;
+
+  const planBlock = opts.expiresAt && opts.planNote
+    ? `📦 GÓI DÙNG THỬ (${opts.planNote}, hết hạn ${opts.expiresAt}):
+   • 30 ảnh AI
+   • 3 video Reel
+   • 25 caption content
+   • Trần chi phí $10 USD
+
+Sau khi hết, bạn có thể nâng gói (Pro / Enterprise) hoặc tiếp tục dùng lượng miễn phí hàng tháng.`
     : '';
 
-  const footer = scenario === 'reset-password'
-    ? `\nSau khi vào, hệ thống yêu cầu đổi lại mật khẩu mới của bạn.`
-    : `\nSau khi vào: wizard 3 bước tự dẫn dắt bạn setup (đổi mật khẩu → Brand DNA cơ bản → kết nối FB/IG).
-Bấm "?" ở góc mỗi màn hình để xem hướng dẫn nhanh, hoặc hỏi chatbot ở góc phải dưới.`;
+  return `🎉 Chào chị/anh,
 
-  return [header, '', shopLine, '', loginOptions + planLine, footer].join('\n');
+Chào mừng ${opts.storeName} đến với Easy Creative Hub — nền tảng AI giúp shop
+của bạn TỰ ĐỘNG tạo content marketing (caption, ảnh sản phẩm, video Reel)
+đăng thẳng lên Facebook + Instagram, không cần đội content riêng.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔗 Link đăng nhập shop của bạn:
+   ${url}
+
+📧 Email tài khoản admin:
+   ${opts.ownerEmail}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${loginBlock}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📖 SAU KHI VÀO — Wizard 3 bước tự dẫn (~5 phút)
+
+  1️⃣ Đổi mật khẩu (nếu chọn cách 2)
+  2️⃣ Nhập "Chất thương hiệu" cơ bản:
+       • Tagline: 1 câu mô tả bạn bán gì cho ai
+         (vd "Trà thảo mộc cho người ngủ ngon")
+       • Voice: 3-5 tính từ giọng thương hiệu
+         (vd "ấm áp, chân thật, khoa học")
+       → AI dựa vào 2 thông tin này để viết ĐÚNG giọng shop bạn
+  3️⃣ Kết nối Facebook Page + Instagram Business
+       → Từ giờ đăng bài tự động, không cần copy-paste
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 BƯỚC TIẾP THEO — Setup shop 15 phút
+
+  📦 Vào menu Products → thêm sản phẩm:
+     • Điền tên, mô tả, thành phần
+     • Upload nhiều góc ảnh (mặt trước, nghiêng 45°, chi tiết)
+     • ⭐ QUAN TRỌNG: đánh dấu 1 ảnh HERO (mặt trước chuẩn nhất)
+       — AI sẽ bám ảnh này khi tạo mọi ảnh sau này
+
+  🎨 Vào menu Content Templates → tải lên mẫu bạn thích:
+     • Ảnh brand khác có phong cách bạn muốn học
+     • Hệ thống TỰ phân tích bố cục ~8 giây (không cần bấm gì)
+     • Sau đó bấm "Tạo post từ template" → AI sinh ảnh của bạn
+       giữ phong cách mẫu nhưng CHỦ THỂ là sản phẩm bạn
+
+  ✅ Vào Review & Queue → duyệt bài AI tạo → bấm "Post Now" đăng ngay
+     hoặc "Đặt lịch" đăng theo giờ chọn
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🆘 VƯỚNG Ở ĐÂU?
+
+  ❓ Ở MỖI MÀN HÌNH, có nút "?" ở góc trên
+     → Bấm mở hướng dẫn chi tiết cho đúng màn đó
+
+  💬 Ở GÓC PHẢI DƯỚI có nút chat tròn
+     → Hỏi tiếng Việt tự do: "làm sao gen ảnh sản phẩm",
+       "chèn chữ carousel thế nào", "FB không đăng được"
+     → Trợ lý AI trả lời tức thì với các bước cụ thể
+
+  🛎 Không giải quyết được?
+     → Trong chatbot có nút "Tạo yêu cầu hỗ trợ"
+     → Đội kỹ thuật sẽ xem và phản hồi trong 24h
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${planBlock}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Chúc ${opts.storeName} có những campaign đầu tiên thành công 🌱
+
+Mọi thắc mắc gấp, chị/anh nhắn lại tin này — tôi hỗ trợ trực tiếp.
+
+Trân trọng,
+Founder Easy Creative Hub`;
 }
