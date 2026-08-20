@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { UserManagementView } from './UserManagementView';
+import { AdminDashboardView } from './AdminDashboardView';
 
 interface Store {
   id: string; name: string; slug: string; logo_url: string | null;
@@ -23,7 +24,7 @@ export function PlatformConsole() {
   const role = (session?.user as { role?: string } | undefined)?.role;
   const isAdmin = role === 'admin' || role === 'root_admin';
 
-  const [section, setSection] = useState<'stores' | 'users'>('stores');
+  const [section, setSection] = useState<'overview' | 'stores' | 'users'>('overview');
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
@@ -218,13 +219,15 @@ export function PlatformConsole() {
 
       {/* Section toggle */}
       <div className="px-6 pt-5 flex gap-2">
-        {([['stores', '🏪 Stores'], ['users', '👥 Tất cả người dùng']] as const).map(([id, label]) => (
+        {([['overview', '📊 Overview'], ['stores', '🏪 Stores'], ['users', '👥 Tất cả người dùng']] as const).map(([id, label]) => (
           <button key={id} onClick={() => setSection(id)}
             className={`text-sm px-3 py-1.5 rounded-lg border ${section === id ? 'bg-brand-600/20 border-brand-500 text-white' : 'border-gray-800 text-gray-400 hover:text-white'}`}>
             {label}
           </button>
         ))}
       </div>
+
+      {section === 'overview' && <AdminDashboardView />}
 
       {section === 'stores' && (
       <div className="px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-6">
