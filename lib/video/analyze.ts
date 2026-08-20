@@ -62,7 +62,7 @@ async function geminiVideoAnalyze(videoPath: string, mimeType: string): Promise<
     if (file.state !== FileState.ACTIVE) { try { await fm.deleteFile(uploaded.file.name); } catch { /* */ } return null; }
 
     const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { ...NO_THINK, responseMimeType: 'application/json' } });
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest', generationConfig: { ...NO_THINK, responseMimeType: 'application/json' } });
     const res = await model.generateContent([
       { fileData: { mimeType, fileUri: file.uri } },
       ANALYSIS_PROMPT,

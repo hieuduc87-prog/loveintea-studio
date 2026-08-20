@@ -15,7 +15,7 @@ import { enforceRateLimit } from '@/lib/rate-limit';
 import { getDb } from '@/lib/db';
 import { generateJSON } from '@/lib/gemini';
 import { SEGMENTS } from '@/lib/brand-dna';
-import { fileToText } from '@/lib/product-knowledge';
+import { fileToTextAsync } from '@/lib/product-knowledge';
 import { canAccessBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -38,12 +38,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const parts: string[] = []; const names: string[] = [];
       for (const f of files) {
         try {
-          const t = fileToText(Buffer.from(await f.arrayBuffer()), f.name);
+          const t = await fileToTextAsync(Buffer.from(await f.arrayBuffer()), f.name);
           if (t.trim()) { parts.push(`### ${f.name}\n${t.slice(0, 12000)}`); names.push(f.name); }
         } catch { /* bỏ qua file không đọc được */ }
       }
       const text = parts.join('\n\n').slice(0, 42000);
-      if (!text.trim()) return NextResponse.json({ error: 'Không đọc được nội dung file nào (hỗ trợ .xlsx/.docx/.txt/.csv/.md/.json)' }, { status: 400 });
+      if (!text.trim()) return NextResponse.json({ error: 'Không đọc được nội dung file nào (hỗ trợ .pdf/.xlsx/.docx/.txt/.csv/.md/.json)' }, { status: 400 });
 
       // Trích XUẤT FULL DNA trong 1 lần (không chỉ 4 trường chiến lược).
       const fullPrompt = `Bạn là brand strategist. Từ (các) tài liệu thương hiệu khách gửi dưới đây, trích xuất bộ Brand DNA đầy đủ bằng tiếng Việt. CHỈ dùng thông tin CÓ trong tài liệu; thiếu thì để "" hoặc []. Không bịa.

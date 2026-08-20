@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useBrandProducts } from './useBrandProducts';
+import { hdDownloadUrl } from '@/lib/image-url';
 
 interface Post {
   id: string; sku_id: string; caption: string; image_url?: string;
@@ -330,8 +331,9 @@ export function ScheduleView({ brandId }: { brandId?: string } = {}) {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-xs font-bold text-gray-500 uppercase">Image</p>
-                      <a href={selected.image_url} download={`loveintea-${selected.id}.png`}
-                        className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs rounded-lg">⬇ Download</a>
+                      <a href={hdDownloadUrl(selected.image_url)} download={`loveintea-${selected.id}.png`}
+                        className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs rounded-lg"
+                        title="Tải ảnh 4K">⬇ Download 4K</a>
                     </div>
                     <div className="rounded-xl overflow-hidden bg-gray-800 max-w-[220px]">
                       {selected.image_url.startsWith('data:') ? (

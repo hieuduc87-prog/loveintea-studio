@@ -45,3 +45,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   db.prepare(`UPDATE products SET ${sets.join(', ')} WHERE id=?`).run(...vals);
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * DELETE /api/products/[id] — xoá sản phẩm khỏi brand.
+ *
+ * FIX HỆ THỐNG (card hoa-lang-thang "Không thể xoá hoặc điều chỉnh thông tin sản phẩm"):
+ * route trước CHỈ có GET + PATCH → nút Xoá SP trả 405 cho MỌI brand. Fix cấp API →
+ * áp dụng ngay cho loveintea/bazan/rootin/gossby/hoa-lang-thang/WhiteLotus/Oliva Pilates
+ * + brand mới về sau.
+ *
+ * Cascade delete: product_images (FK), tài nguyên xoá được. GIỮ lại kanban/posts đã
+ * publish (không sửa lịch sử) — chỉ xoá row products.
+ */
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query
+  const { id } = await params;
+  const db = getDb();
+
+  // Ngăn xoá SP thuộc brand khác (403)
+  const row = db.prepare('SELECT brand_id FROM products WHERE id=?').get(id) as { brand_id?: string } | undefined;
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const denied = assertResourceBrand(req, row.brand_id);
+  if (denied) return denied;
+
+  // Transaction: xoá ảnh SP trước (FK), rồi xoá SP
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM product_images WHERE product_id=?').run(id);
+    db.prepare('DELETE FROM products WHERE id=?').run(id);
+  });
+  tx();
+
+  return NextResponse.json({ ok: true, deleted: id });
+}

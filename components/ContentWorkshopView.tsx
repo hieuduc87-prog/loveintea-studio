@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { SKUS, SEGMENTS, RTBS, USP_ANCHORS, NARRATIVES, CONTEXTS, CTA_OPTIONS, FORMATS } from '@/lib/brand-dna';
 import { useBrandProducts } from './useBrandProducts';
+import { hdDownloadUrl } from '@/lib/image-url';
 
 interface O3Result { caption: string; imagePrompt: string; hashtags: string; cellId: string; }
 interface LogEntry  { msg: string; status: 'loading' | 'ok' | 'error'; }
@@ -575,8 +576,9 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
                     <div className="p-3 flex items-center justify-between bg-gray-900">
                       <p className="text-xs text-gray-500 font-mono">Job: {genImage.jobId.slice(0, 8)}… · {Math.round(genImage.durationMs / 1000)}s</p>
                       <div className="flex gap-2">
-                        <a href={genImage.url} download={`loveintea-${config.skuId}-${genImage.jobId}.png`}
-                          className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs rounded-lg transition-colors">⬇ Download</a>
+                        <a href={hdDownloadUrl(genImage.url)} download={`loveintea-${config.skuId}-${genImage.jobId}.png`}
+                          className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs rounded-lg transition-colors"
+                          title="Tải ảnh chất lượng 4K">⬇ Download 4K</a>
                         <button onClick={() => navigator.clipboard.writeText(`https://loveintea.wealthpsy.com${genImage.url}`)}
                           className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded-lg transition-colors">Copy URL</button>
                       </div>

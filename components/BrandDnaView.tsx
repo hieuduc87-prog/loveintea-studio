@@ -114,8 +114,8 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
   }
 
   async function ingestFiles(list: FileList | File[]) {
-    const files = Array.from(list).filter(f => /\.(xlsx|xls|docx|txt|csv|md|json)$/i.test(f.name));
-    if (!files.length) { setIngestMsg('✗ Không có file hợp lệ. Hỗ trợ: .xlsx .docx .txt .csv .md .json'); return; }
+    const files = Array.from(list).filter(f => /\.(pdf|xlsx|xls|docx|txt|csv|md|json)$/i.test(f.name));
+    if (!files.length) { setIngestMsg('✗ Không có file hợp lệ. Hỗ trợ: .pdf .xlsx .docx .txt .csv .md .json'); return; }
     setIngesting(true); setIngestMsg(`⏳ Đang đọc ${files.length} tài liệu và tự tạo Brand DNA…`);
     try {
       const fd = new FormData(); files.forEach(f => fd.append('files', f));
@@ -226,7 +226,7 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
           <h2 className="text-base font-bold text-white">Kéo-thả tài liệu thương hiệu vào đây → tự tạo Brand DNA</h2>
           <p className="text-xs text-gray-400 mt-1 max-w-lg mx-auto">
             Thả playbook, guideline, brief, thông tin sản phẩm… (nhiều file hoặc cả folder). AI tự đọc và điền DNA:
-            giọng nói, đối tượng, insight, luật thương hiệu. Hỗ trợ .xlsx .docx .txt .csv .md .json
+            giọng nói, đối tượng, insight, luật thương hiệu. Hỗ trợ .pdf .xlsx .docx .txt .csv .md .json
           </p>
           <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
             <button onClick={() => multiRef.current?.click()} disabled={ingesting}
@@ -239,7 +239,7 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
             </button>
           </div>
           {ingestMsg && <p className={`text-xs mt-3 ${ingestMsg.startsWith('✅') ? 'text-green-400' : ingestMsg.startsWith('⏳') ? 'text-brand-300' : 'text-red-400'}`}>{ingestMsg}</p>}
-          <input ref={multiRef} type="file" multiple accept=".xlsx,.xls,.docx,.txt,.csv,.md,.json" className="hidden"
+          <input ref={multiRef} type="file" multiple accept=".pdf,.xlsx,.xls,.docx,.txt,.csv,.md,.json" className="hidden"
             onChange={e => { if (e.target.files?.length) ingestFiles(e.target.files); e.target.value = ''; }} />
           {/* @ts-expect-error webkitdirectory là thuộc tính non-standard nhưng trình duyệt hỗ trợ */}
           <input ref={folderRef} type="file" webkitdirectory="" directory="" multiple className="hidden"
@@ -344,7 +344,7 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
               className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-bold">
               {extracting ? '⟳ AI đang đọc…' : '✨ Tổng hợp tất cả tài liệu đã có'}
             </button>
-            <input ref={dnaFileRef} type="file" accept=".xlsx,.xls,.csv,.txt,.md,.docx,.json" className="hidden"
+            <input ref={dnaFileRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.txt,.md,.docx,.json" className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) extractFromFile(f); e.target.value = ''; }} />
             <button onClick={() => dnaFileRef.current?.click()} disabled={extracting}
               className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-200 text-xs font-semibold">

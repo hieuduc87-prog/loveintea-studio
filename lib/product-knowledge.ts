@@ -55,6 +55,10 @@ export function getShotRequirements(productRow: { shot_req_json?: string | null 
 }
 
 /** Parse an uploaded file buffer into plain text for the AI extractor. */
+/**
+ * Sync wrapper — giữ backward compat cho code cũ. Không xử lý PDF (async only).
+ * Prefer fileToTextAsync khi có thể (support PDF).
+ */
 export function fileToText(buffer: Buffer, filename: string): string {
   const lower = filename.toLowerCase();
   if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
@@ -71,7 +75,35 @@ export function fileToText(buffer: Buffer, filename: string): string {
     } catch { /* fall through */ }
   }
   // txt, csv, md, json, or anything decodable as utf-8
+  // PDF binary buffer WON'T decode as utf-8 → dùng fileToTextAsync.
   return buffer.toString('utf-8').slice(0, 30000);
+}
+
+/**
+ * Async — support ĐẦY ĐỦ format bao gồm PDF (dùng pdf-parse lazy require).
+ *
+ * FIX HỆ THỐNG (card hoa-lang-thang "Brand DNA cần được phép update file .pdf"):
+ * fileToText sync trước KHÔNG parse PDF → PDF binary → utf-8 garbage → Gemini bịa
+ * DNA sai. Async version thêm branch .pdf → text sạch. Áp cho MỌI brand khi upload
+ * PDF trong Brand DNA / Product Knowledge / Content Templates.
+ */
+export async function fileToTextAsync(buffer: Buffer, filename: string): Promise<string> {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith('.pdf')) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const pdfParse = require('pdf-parse');
+      const data = await pdfParse(buffer);
+      const text = String(data?.text || '').trim();
+      if (text) return text.slice(0, 30000);
+    } catch (e) {
+      console.warn('[fileToTextAsync] PDF parse fail:', String(e).slice(0, 100));
+    }
+    // fallback: fail-soft trả empty (caller sẽ hiển thị 400 "không đọc được")
+    return '';
+  }
+  // Các format còn lại delegate sang sync version
+  return fileToText(buffer, filename);
 }
 
 /** Extract template fields from raw text (customer doc) via Gemini. */

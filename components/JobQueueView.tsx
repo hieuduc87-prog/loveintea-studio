@@ -5,6 +5,7 @@
  * (Template), bài từ plan, render video. Hiển thị trạng thái, tiến độ, log, lỗi, kết quả.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { hdDownloadUrl } from '@/lib/image-url';
 
 interface Job {
   id: string; brand_id: string; kind: string; title: string; source: string | null;
@@ -147,7 +148,7 @@ export function JobQueueView() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={r.url.includes('/api/images/') ? `${r.url}${r.url.includes('?') ? '&' : '?'}w=900` : r.url} alt="" className="w-full max-h-[420px] object-contain" />
                     <div className="absolute bottom-3 right-3 flex gap-2">
-                      <a href={r.url} download onClick={e => e.stopPropagation()} className="px-3 py-1.5 bg-black/70 hover:bg-black text-white text-xs rounded-lg backdrop-blur">⬇ Tải</a>
+                      <a href={hdDownloadUrl(r.url)} download onClick={e => e.stopPropagation()} className="px-3 py-1.5 bg-black/70 hover:bg-black text-white text-xs rounded-lg backdrop-blur" title="Tải 4K">⬇ Tải 4K</a>
                     </div>
                   </div>
                 ) : null; })()}

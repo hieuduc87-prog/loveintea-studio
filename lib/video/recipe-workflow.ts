@@ -147,7 +147,7 @@ export async function classifyRecipeClip(videoPath: string, mimeType: string, id
       }
       if (file.state === FileState.ACTIVE) {
         const genAI = new GoogleGenerativeAI(key);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { ...NO_THINK, responseMimeType: 'application/json' } });
+        const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest', generationConfig: { ...NO_THINK, responseMimeType: 'application/json' } });
         const res = await model.generateContent([{ fileData: { mimeType, fileUri: file.uri } }, CLASSIFY_PROMPT]);
         const raw = res.response.text().trim();
         try { await fm.deleteFile(uploaded.file.name); } catch { /* best effort */ }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { USP_ANCHORS } from '@/lib/brand-dna';
 import { useBrandProducts } from './useBrandProducts';
+import { hdDownloadUrl } from '@/lib/image-url';
 
 interface LibImage {
   id: string;
@@ -301,11 +302,12 @@ export function ImageLibraryView({ brandId }: { brandId?: string } = {}) {
                   </button>
                 </div>
                 <a
-                  href={selected.image_url}
+                  href={hdDownloadUrl(selected.image_url)}
                   download={`loveintea-${selected.sku_id}-${selected.id.slice(0, 8)}.png`}
                   className="block text-center py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-xs transition-colors"
+                  title="Tải ảnh chất lượng 4K (4096×5120)"
                 >
-                  ⬇ Download Full Res
+                  ⬇ Download 4K
                 </a>
               </div>
             </div>

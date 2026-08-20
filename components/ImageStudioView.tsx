@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { SKUS, USP_ANCHORS, CONTEXTS } from '@/lib/brand-dna';
 import { useBrandProducts } from './useBrandProducts';
+import { hdDownloadUrl } from '@/lib/image-url';
 
 interface GeneratedImage {
   jobId: string;
@@ -30,6 +31,31 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
   // sản phẩm (từ DB), server tự suy USP/scene từ chính sản phẩm.
   const isLit = !brandId || brandId === 'loveintea';
   const products = useBrandProducts(brandId);
+
+  /**
+   * FIX HỆ THỐNG (card hoa-lang-thang "Ảnh generate không tự lưu, mất khi đổi tool"):
+   * Route /api/content/image ĐÃ insert vào image_library, nhưng panel history CHỈ giữ
+   * React state → đổi tab = mất. Fix: load 12 ảnh gần nhất từ /api/image-library khi
+   * component mount → history bền vững qua mọi lần đổi tool. Áp cho MỌI brand.
+   */
+  useEffect(() => {
+    (async () => {
+      try {
+        const bq = brandId ? `?brand=${encodeURIComponent(brandId)}&limit=12` : '?limit=12';
+        const r = await fetch(`/api/image-library${bq}`);
+        if (!r.ok) return;
+        const d = await r.json() as { images?: Array<{ id: string; sku_id: string; image_url: string; prompt: string; usp_id: string; context_id: string }> };
+        const items: GeneratedImage[] = (d.images ?? []).map(img => ({
+          jobId: img.id,
+          skuId: img.sku_id || '',
+          imageUrl: img.image_url,
+          prompt: img.prompt || '',
+        }));
+        setHistory(items);
+      } catch { /* fail-soft */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId]);
 
   async function generate() {
     if (!skuId || (isLit && (!uspId || !contextId))) {
@@ -229,11 +255,12 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
                   <p className="text-xs text-gray-500 font-mono">{result.jobId}</p>
                   <div className="flex gap-2">
                     <a
-                      href={result.imageUrl}
+                      href={hdDownloadUrl(result.imageUrl)}
                       download={`loveintea-${result.skuId}-${result.jobId}.png`}
                       className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs rounded-lg transition-colors"
+                      title="Tải ảnh chất lượng 4K (4096×5120)"
                     >
-                      ⬇ Download
+                      ⬇ Download 4K
                     </a>
                     <button
                       onClick={addText}
@@ -261,7 +288,7 @@ export function ImageStudioView({ brandId }: { brandId?: string } = {}) {
                   </div>
                   <div className="p-4 flex items-center justify-between">
                     <p className="text-xs text-brand-300">✨ Ảnh đã phủ chữ (AI gợi ý theo brand)</p>
-                    <a href={overlaidUrl} download={`loveintea-${result.skuId}-text.png`}
+                    <a href={hdDownloadUrl(overlaidUrl)} download={`loveintea-${result.skuId}-text.png`}
                       className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs rounded-lg transition-colors">⬇ Tải ảnh có chữ</a>
                   </div>
                 </div>

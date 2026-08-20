@@ -8,7 +8,7 @@ export const maxDuration = 120;
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { fileToText, extractKnowledge, summarizeKnowledge } from '@/lib/product-knowledge';
+import { fileToTextAsync, extractKnowledge, summarizeKnowledge } from '@/lib/product-knowledge';
 import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const fd = await req.formData();
       const file = fd.get('file') as File | null;
       if (!file) return NextResponse.json({ error: 'file required' }, { status: 400 });
-      const text = fileToText(Buffer.from(await file.arrayBuffer()), file.name);
+      const text = await fileToTextAsync(Buffer.from(await file.arrayBuffer()), file.name);
       if (!text.trim()) return NextResponse.json({ error: 'Không đọc được nội dung file' }, { status: 400 });
       const knowledge = await extractKnowledge(product.name, product.brand_id, text);
       return NextResponse.json({ ok: true, knowledge });
