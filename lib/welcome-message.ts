@@ -77,9 +77,12 @@ Sau khi hết, bạn có thể nâng gói (Pro / Enterprise) hoặc tiếp tục
 
   return `🎉 Chào chị/anh,
 
-Chào mừng ${opts.storeName} đến với Easy Creative Hub — nền tảng AI giúp shop
-của bạn TỰ ĐỘNG tạo content marketing (caption, ảnh sản phẩm, video Reel)
-đăng thẳng lên Facebook + Instagram, không cần đội content riêng.
+Chào mừng ${opts.storeName} đến với Easy Creative Hub — nền tảng
+AI + Đội ngũ chuyên gia marketing giúp shop bạn:
+  • Chuyên gia MARKETING lên plan content tháng (không phó thác 100% cho AI)
+  • AI thực thi caption + ảnh sản phẩm + video Reel theo plan
+  • Đăng thẳng lên Facebook + Instagram theo lịch
+  • Bạn duyệt qua Zalo — không cần thuê đội content riêng, không cần agency đắt
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -104,10 +107,12 @@ ${loginBlock}
        • Voice: 3-5 tính từ giọng thương hiệu
          (vd "ấm áp, chân thật, khoa học")
        → AI dựa vào 2 thông tin này để viết ĐÚNG giọng shop bạn
-  3️⃣ Kết nối Facebook Page + Instagram (chọn 1 trong 2 cách)
-       → Cách 1: menu Channels → "Đăng nhập Facebook" (nhanh, token ~60 ngày)
-       → Cách 2: share Business Portfolio cho ECH (chuẩn agency, không hết hạn)
-       → Chi tiết Cách 2 ở phần "CHIA SẺ FB/IG" dưới cùng tin nhắn này
+  3️⃣ Kết nối Facebook Page + Instagram
+       → Chia sẻ Fanpage + IG cho Business Portfolio của ECH
+         (làm 1 lần trên Meta Business Suite, dùng mãi, không hết hạn)
+       → Hướng dẫn chi tiết có ảnh minh hoạ + FAQ:
+         https://app.easycreativehub.com/help/share-fb-ig
+       → Tóm tắt các bước cũng có ở phần "CHIA SẺ FB/IG" dưới cùng tin này
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

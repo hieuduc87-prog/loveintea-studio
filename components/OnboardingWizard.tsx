@@ -166,42 +166,34 @@ export function OnboardingWizard({ activeBrandId, onDone }: Props) {
           </div>
         )}
 
-        {/* Bước 3: 2 CÁCH — khách chọn */}
+        {/* Bước 3: CHIA SẺ QUYỀN FB + IG CHO BUSINESS ECH (cách duy nhất, chuẩn agency, không hết hạn) */}
         {step === 3 && (
           <div className="space-y-3">
-            <p className="text-sm text-gray-300">Chọn 1 trong 2 cách để hệ thống đăng bài lên Fanpage + Instagram của bạn:</p>
+            <p className="text-sm text-gray-300">Để ECH đăng bài tự động lên Fanpage + Instagram của bạn, chia sẻ quyền cho Business Portfolio của ECH. Làm 1 lần, dùng mãi (không hết hạn):</p>
 
-            {/* Cách A — Login trực tiếp (nhanh, khách tự làm) */}
-            <details open className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-              <summary className="cursor-pointer px-3 py-2 hover:bg-gray-750 text-sm font-semibold text-white">
-                🔗 CÁCH 1 — Đăng nhập Facebook trực tiếp (nhanh, tự làm)
-              </summary>
-              <div className="px-3 pb-3 space-y-2 text-xs text-gray-400">
-                <p>Bạn login Facebook trong app → chọn Fanpage cần đăng → xong. ECH lấy access token của bạn.</p>
-                <a href="/api/auth/facebook/start" target="_blank" rel="noreferrer"
-                  className="block bg-[#1877F2] hover:bg-[#166FE5] text-white text-xs py-2 rounded text-center font-semibold">
-                  Đăng nhập Facebook + Instagram →
-                </a>
-                <p className="text-[10px] text-gray-500">Token có hạn ~60 ngày, khi hết bạn phải login lại. Đơn giản nhất cho shop mới.</p>
+            <div className="bg-gray-800 border border-brand-500/50 rounded-lg p-3 space-y-3">
+              <div className="bg-brand-500/10 border border-brand-500/30 rounded p-2">
+                <div className="text-[11px] text-brand-300 font-semibold mb-1">📌 ID Business Portfolio của ECH — copy để dán:</div>
+                <code className="block bg-gray-900 px-3 py-2 rounded text-brand-300 text-sm select-all font-mono">247211154665626</code>
               </div>
-            </details>
 
-            {/* Cách B — Share Business Portfolio (chuẩn agency, token never-expire) */}
-            <details className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-              <summary className="cursor-pointer px-3 py-2 hover:bg-gray-750 text-sm font-semibold text-white">
-                🤝 CÁCH 2 — Chia sẻ Business Portfolio (chuẩn agency, không hết hạn)
-              </summary>
-              <div className="px-3 pb-3 space-y-2 text-xs text-gray-400">
-                <p>Vào Meta Business Suite share quyền Fanpage + IG cho Business của ECH. Làm 1 lần, không phải xin token lại.</p>
-                <div><b className="text-brand-300">📌 ID Business ECH:</b> <code className="bg-gray-900 px-2 py-0.5 rounded select-all">247211154665626</code></div>
-                <ol className="list-decimal ml-4 space-y-1">
-                  <li>Mở <a href="https://business.facebook.com" target="_blank" rel="noreferrer" className="text-brand-300 hover:underline">business.facebook.com</a> → chọn Business Portfolio của shop</li>
-                  <li>Accounts → <b>Pages</b> → chọn Fanpage → &quot;Assign Partners&quot; → nhập ID trên → tick <i>Create content + Manage Page + Send messages + Insights</i></li>
-                  <li>Accounts → <b>Instagram accounts</b> → chọn IG → &quot;Assign Partners&quot; → cùng ID → tick <i>Create content + Insights</i></li>
-                  <li>Xong → nhắn tên Fanpage + IG cho admin ECH qua Zalo để bật</li>
-                </ol>
+              <ol className="list-decimal ml-4 space-y-2 text-xs text-gray-300">
+                <li>Mở <a href="https://business.facebook.com" target="_blank" rel="noreferrer" className="text-brand-300 hover:underline font-semibold">business.facebook.com</a> → chọn Business Portfolio của shop bạn <span className="text-gray-500">(chưa có: bấm &quot;Create a business account&quot;, miễn phí 2 phút)</span></li>
+                <li><b>Accounts → Pages</b> → chọn Fanpage → tab <b>&quot;Assign Partners&quot;</b> → nhập ID trên → tick quyền: <i>Create content, Manage Page, Send messages, Insights</i> → <b>Save</b></li>
+                <li><b>Accounts → Instagram accounts</b> → chọn IG → tab <b>&quot;Assign Partners&quot;</b> → cùng ID → tick <i>Create content, Insights</i> → <b>Save</b></li>
+                <li>Xong → nhắn tên Fanpage + tên IG cho admin ECH qua Zalo/Messenger — ECH verify + bật đăng bài trong ~2 phút</li>
+              </ol>
+
+              <a href="/help/share-fb-ig" target="_blank" rel="noreferrer"
+                className="block bg-brand-500 hover:bg-brand-400 text-white text-xs py-2 rounded text-center font-semibold">
+                📖 Xem hướng dẫn CHI TIẾT (có ảnh, FAQ) →
+              </a>
+
+              <div className="text-[11px] text-gray-500 border-t border-gray-700 pt-2 space-y-1">
+                <div>❓ <b>Chưa có IG Business?</b> App IG → Settings → Account → &quot;Switch to Business&quot; → link Fanpage.</div>
+                <div>❓ <b>Fanpage đã có agency khác?</b> Vẫn share song song được, không ảnh hưởng access của họ.</div>
               </div>
-            </details>
+            </div>
 
             <div className="flex gap-2 pt-1">
               <button onClick={finish} className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm py-2.5 rounded-lg">

@@ -21,6 +21,9 @@ export const SHARE_FB_INSTRUCTIONS_VI = `🤝 CHIA SẺ FACEBOOK + INSTAGRAM CHO
 truy cập cho Business Portfolio của Easy Creative Hub. Làm 1 lần, dùng mãi mãi
 (token không hết hạn, không phải xin lại).
 
+📖 HƯỚNG DẪN CHI TIẾT CÓ ẢNH MINH HOẠ + FAQ:
+   https://app.easycreativehub.com/help/share-fb-ig
+
 📌 ID Business Portfolio của ECH:  ${ECH_BUSINESS_ID}
    (Copy ID này để dán vào bước dưới)
 

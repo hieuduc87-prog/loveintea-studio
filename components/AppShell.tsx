@@ -19,6 +19,7 @@ import { PlanCalendarView }   from './PlanCalendarView';
 import { UserGuideView }      from './UserGuideView';
 import { OnboardingWizard }   from './OnboardingWizard';
 import { HelpChatbot }        from './HelpChatbot';
+import { PricingBanner }      from './PricingBanner';
 import { VideoToolGuideView } from './VideoToolGuideView';
 import { HelpDrawer }         from './HelpDrawer';
 import { BrandMembersView } from './BrandMembersView';
@@ -491,6 +492,7 @@ export function AppShell({ initialTab, fbSuccess, fbError }: {
 
       {/* Main */}
       <div className="flex-1 min-w-0 flex flex-col">
+        <PricingBanner />
         <header className="sticky top-0 z-10 border-b border-gray-800 bg-gray-950/90 backdrop-blur px-4 h-12 flex items-center gap-3 flex-shrink-0">
           <button className="md:hidden p-1 -ml-1 text-gray-400 hover:text-white rounded"
             onClick={() => setDrawerOpen(true)}>

@@ -22,7 +22,7 @@ const FEATURES = [
 
 const STEPS = [
   { n: '01', t: 'Nạp Brand DNA', d: 'Upload tài liệu thương hiệu — AI tự trích xuất chiến lược, đối tượng, giọng điệu.' },
-  { n: '02', t: 'AI lên plan & content', d: 'Content plan cả tháng, caption + ảnh + video sinh tự động theo từng ngày.' },
+  { n: '02', t: 'Chuyên gia + AI lên plan', d: 'Chuyên gia marketing duyệt content plan tháng, AI sinh caption + ảnh + video theo từng ngày.' },
   { n: '03', t: 'Duyệt & xếp lịch', d: 'Kéo thả trên calendar, duyệt hàng loạt. Bài khoá sau khi đăng — an toàn tuyệt đối.' },
   { n: '04', t: 'Đo lường & tự học', d: 'Metrics đổ về, scoreboard chấm điểm, vòng lặp học hỏi tối ưu plan kế tiếp.' },
 ];
@@ -154,7 +154,8 @@ export function LandingPage() {
               <div className="ech-logo-mark">⚡</div>
               Easy Creative Hub
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <a className="ech-btn ech-btn-ghost ech-btn-sm" href="/plans">💼 Bảng giá</a>
               <a className="ech-btn ech-btn-ghost ech-btn-sm" href={`${APP_URL}/login`}>Đăng nhập</a>
               <a className="ech-btn ech-btn-primary ech-btn-sm" href={`${APP_URL}/login`}>Vào Studio →</a>
             </div>
@@ -166,23 +167,23 @@ export function LandingPage() {
           <canvas className="ech-stars" ref={starsRef} />
           <div className="ech-floor" />
           <div data-depth="4">
-            <div className="ech-badge ech-reveal ech-in">✦ Marketing OS thế hệ AI — cho thương hiệu D2C</div>
+            <div className="ech-badge ech-reveal ech-in">✦ AI + Đội ngũ chuyên gia Marketing — cho thương hiệu D2C Việt</div>
           </div>
           <div data-depth="7">
             <h1 className="ech-h1 ech-reveal ech-in ech-d1">
-              Cỗ máy content chạy bằng AI<br />
+              AI thực thi + Chuyên gia lên plan<br />
               <span className="ech-h1-grad">cho thương hiệu của bạn</span>
             </h1>
           </div>
           <div data-depth="5">
             <p className="ech-sub ech-reveal ech-in ech-d2">
               Gói trọn <b>Strategy → Content → Publish → Learn</b> vào một hệ điều hành duy nhất.
-              AI viết caption, tạo ảnh, dựng video, đăng bài đúng giờ và tự học từ số liệu — bạn chỉ việc duyệt.
+              Đội ngũ chuyên gia marketing lên plan tháng, AI tăng tốc thực thi caption + ảnh + video + đăng bài — bạn duyệt qua Zalo. Không phó thác hết cho AI, không phải thuê agency đắt.
             </p>
           </div>
           <div className="ech-hero-ctas ech-reveal ech-in ech-d3" data-depth="3">
-            <a className="ech-btn ech-btn-primary" href={`${APP_URL}/login`}>Bắt đầu ngay →</a>
-            <a className="ech-btn ech-btn-ghost" href="#features">Khám phá tính năng</a>
+            <a className="ech-btn ech-btn-primary" href={`${APP_URL}/login`}>🎁 Thử miễn phí 30 ngày →</a>
+            <a className="ech-btn ech-btn-ghost" href="/plans">💼 Xem 7 gói dịch vụ</a>
           </div>
 
           <div className="ech-stats ech-reveal ech-d4">
@@ -344,8 +345,9 @@ export function LandingPage() {
           <h2 className="ech-reveal">Sẵn sàng vận hành thương hiệu<br />như một studio chuyên nghiệp?</h2>
           <p className="ech-reveal ech-d1">Đăng nhập và cảm nhận sự khác biệt ngay từ bài đăng đầu tiên.</p>
           <div className="ech-final-ctas ech-reveal ech-d2">
-            <a className="ech-btn ech-btn-primary" href={`${APP_URL}/login`}>Vào Studio ngay →</a>
-            <a className="ech-btn ech-btn-ghost" href="mailto:hieuduc87@gmail.com">Liên hệ hợp tác</a>
+            <a className="ech-btn ech-btn-primary" href="/plans">💼 Xem gói + báo giá →</a>
+            <a className="ech-btn ech-btn-ghost" href={`${APP_URL}/login`}>🎁 Thử miễn phí 30 ngày</a>
+            <a className="ech-btn ech-btn-ghost" href="https://zalo.me/hieuduc87" target="_blank" rel="noreferrer">💬 Chat Zalo</a>
           </div>
         </section>
 
@@ -361,7 +363,7 @@ export function LandingPage() {
               <a href="https://admin.easycreativehub.com">Quản trị</a>
               <a href="mailto:hieuduc87@gmail.com">Liên hệ</a>
             </div>
-            <div>© 2026 Easy Creative Hub · Marketing OS chạy bằng AI</div>
+            <div>© 2026 Easy Creative Hub · AI + Đội ngũ chuyên gia Marketing cho shop Việt</div>
           </div>
         </footer>
       </div>

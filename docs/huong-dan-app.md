@@ -1,5 +1,9 @@
 # Hướng dẫn sử dụng Easy Creative Hub — TỔNG QUAN
 
+**Easy Creative Hub là gì?** Nền tảng SaaS **AI + Đội ngũ chuyên gia marketing** cho shop D2C Việt.
+Chuyên gia lên plan content tháng, AI tăng tốc thực thi (caption + ảnh + video), khách duyệt qua Zalo trước khi đăng.
+KHÔNG phó thác 100% cho AI — có người chịu trách nhiệm về chất lượng plan và mỗi bài post.
+
 Đây là tài liệu ngắn gọn cho chatbot trợ giúp — bám sát thao tác thật trong app.
 
 ## Đăng nhập lần đầu
@@ -55,23 +59,19 @@ Duyệt mọi bài AI tạo trước khi đăng.
 - Bấm bài để xem, sửa caption, đổi ảnh, chọn kênh (FB/IG) và lịch đăng.
 - Nút "Post Now" đăng ngay, "Đặt lịch" đăng theo giờ chọn (giờ VN, hệ tự convert UTC).
 
-## 9. Publisher / Channels — KẾT NỐI FB + IG (chọn 1 trong 2 cách)
+## 9. Kết nối FB + IG — Chia sẻ Business Portfolio cho ECH
 
-### Cách 1 — Đăng nhập Facebook trực tiếp (nhanh, tự làm)
-- Vào menu **Channels** → bấm "Đăng nhập Facebook + Instagram"
-- Login FB → chọn Fanpage → cấp quyền → xong.
-- Token có hạn ~60 ngày, hết thì badge "chưa nối FB" xuất hiện → bấm "Kết nối lại".
-- **Phù hợp**: shop nhỏ, chủ shop tự làm content, không có agency riêng.
+**Hướng dẫn CHI TIẾT có ảnh + FAQ**: https://app.easycreativehub.com/help/share-fb-ig
 
-### Cách 2 — Chia sẻ Business Portfolio cho ECH (chuẩn agency, không hết hạn)
-- Vào https://business.facebook.com → chọn Business Portfolio của shop
-- Accounts → **Pages** → click Fanpage → tab "Assign Partners" → nhập Business ID `247211154665626` → chọn quyền: Create content + Manage Page + Send messages + Insights → Save
-- Accounts → **Instagram accounts** → click IG → tab "Assign Partners" → cùng Business ID → chọn: Create content + Insights → Save
-- Nhắn tên Fanpage + tên IG cho admin ECH qua Zalo/Messenger → ECH verify và bật tính năng đăng bài trong ~2 phút
-- **Phù hợp**: shop có agency, không muốn share password FB, muốn token vĩnh viễn không phải xin lại.
+Cách CHUẨN AGENCY, chuẩn Meta khuyến nghị (token vĩnh viễn, không hết hạn, không share password):
+1. Mở https://business.facebook.com → chọn Business Portfolio của shop bạn (chưa có → bấm "Create a business account", miễn phí 2 phút)
+2. Accounts → **Pages** → click Fanpage → tab "Assign Partners" → nhập Business ID `247211154665626` → tick: Create content + Manage Page + Send messages + Insights → Save
+3. Accounts → **Instagram accounts** → click IG → tab "Assign Partners" → cùng Business ID `247211154665626` → tick: Create content + Insights → Save
+4. Nhắn tên Fanpage + tên IG cho admin ECH qua Zalo/Messenger → ECH verify và bật tính năng đăng bài trong ~2 phút
 
-**Không có Business Portfolio?** business.facebook.com → "Create a business account" — miễn phí, 2 phút.
 **Không có IG Business?** App IG → Settings → Account → "Switch to Business account" → link Fanpage.
+**Fanpage đã có agency khác?** Vẫn share song song được, không ảnh hưởng access hiện tại của họ.
+**Muốn thu hồi quyền?** Vào lại chỗ Assign → xoá ECH khỏi Partners → mất quyền ngay lập tức.
 
 ## 10. Analytics + Scoreboard (menu "Analytics" + "Scoreboard")
 - Analytics: xem lượt reach/engagement/comments từng bài.

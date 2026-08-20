@@ -28,6 +28,8 @@ const PLATFORM_DB_TABLES = [
   'brand_quotas', 'usage_counters', 'cost_ledger',
   'channels', 'fb_connections', 'fb_pages',
   'jobs',
+  // Marketing surface (public /plans landing) — global, không per-tenant
+  'service_plans', 'sales_leads',
 ];
 
 let _db: Database.Database | null = null;
@@ -1200,6 +1202,73 @@ function initSchema(db: Database.Database, opts?: { tenant?: boolean }) {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_status  ON jobs(status)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at)`);
   } catch { /* already exists */ }
+
+  // ── SERVICE PLANS + SALES LEADS (public /plans marketing surface) ──
+  // service_plans = catalog gói bán hàng, hiển thị công khai; giá text để
+  // founder tuỳ chỉnh (VND format hoặc "Liên hệ báo giá"). category dùng
+  // để nhóm hiển thị. features_json = mảng chuỗi bullet. quota_json = brand_quotas
+  // preset áp khi gói self-serve được kích hoạt.
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS service_plans (
+      slug          TEXT PRIMARY KEY,
+      name          TEXT NOT NULL,
+      category      TEXT NOT NULL,          -- trial | social-image | social-video | combo | brand-identity | logo | website-seo | custom
+      price_display TEXT NOT NULL DEFAULT 'Liên hệ báo giá',
+      price_note    TEXT DEFAULT '',        -- vd '/tháng', '/gói', '1 lần'
+      tagline       TEXT DEFAULT '',
+      features_json TEXT DEFAULT '[]',      -- ["30 ảnh AI/tháng", "..."]
+      quota_json    TEXT DEFAULT '{}',      -- {videos, images, content, cap_usd} — chỉ với gói self-serve
+      billing_type  TEXT DEFAULT 'contact', -- 'contact' | 'self-serve-monthly' | 'one-time'
+      is_active     INTEGER DEFAULT 1,
+      is_featured   INTEGER DEFAULT 0,      -- highlight card lớn hơn
+      sort_order    INTEGER DEFAULT 100,
+      created_at    TEXT DEFAULT (datetime('now')),
+      updated_at    TEXT DEFAULT (datetime('now'))
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_service_plans_cat ON service_plans(category, sort_order)`);
+
+    // Seed 7 gói placeholder — giá 'Liên hệ báo giá' để founder chỉnh trong Admin,
+    // không lỡ tay bán nhầm giá. INSERT OR IGNORE để không đè khi founder đã sửa.
+    const seed = [
+      { slug: 'trial-social-30', category: 'trial', name: 'Dùng thử Social 30 ngày', price_display: 'Miễn phí', price_note: '/30 ngày', tagline: 'Trải nghiệm 30 ngày, không cần thẻ', features: ['30 ảnh AI/tháng', '3 video Reel', '25 caption content', 'Trần chi phí AI $10', 'Đăng FB + IG'], quota: { videos: 3, images: 30, content: 25, cap_usd: 10 }, billing_type: 'self-serve-monthly', is_featured: 0, sort_order: 10 },
+      { slug: 'basic-image-monthly', category: 'social-image', name: 'Gói Ảnh Social', price_display: 'Liên hệ báo giá', price_note: '/tháng', tagline: 'Chuyên biệt cho shop cần ảnh chất lượng cao, đều đặn', features: ['200 ảnh AI/tháng', 'Không giới hạn caption', 'Chuyên gia duyệt template hàng tuần', 'Đăng FB + IG tự động', 'Analytics per-post'], quota: { videos: 0, images: 200, content: 500, cap_usd: 50 }, billing_type: 'contact', is_featured: 0, sort_order: 20 },
+      { slug: 'basic-video-monthly', category: 'social-video', name: 'Gói Video Reel', price_display: 'Liên hệ báo giá', price_note: '/tháng', tagline: 'Reel 10-30s + video sản phẩm, chuyên gia duyệt storyboard', features: ['20 video Reel/tháng', 'Voiceover AI miễn phí', 'BGM library + tách nhạc video mẫu', 'Chuyên gia duyệt storyboard trước render', 'Đăng FB + IG tự động'], quota: { videos: 20, images: 60, content: 100, cap_usd: 100 }, billing_type: 'contact', is_featured: 0, sort_order: 30 },
+      { slug: 'combo-full-monthly', category: 'combo', name: 'Combo Ảnh + Video (Bán chạy)', price_display: 'Liên hệ báo giá', price_note: '/tháng', tagline: 'Trọn gói content cho shop D2C: ảnh + video + đăng bài + duyệt bởi chuyên gia', features: ['200 ảnh AI/tháng', '20 video Reel/tháng', 'Không giới hạn caption', 'Chuyên gia lên plan tháng + duyệt content', 'Đăng FB + IG + đo hiệu quả', 'Support Zalo 24/7 giờ hành chính'], quota: { videos: 20, images: 200, content: 500, cap_usd: 120 }, billing_type: 'contact', is_featured: 1, sort_order: 40 },
+      { slug: 'brand-identity-package', category: 'brand-identity', name: 'Gói Xây Brand Identity', price_display: 'Liên hệ báo giá', price_note: '/gói (1 lần)', tagline: 'Cho shop chưa có brand rõ ràng — chuyên gia phỏng vấn + xây DNA', features: ['2 buổi tư vấn 1-1 với chuyên gia marketing', 'Xây brand DNA đầy đủ (tagline, voice, values)', 'Bộ hướng dẫn brand voice + tone', 'Ma trận content pillars', 'Nạp thẳng vào Easy Creative Hub — AI sẵn sàng chạy'], quota: {}, billing_type: 'one-time', is_featured: 0, sort_order: 50 },
+      { slug: 'logo-design-package', category: 'logo', name: 'Gói Thiết Kế Logo', price_display: 'Liên hệ báo giá', price_note: '/gói (1 lần)', tagline: 'Designer thật + AI phác thảo — 3 concept, revisions không giới hạn 14 ngày', features: ['3 concept logo thủ công', 'AI phác thảo mở rộng ý tưởng', 'Revisions không giới hạn trong 14 ngày', 'Deliverable: PNG + SVG + AI + guide sử dụng', 'Áp lên bao bì / social template có sẵn'], quota: {}, billing_type: 'one-time', is_featured: 0, sort_order: 60 },
+      { slug: 'website-seo-package', category: 'website-seo', name: 'Gói Website + Auto SEO', price_display: 'Liên hệ báo giá', price_note: '/gói (1 lần + 3 tháng SEO)', tagline: 'Landing shop chuẩn SEO + AI tự viết blog SEO 3 tháng đầu', features: ['Landing 5-8 section (hero + sản phẩm + testimonial + CTA)', 'Chuẩn SEO on-page (schema, meta, sitemap, speed)', 'AI tự viết 12 bài blog SEO trong 3 tháng đầu', 'Google Analytics + Search Console setup', 'Domain + hosting năm đầu bao', 'Sau 3 tháng: chuyển sang gói Content-SEO tuỳ chọn'], quota: {}, billing_type: 'one-time', is_featured: 0, sort_order: 70 },
+    ];
+    const insertPlan = db.prepare(`INSERT OR IGNORE INTO service_plans
+      (slug, name, category, price_display, price_note, tagline, features_json, quota_json, billing_type, is_featured, sort_order)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+    for (const p of seed) {
+      insertPlan.run(p.slug, p.name, p.category, p.price_display, p.price_note, p.tagline,
+        JSON.stringify(p.features), JSON.stringify(p.quota), p.billing_type, p.is_featured, p.sort_order);
+    }
+  } catch { /* already exists */ }
+
+  // sales_leads = ai điền form "Nhận báo giá" trên /plans/[slug] hoặc exit-intent
+  // popup → INSERT + tạo kanban card sales-lead. Truy vết source để đo funnel.
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS sales_leads (
+      id           TEXT PRIMARY KEY,
+      email        TEXT NOT NULL,
+      phone        TEXT,
+      store_name   TEXT,
+      plan_slug    TEXT,                    -- slug plan khách quan tâm
+      source       TEXT DEFAULT 'plans',    -- plans | exit-intent | homepage | wizard-upgrade
+      note         TEXT,
+      user_agent   TEXT,
+      ip_hash      TEXT,                    -- SHA1 để rate-limit không lưu IP thật
+      kanban_card_id TEXT,                  -- link ra card kanban created
+      status       TEXT DEFAULT 'new',      -- new | contacted | qualified | won | lost
+      contacted_at TEXT,
+      created_at   TEXT DEFAULT (datetime('now'))
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sales_leads_status ON sales_leads(status, created_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_sales_leads_ip ON sales_leads(ip_hash, created_at)`);
+  } catch { /* already exists */ }
+
   // Product knowledge template + photo shot-list requirements
   try { db.exec(`ALTER TABLE products ADD COLUMN knowledge_json TEXT DEFAULT '{}'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE products ADD COLUMN shot_req_json TEXT DEFAULT ''`); } catch { /* already exists */ }

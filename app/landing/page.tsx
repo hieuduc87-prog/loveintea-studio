@@ -4,11 +4,11 @@ import { LandingPage } from '@/components/LandingPage';
 import './landing.css';
 
 export const metadata: Metadata = {
-  title: 'Easy Creative Hub — Marketing OS chạy bằng AI cho thương hiệu',
-  description: 'AI viết caption, tạo ảnh, dựng video, đăng bài FB/IG tự động và tự học từ số liệu. Strategy → Content → Publish → Learn trong một nền tảng duy nhất.',
+  title: 'Easy Creative Hub — AI + Đội ngũ marketing chuyên gia lên plan cho thương hiệu Việt',
+  description: 'Không phó thác 100% cho AI. Đội ngũ chuyên gia marketing lên plan, AI tăng tốc thực thi — caption, ảnh, video, đăng bài FB/IG. Chuẩn agency, tối ưu cho shop D2C Việt Nam.',
   openGraph: {
-    title: 'Easy Creative Hub — Marketing OS chạy bằng AI',
-    description: 'Cỗ máy content chạy bằng AI cho thương hiệu của bạn.',
+    title: 'Easy Creative Hub — AI + Chuyên gia Marketing',
+    description: 'Đội ngũ marketing chuyên gia + AI thực thi. Không phải phó mặc cho AI — có người review từng plan, từng bài.',
     images: ['/brand/landing/hero-visual.jpg'],
   },
 };
