@@ -1,6 +1,16 @@
 import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
 
+// Whitelist truy cập Platform Console — chỉ 2 email (không dùng role admin generic
+// vì có nhiều admin brand khác không nên xem tổng platform). Hardcode để không đổi
+// âm thầm qua env. Xem thêm lib/platform-access.ts cho helper server-side.
+const PLATFORM_CONSOLE_EMAILS = new Set([
+  'hieuduc87@gmail.com',
+  'manhson.nguyen@gmail.com',
+]);
+// Cost/Revenue/Profit là DỮ LIỆU TÀI CHÍNH nội bộ — chỉ founder chính xem.
+const COST_VIEWER_EMAILS = new Set(['hieuduc87@gmail.com']);
+
 /**
  * Auth + role + BRAND-TENANT enforcement + host-based routing.
  *
@@ -20,12 +30,15 @@ import { NextResponse } from 'next/server';
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token as
-      | { role?: string; brands?: string[]; allBrands?: boolean; mustChangePassword?: boolean }
+      | { role?: string; brands?: string[]; allBrands?: boolean; mustChangePassword?: boolean; email?: string }
       | null;
     const role = token?.role ?? 'viewer';
+    const email = (token?.email || '').toLowerCase().trim();
     const { pathname } = req.nextUrl;
     const isApi = pathname.startsWith('/api/');
     const isAdmin = role === 'admin' || role === 'root_admin';
+    const isPlatformAdmin = PLATFORM_CONSOLE_EMAILS.has(email);
+    const isCostViewer = COST_VIEWER_EMAILS.has(email);
     const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
 
     // ---- Host-based function routing (BigAI MKT) ----
@@ -62,13 +75,19 @@ export default withAuth(
       return NextResponse.redirect(new URL('/change-password', req.url));
     }
 
-    if (pathname.startsWith('/api/admin') && !isAdmin) {
-      return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 });
+    // Platform admin routes — chỉ 2 email whitelist (không phải "role admin generic" — vì
+    // admin của brand khác không nên xem/tạo store, mời user, v.v. cấp platform)
+    if (pathname.startsWith('/api/admin') && !isPlatformAdmin) {
+      return NextResponse.json({ error: 'Forbidden — chỉ founder (hieuduc87/manhson) truy cập được Platform Console.' }, { status: 403 });
+    }
+    // Cost/Revenue/P&L — chỉ founder chính (hieuduc87). /api/cost hoàn toàn cấm cho non-cost-viewer.
+    // /api/admin/dashboard vẫn cho manhson (thấy shops/users/alerts NON-COST) — route tự strip cost fields khi caller không phải cost viewer.
+    if (pathname.startsWith('/api/cost') && !isCostViewer) {
+      return NextResponse.json({ error: 'Forbidden — Cost/Revenue là dữ liệu nội bộ, chỉ founder chính xem được.' }, { status: 403 });
     }
 
-    // Platform (super-admin) console — admins only. Non-admins are pushed to the
-    // tenant app (cross-host to app.<domain> when on the crm host).
-    if (isPlatformSurface && !isAdmin) {
+    // Platform (super-admin) console — chỉ 2 email whitelist. Non-whitelist → app tenant.
+    if (isPlatformSurface && !isPlatformAdmin) {
       const to = crmHost ? `${proto}//app.${baseDomain}/` : new URL('/', req.url).toString();
       return NextResponse.redirect(to);
     }

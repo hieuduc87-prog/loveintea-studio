@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAdminSession } from '@/lib/api-auth';
+import { isCostViewer } from '@/lib/platform-access';
 
 interface Shop {
   id: string; name: string; slug: string; created_at: string;
@@ -27,6 +28,8 @@ export async function GET() {
   const auth = await requireAdminSession();
   if ('error' in auth) return auth.error;
   if (auth.role !== 'root_admin' && auth.role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+  const email = ((auth.session as { user?: { email?: string } } | null)?.user?.email || '').toLowerCase();
+  const showCost = isCostViewer(email); // true = hieuduc87, false = manhson
 
   const db = getDb();
   const brands = db.prepare('SELECT id, name, slug, created_at FROM brands ORDER BY created_at DESC').all() as Array<{ id: string; name: string; slug: string; created_at: string }>;
@@ -95,18 +98,29 @@ export async function GET() {
   const totalRev30d = shops.reduce((s, x) => s + x.revenue_30d_vnd, 0);
   const totalRevAll = shops.reduce((s, x) => s + x.revenue_all_vnd, 0);
 
+  // Strip cost/revenue fields cho non-cost-viewer (manhson thấy shops + alerts nhưng KHÔNG thấy $)
+  const shopsOut = showCost ? shops : shops.map(s => ({
+    ...s,
+    cost_30d_usd: 0, revenue_30d_vnd: 0, revenue_all_vnd: 0, cap_usd: 0,
+    // Vẫn giữ alerts về trial/quota (không phải cost); strip alert "cost vượt cap"
+    alerts: s.alerts.filter(a => !a.msg.startsWith('Cost 30d')),
+  }));
+
   return NextResponse.json({
+    show_cost: showCost,
     totals: {
       shops: shops.length,
       users: totalUsers,
       active_users_30d: activeUsers30d,
-      cost_30d_usd: Math.round(totalCost30d * 10000) / 10000,
-      revenue_30d_vnd: totalRev30d,
-      revenue_all_vnd: totalRevAll,
-      // Ước lãi/lỗ platform theo tỷ giá 25000 VND/USD
-      profit_30d_vnd: totalRev30d - Math.round(totalCost30d * 25000),
+      // Ẩn hoàn toàn cost/revenue nếu không phải cost-viewer
+      cost_30d_usd: showCost ? Math.round(totalCost30d * 10000) / 10000 : null,
+      revenue_30d_vnd: showCost ? totalRev30d : null,
+      revenue_all_vnd: showCost ? totalRevAll : null,
+      profit_30d_vnd: showCost ? totalRev30d - Math.round(totalCost30d * 25000) : null,
     },
-    shops,
+    shops: shopsOut,
     generated_at: now.toISOString(),
+    // Ghi chú minh bạch cho hieuduc87: cost là ƯỚC theo pricing công bố, không phải billing thật
+    cost_note: showCost ? 'Cost là ước tính theo bảng giá công bố (OpenAI/Gemini/fal). Không phải billing thật từ API provider — provider không hỗ trợ tag per-brand nên không thể lấy chính xác 100% per-shop. Reconcile với dashboard provider hàng tháng để hiệu chỉnh.' : undefined,
   });
 }

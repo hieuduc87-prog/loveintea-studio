@@ -23,7 +23,7 @@ interface Shop {
 }
 interface Totals {
   shops: number; users: number; active_users_30d: number;
-  cost_30d_usd: number; revenue_30d_vnd: number; revenue_all_vnd: number; profit_30d_vnd: number;
+  cost_30d_usd: number | null; revenue_30d_vnd: number | null; revenue_all_vnd: number | null; profit_30d_vnd: number | null;
 }
 
 const fmtVnd = (n: number) => new Intl.NumberFormat('vi-VN').format(n) + '₫';
@@ -31,7 +31,7 @@ const fmtUsd = (n: number) => '$' + n.toFixed(2);
 const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString('vi-VN') : '—';
 
 export function AdminDashboardView() {
-  const [data, setData] = useState<{ totals: Totals; shops: Shop[] } | null>(null);
+  const [data, setData] = useState<{ totals: Totals; shops: Shop[]; show_cost?: boolean; cost_note?: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,14 +48,15 @@ export function AdminDashboardView() {
   if (!data) return <div className="p-6 text-red-400 text-sm">Không tải được dashboard</div>;
 
   const t = data.totals;
+  const showCost = data.show_cost !== false; // undefined = true (backward compat)
   const alertShops = data.shops.filter(s => s.alerts.length > 0);
   const criticalCount = alertShops.reduce((n, s) => n + s.alerts.filter(a => a.level === 'critical').length, 0);
   const warnCount = alertShops.reduce((n, s) => n + s.alerts.filter(a => a.level === 'warn').length, 0);
 
   return (
     <div className="p-6 space-y-6">
-      {/* Widgets hàng đầu */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      {/* Widgets hàng đầu — ẩn 3 widget Cost/Revenue/Profit cho non-cost-viewer (manhson) */}
+      <div className={`grid grid-cols-2 gap-3 ${showCost ? 'md:grid-cols-5' : 'md:grid-cols-2'}`}>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <div className="text-[10px] uppercase text-gray-500 tracking-widest">Tổng shops</div>
           <div className="text-2xl font-bold text-white mt-1">{t.shops}</div>
@@ -66,22 +67,33 @@ export function AdminDashboardView() {
           <div className="text-2xl font-bold text-white mt-1">{t.active_users_30d}</div>
           <div className="text-xs text-gray-500 mt-0.5">{t.users > 0 ? Math.round(t.active_users_30d / t.users * 100) : 0}% tổng users</div>
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-[10px] uppercase text-gray-500 tracking-widest">Cost 30d</div>
-          <div className="text-2xl font-bold text-amber-300 mt-1">{fmtUsd(t.cost_30d_usd)}</div>
-          <div className="text-xs text-gray-500 mt-0.5">≈ {fmtVnd(Math.round(t.cost_30d_usd * 25000))}</div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-[10px] uppercase text-gray-500 tracking-widest">Revenue 30d</div>
-          <div className="text-2xl font-bold text-green-300 mt-1">{fmtVnd(t.revenue_30d_vnd)}</div>
-          <div className="text-xs text-gray-500 mt-0.5">All-time: {fmtVnd(t.revenue_all_vnd)}</div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-[10px] uppercase text-gray-500 tracking-widest">Profit 30d</div>
-          <div className={`text-2xl font-bold mt-1 ${t.profit_30d_vnd >= 0 ? 'text-green-300' : 'text-red-400'}`}>{fmtVnd(t.profit_30d_vnd)}</div>
-          <div className="text-xs text-gray-500 mt-0.5">Revenue − Cost×25000</div>
-        </div>
+        {showCost && t.cost_30d_usd !== null && (
+          <>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="text-[10px] uppercase text-gray-500 tracking-widest flex items-center gap-1">
+                Cost 30d <span title="Ước tính theo bảng giá công bố — không phải billing thật từ provider" className="text-amber-500/60 cursor-help">ⓘ</span>
+              </div>
+              <div className="text-2xl font-bold text-amber-300 mt-1">{fmtUsd(t.cost_30d_usd)}</div>
+              <div className="text-xs text-gray-500 mt-0.5">≈ {fmtVnd(Math.round(t.cost_30d_usd * 25000))} · <span className="italic">ước</span></div>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="text-[10px] uppercase text-gray-500 tracking-widest">Revenue 30d</div>
+              <div className="text-2xl font-bold text-green-300 mt-1">{fmtVnd(t.revenue_30d_vnd ?? 0)}</div>
+              <div className="text-xs text-gray-500 mt-0.5">All-time: {fmtVnd(t.revenue_all_vnd ?? 0)}</div>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="text-[10px] uppercase text-gray-500 tracking-widest">Profit 30d</div>
+              <div className={`text-2xl font-bold mt-1 ${(t.profit_30d_vnd ?? 0) >= 0 ? 'text-green-300' : 'text-red-400'}`}>{fmtVnd(t.profit_30d_vnd ?? 0)}</div>
+              <div className="text-xs text-gray-500 mt-0.5">Revenue − Cost×25000</div>
+            </div>
+          </>
+        )}
       </div>
+      {showCost && data.cost_note && (
+        <div className="text-[10px] text-gray-600 bg-gray-900/50 border border-gray-800 rounded-lg px-3 py-2">
+          💡 <b className="text-gray-500">Về số Cost</b>: {data.cost_note}
+        </div>
+      )}
 
       {/* Alerts panel */}
       {alertShops.length > 0 && (
@@ -115,8 +127,8 @@ export function AdminDashboardView() {
                 <th className="text-left px-4 py-3">Shop</th>
                 <th className="text-left px-4 py-3">Gói</th>
                 <th className="text-left px-4 py-3">Hết hạn</th>
-                <th className="text-right px-4 py-3">Cost 30d</th>
-                <th className="text-right px-4 py-3">Revenue 30d</th>
+                {showCost && <th className="text-right px-4 py-3">Cost 30d <span className="text-amber-500/60 normal-case font-normal">(ước)</span></th>}
+                {showCost && <th className="text-right px-4 py-3">Revenue 30d</th>}
                 <th className="text-center px-4 py-3">Members</th>
                 <th className="text-left px-4 py-3">Alerts</th>
                 <th className="text-left px-4 py-3">Last activity</th>
@@ -140,13 +152,15 @@ export function AdminDashboardView() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-xs">{fmtDate(s.expires_at)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`font-mono ${capPct >= 100 ? 'text-red-400' : capPct >= 80 ? 'text-amber-300' : 'text-gray-200'}`}>
-                        {fmtUsd(s.cost_30d_usd)}
-                      </div>
-                      {s.cap_usd > 0 && <div className="text-[10px] text-gray-500">{capPct}% cap</div>}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-green-300">{s.revenue_30d_vnd > 0 ? fmtVnd(s.revenue_30d_vnd) : '—'}</td>
+                    {showCost && (
+                      <td className="px-4 py-3 text-right">
+                        <div className={`font-mono ${capPct >= 100 ? 'text-red-400' : capPct >= 80 ? 'text-amber-300' : 'text-gray-200'}`}>
+                          {fmtUsd(s.cost_30d_usd)}
+                        </div>
+                        {s.cap_usd > 0 && <div className="text-[10px] text-gray-500">{capPct}% cap</div>}
+                      </td>
+                    )}
+                    {showCost && <td className="px-4 py-3 text-right font-mono text-green-300">{s.revenue_30d_vnd > 0 ? fmtVnd(s.revenue_30d_vnd) : '—'}</td>}
                     <td className="px-4 py-3 text-center text-gray-300">{s.members_count}</td>
                     <td className="px-4 py-3">
                       {s.alerts.length === 0 ? <span className="text-green-500 text-xs">✓</span> : (
