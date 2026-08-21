@@ -38,6 +38,7 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading]   = useState(true);
   const [selected, setSelected] = useState<Product | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [images, setImages]     = useState<ProductImage[]>([]);
   const [videos, setVideos]     = useState<ProductVideo[]>([]);
   const [imgLoading, setImgLoading] = useState(false);
@@ -68,6 +69,24 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
     await fetch(`/api/products/${selected.id}/images?imageId=${imageId}`, { method: 'DELETE' });
     setImages(imgs => imgs.filter(im => im.id !== imageId));
     setLightbox(null);
+  }
+
+  /**
+   * FIX HỆ THỐNG (card hoa-lang-thang "Không thể xoá/điều chỉnh Products" — lặp lại sau hôm qua):
+   * Hôm qua add DELETE handler ở /api/products/[id] backend (LIT-FIX-0820N #1). Nhưng
+   * ProductsView.tsx FRONTEND KHÔNG có nút Xoá/Sửa Product — user không có cách bấm →
+   * bug vẫn xảy ra dù API OK. Add nút + modal edit. Áp cho MỌI brand.
+   */
+  async function deleteProduct(p: Product) {
+    if (!confirm(`Xóa VĨNH VIỄN sản phẩm "${p.display_name}" khỏi kho?\n\nHành động này XÓA cả ảnh + video + brief của SP. KHÔNG khôi phục được.`)) return;
+    const r = await fetch(`/api/products/${p.id}${brandId ? `?brand=${encodeURIComponent(brandId)}` : ''}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      alert(`Lỗi xoá: ${d.error || r.statusText}`);
+      return;
+    }
+    setSelected(null);
+    setProducts(prev => prev.filter(x => x.id !== p.id));
   }
 
   // AI phân loại ảnh → gắn ref_role/angle/nhãn để luồng gen tự chọn ảnh ref phù hợp
@@ -325,7 +344,19 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
                     <div className="flex items-center gap-3 mb-2">
                       <span className="w-4 h-4 rounded-full" style={{ backgroundColor: selected.color }} />
                       <h3 className="text-lg font-bold text-white">{selected.display_name}</h3>
-                      <button onClick={() => setSelected(null)} className="ml-auto text-gray-500 hover:text-white">✕</button>
+                      <div className="ml-auto flex items-center gap-2">
+                        <button onClick={() => setEditingProduct(selected)}
+                          className="text-xs px-3 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
+                          title="Sửa thông tin sản phẩm">
+                          ✏ Sửa
+                        </button>
+                        <button onClick={() => deleteProduct(selected)}
+                          className="text-xs px-3 py-1 bg-red-900/40 hover:bg-red-800/60 text-red-300 rounded"
+                          title="Xoá sản phẩm">
+                          🗑 Xoá SP
+                        </button>
+                        <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-white" title="Đóng">✕</button>
+                      </div>
                     </div>
                     <p className="text-sm text-gray-400 mb-1">{selected.theme}</p>
                     <p className="text-xs text-gray-500 mb-2">{selected.pitch}</p>
@@ -496,6 +527,119 @@ export function ProductsView({ brandId = 'loveintea' }: { brandId?: string }) {
           </div>
         </div>
       )}
+
+      {/* MODAL EDIT SẢN PHẨM — FIX HỆ THỐNG card hoa-lang-thang "Không điều chỉnh được thông tin SP" */}
+      {editingProduct && (
+        <EditProductModal
+          product={editingProduct}
+          brandId={brandId}
+          onClose={() => setEditingProduct(null)}
+          onSaved={(updated) => {
+            setEditingProduct(null);
+            setProducts(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+            if (selected?.id === updated.id) setSelected({ ...selected, ...updated });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * EditProductModal — form sửa thông tin SP (tái dùng cùng schema PATCH allowlist backend).
+ * Fields khớp `allowed` trong app/api/products/[id]/route.ts PATCH.
+ */
+function EditProductModal({ product, brandId, onClose, onSaved }: {
+  product: Product;
+  brandId: string;
+  onClose: () => void;
+  onSaved: (p: Partial<Product> & { id: string }) => void;
+}) {
+  const [form, setForm] = useState({
+    display_name: product.display_name || '',
+    theme: product.theme || '',
+    color: product.color || '#888888',
+    color_name: product.color_name || '',
+    pitch: product.pitch || '',
+    ingredients: (() => { try { return JSON.parse(product.ingredients || '[]').join(', '); } catch { return product.ingredients || ''; } })(),
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function save() {
+    setErr(''); setSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        display_name: form.display_name.trim(),
+        theme: form.theme.trim(),
+        color: form.color,
+        color_name: form.color_name.trim(),
+        pitch: form.pitch.trim(),
+        ingredients: form.ingredients.split(',').map((s: string) => s.trim()).filter(Boolean),
+      };
+      const r = await fetch(`/api/products/${product.id}${brandId ? `?brand=${encodeURIComponent(brandId)}` : ''}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Lỗi lưu');
+      onSaved({ id: product.id, ...body, ingredients: JSON.stringify(body.ingredients) } as Partial<Product> & { id: string });
+    } catch (e) { setErr((e as Error).message); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-[110] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-lg w-full space-y-3" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-bold text-white">✏ Sửa sản phẩm</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white">✕</button>
+        </div>
+        <div>
+          <label className="text-[11px] text-gray-500">TÊN HIỂN THỊ</label>
+          <input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label className="text-[11px] text-gray-500">CHỦ ĐỀ / DÒNG SP</label>
+          <input value={form.theme} onChange={e => setForm({ ...form, theme: e.target.value })}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[11px] text-gray-500">MÀU CHỦ ĐẠO</label>
+            <div className="flex gap-2 items-center">
+              <input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })}
+                className="w-10 h-10 rounded" />
+              <input value={form.color} onChange={e => setForm({ ...form, color: e.target.value })}
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white font-mono" />
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] text-gray-500">TÊN MÀU</label>
+            <input value={form.color_name} onChange={e => setForm({ ...form, color_name: e.target.value })}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+          </div>
+        </div>
+        <div>
+          <label className="text-[11px] text-gray-500">PITCH / MÔ TẢ NGẮN</label>
+          <textarea value={form.pitch} onChange={e => setForm({ ...form, pitch: e.target.value })} rows={2}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-none" />
+        </div>
+        <div>
+          <label className="text-[11px] text-gray-500">INGREDIENTS (ngăn bằng dấu phẩy)</label>
+          <textarea value={form.ingredients} onChange={e => setForm({ ...form, ingredients: e.target.value })} rows={2}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-none" />
+        </div>
+        {err && <p className="text-xs text-red-400">{err}</p>}
+        <div className="flex gap-2 pt-2">
+          <button onClick={onClose} className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm py-2.5 rounded-lg">Huỷ</button>
+          <button onClick={save} disabled={saving || !form.display_name.trim()}
+            className="flex-1 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm py-2.5 rounded-lg font-semibold">
+            {saving ? 'Đang lưu…' : '💾 Lưu thay đổi'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

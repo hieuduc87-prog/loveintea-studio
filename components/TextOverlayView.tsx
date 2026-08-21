@@ -8,6 +8,10 @@ const LAYOUTS = [
   { id: 'center-quote',    name: 'Trích dẫn giữa', desc: 'Quote/khẩu hiệu căn giữa. Hợp testimonial.' },
   { id: 'benefit-list',    name: 'Liệt kê lợi ích', desc: 'Tiêu đề + gạch đầu dòng (ngăn bằng dấu |).' },
   { id: 'promo-badge',     name: 'Khuyến mãi',    desc: 'Badge tròn + CTA. Hợp sale/ra mắt.' },
+  // FIX HỆ THỐNG kanban (bổ sung 3 style text mới):
+  { id: 'script-hero',     name: '✒ Script chữ ký', desc: 'Font cursive lớn giữa ảnh. Thủ công, cao cấp.' },
+  { id: 'split-diagonal',  name: '◤ Chia chéo',     desc: 'Tam giác brand che góc + chữ in đậm. Mạnh mẽ.' },
+  { id: 'editorial-caption', name: '📰 Editorial',  desc: 'Line + kicker + serif to. Kiểu tạp chí sang trọng.' },
 ] as const;
 
 type LayoutId = typeof LAYOUTS[number]['id'];
@@ -384,7 +388,16 @@ export function TextOverlayView({ brandId, brandName }: { brandId: string; brand
               <div className="text-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={result} alt="result" className="max-h-[540px] rounded-lg mx-auto" />
-                <div className="flex items-center justify-center gap-4 mt-3">
+                <div className="flex items-center justify-center gap-3 mt-3 flex-wrap">
+                  {/* FIX HỆ THỐNG kanban loveintea "bổ sung sửa text": nút Sửa lại
+                      giữ ảnh nền, cho user chỉnh chữ + bấm Render lại — không phải
+                      nhập lại toàn bộ. Xoá result → user thấy panel input để sửa,
+                      giữ base + headline + sub + cta + badge như cũ. */}
+                  <button onClick={() => setResult('')}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 font-medium"
+                    title="Sửa chữ rồi render lại — giữ ảnh nền và các trường đã nhập">
+                    ✏ Sửa chữ / Render lại
+                  </button>
                   <a href={result} download className="text-xs text-brand-400 hover:underline">⬇ Tải ảnh</a>
                   <button onClick={() => pushToQueue([result], [headline, sub].filter(Boolean).join('\n'))} disabled={pushing}
                     className="text-xs px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white font-medium">

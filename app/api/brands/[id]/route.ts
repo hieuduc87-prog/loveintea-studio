@@ -18,7 +18,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 const DNA_COLUMNS = ['tagline', 'archetype', 'through_line', 'voice_traits', 'compliance_json',
   'hashtags', 'colors_json', 'typography_json', 'target_audience', 'insight', 'behavior', 'brand_rules',
-  'content_language', 'model_look'];
+  'content_language', 'model_look',
+  // Moodboard — ảnh khách upload làm reference tone/mood cho image gen (JSON array).
+  'moodboard_json'];
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

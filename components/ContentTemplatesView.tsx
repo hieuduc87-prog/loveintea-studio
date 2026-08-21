@@ -1203,6 +1203,9 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
   const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
   const [productId, setProductId] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
+  // FIX HỆ THỐNG (card hlt "không điều chỉnh được ratio trong template"):
+  // default theo template.aspect_ratio, user có thể override.
+  const [ratio, setRatio] = useState<string>(tpl.aspect_ratio || '4:5');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [result, setResult] = useState<{ images?: string[]; count?: number } | null>(null);
@@ -1216,7 +1219,7 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
     try {
       const r = await fetch(`/api/content-templates/${tpl.id}/generate`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId: tpl.brand_id, productId: productId || undefined, customPrompt: customPrompt.trim() || undefined }),
+        body: JSON.stringify({ brandId: tpl.brand_id, productId: productId || undefined, customPrompt: customPrompt.trim() || undefined, ratio }),
       });
       const d = await r.json() as { ok?: boolean; jobId?: string; error?: string };
       if (!d.ok || !d.jobId) { setMsg('✗ ' + (d.error ?? 'Lỗi tạo post')); setBusy(false); return; }
@@ -1248,6 +1251,21 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
       <input value={customPrompt} onChange={e => setCustomPrompt(e.target.value)}
         placeholder="Yêu cầu thêm (tùy chọn): vd 'đặt trên bàn gỗ, ánh sáng sáng', 'thêm tách trà'…"
         className="w-full mb-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white" />
+      {/* Ratio selector — mặc định = template.aspect_ratio, user override được */}
+      <div className="flex gap-1.5 mb-2 flex-wrap items-center">
+        <span className="text-[10px] text-gray-500">Tỉ lệ:</span>
+        {[
+          { v: '1:1', label: '□ 1:1 (feed vuông)' },
+          { v: '4:5', label: '▯ 4:5 (feed dọc)' },
+          { v: '9:16', label: '▮ 9:16 (Reel/Story)' },
+          { v: '16:9', label: '▭ 16:9 (landscape)' },
+        ].map(o => (
+          <button key={o.v} type="button" onClick={() => setRatio(o.v)}
+            className={`text-[10px] px-2 py-1 rounded border ${ratio === o.v ? 'bg-brand-600 border-brand-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}>
+            {o.label}
+          </button>
+        ))}
+      </div>
       <div className="flex gap-2">
         <select value={productId} onChange={e => setProductId(e.target.value)}
           className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white">
@@ -1261,14 +1279,33 @@ function GenerateFromTemplate({ tpl, slideCount }: { tpl: Template; slideCount: 
       </div>
       {msg && <p className={`text-xs mt-2 ${msg.startsWith('✓') ? 'text-emerald-400' : msg.startsWith('✗') ? 'text-red-400' : 'text-gray-400'}`}>{msg}</p>}
       {result?.images?.length ? (
-        <div className="flex gap-1.5 mt-2 overflow-x-auto">
-          {result.images.map((u, i) => (
-            <div key={i} className="relative flex-shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`${u}${u.includes('?') ? '&' : '?'}w=300`} alt="" className="w-16 h-20 object-cover rounded-lg border border-gray-700" />
-              {result.images!.length > 1 && <span className="absolute top-0.5 left-0.5 text-[8px] bg-black/70 text-white px-1 rounded-full">{i + 1}</span>}
-            </div>
-          ))}
+        <div className="mt-2 space-y-2">
+          <div className="flex gap-1.5 overflow-x-auto">
+            {result.images.map((u, i) => (
+              <div key={i} className="relative flex-shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`${u}${u.includes('?') ? '&' : '?'}w=300`} alt="" className="w-16 h-20 object-cover rounded-lg border border-gray-700" />
+                {result.images!.length > 1 && <span className="absolute top-0.5 left-0.5 text-[8px] bg-black/70 text-white px-1 rounded-full">{i + 1}</span>}
+              </div>
+            ))}
+          </div>
+          {/* FIX HỆ THỐNG kanban hlt "Ảnh gen từ template không dùng font đã upload":
+              Root cause là gpt-image-2 (engine gen) KHÔNG nhận font file input — nó vẽ text
+              pixel-by-pixel dựa trên prompt. Font brand chỉ áp được cho công cụ "Chữ lên ảnh"
+              (Puppeteer render với @font-face). Workaround minh bạch: 1-click chuyển ảnh vừa gen
+              sang "Chữ lên ảnh" để user overlay text với brand font. */}
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 text-[11px] text-amber-200">
+            <b>💡 Muốn dùng font brand đã upload cho text?</b> Engine tạo ảnh (gpt-image-2) không
+            đọc file font. Chuyển ảnh vừa gen sang <b>&ldquo;Chữ lên ảnh&rdquo;</b> để phủ chữ với
+            font brand đã upload trong Brand DNA.
+            {' '}
+            <button onClick={() => {
+              // Dispatch event để AppShell mở tool text-overlay + truyền URL ảnh
+              try { window.dispatchEvent(new CustomEvent('open-text-overlay', { detail: { url: result.images![0] } })); } catch { /* */ }
+            }} className="ml-1 text-amber-100 hover:text-white underline font-semibold">
+              → Mở &ldquo;Chữ lên ảnh&rdquo; với ảnh này
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

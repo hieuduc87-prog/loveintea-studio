@@ -33,7 +33,9 @@ export interface OverlayFields {
 }
 
 export type OverlayLayout =
-  | 'bottom-headline' | 'top-banner' | 'center-quote' | 'benefit-list' | 'promo-badge';
+  | 'bottom-headline' | 'top-banner' | 'center-quote' | 'benefit-list' | 'promo-badge'
+  // FIX HỆ THỐNG (card loveintea "bổ sung thêm 3 style text khác nhau"):
+  | 'script-hero' | 'split-diagonal' | 'editorial-caption';
 
 export interface LayoutMeta { id: OverlayLayout; name: string; desc: string; }
 
@@ -43,6 +45,9 @@ export const LAYOUTS: LayoutMeta[] = [
   { id: 'center-quote',    name: 'Trích dẫn giữa', desc: 'Câu quote/khẩu hiệu căn giữa trên ảnh làm mờ. Hợp testimonial.' },
   { id: 'benefit-list',    name: 'Liệt kê lợi ích', desc: 'Tiêu đề + 2–3 gạch đầu dòng lợi ích trên panel mờ.' },
   { id: 'promo-badge',     name: 'Khuyến mãi',    desc: 'Badge nổi (MỚI/-20%) + tiêu đề + nút CTA. Hợp sale/ra mắt.' },
+  { id: 'script-hero',     name: 'Script chữ ký', desc: 'Tiêu đề phông chữ nghiêng cursive lớn giữa ảnh + phụ đề nhỏ. Cảm giác thủ công, cao cấp.' },
+  { id: 'split-diagonal',  name: 'Chia chéo',      desc: 'Tam giác màu thương hiệu che góc + tiêu đề in đậm bên trong. Bố cục hiện đại, mạnh.' },
+  { id: 'editorial-caption', name: 'Editorial',   desc: 'Caption phong cách tạp chí: line ngang + subtitle nhỏ + tiêu đề in serif. Sang trọng, đọc nhanh.' },
 ];
 
 const esc = (s = '') => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -113,6 +118,37 @@ export function overlayImageHtml(opts: {
           ${CTA ? `<div class="cta-btn">${CTA} →</div>` : ''}
         </div>`;
       break;
+    case 'script-hero':
+      // Tiêu đề chữ ký nghiêng lớn giữa ảnh + phụ đề nhỏ dưới; scrim mờ nhẹ.
+      block = `
+        <div class="scrim-full-soft"></div>
+        <div class="center">
+          <div class="h script">${H}</div>
+          ${S ? `<div class="s underline-thin">${S}</div>` : ''}
+          ${CTA ? `<div class="cta-pill mt-lg">${CTA}</div>` : ''}
+        </div>`;
+      break;
+    case 'split-diagonal':
+      // Tam giác màu brand che góc trên-trái + tiêu đề in đậm bên trong tam giác.
+      block = `
+        <div class="diag-wedge"></div>
+        <div class="diag-content">
+          <div class="h uppercase bold">${H}</div>
+          ${S ? `<div class="s">${S}</div>` : ''}
+          ${CTA ? `<div class="cta-btn mt-md">${CTA} →</div>` : ''}
+        </div>`;
+      break;
+    case 'editorial-caption':
+      // Phong cách tạp chí: line ngang mảnh + sub cap letters nhỏ + tiêu đề serif to.
+      block = `
+        <div class="scrim-bottom-soft"></div>
+        <div class="editorial">
+          <div class="hairline"></div>
+          ${S ? `<div class="kicker">${S}</div>` : ''}
+          <div class="h serif">${H}</div>
+          ${CTA ? `<div class="cta-arrow">${CTA} →</div>` : ''}
+        </div>`;
+      break;
     case 'bottom-headline':
     default:
       block = `
@@ -178,6 +214,33 @@ export function overlayImageHtml(opts: {
     box-shadow:0 10px 30px rgba(0,0,0,0.4); transform:rotate(8deg); }
   .cta-btn { margin-top:16px; display:inline-block; background:${c.cream}; color:${c.dark}; font-weight:800; font-size:17px;
     padding:14px 26px; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,0.3); }
+
+  /* ── 3 layout mới (FIX HỆ THỐNG kanban loveintea 3-style-mới) ── */
+  /* script-hero — chữ ký nghiêng cursive lớn */
+  .scrim-full-soft { position:absolute; inset:0; background:rgba(0,0,0,0.25); }
+  .script { font-family:'Dancing Script','Segoe Script',cursive; font-style:italic; font-weight:700;
+    font-size:88px; line-height:1.02; letter-spacing:-0.01em; text-shadow:0 4px 24px rgba(0,0,0,0.55); }
+  .underline-thin { display:inline-block; padding-bottom:6px; border-bottom:2px solid ${c.cream}; margin-top:14px; font-size:20px; letter-spacing:0.06em; }
+  .mt-lg { margin-top:32px; }
+  .mt-md { margin-top:18px; }
+
+  /* split-diagonal — tam giác màu brand che góc trên-trái (dùng clip-path polygon) */
+  .diag-wedge { position:absolute; top:0; left:0; width:100%; height:100%;
+    background:${c.primary}; clip-path:polygon(0 0, 78% 0, 0 62%); opacity:0.92; }
+  .diag-content { position:absolute; top:52px; left:52px; max-width:58%; color:#fff; z-index:5; }
+  .diag-content .h { font-size:52px; line-height:1.02; }
+  .diag-content .s { margin-top:14px; font-size:20px; opacity:0.94; }
+  .uppercase { text-transform:uppercase; letter-spacing:0.04em; }
+  .bold { font-weight:900; }
+
+  /* editorial-caption — magazine style */
+  .scrim-bottom-soft { position:absolute; inset:0; background:linear-gradient(180deg, transparent 55%, rgba(0,0,0,0.5) 100%); }
+  .editorial { position:absolute; left:56px; right:56px; bottom:56px; color:#fff; }
+  .hairline { width:60px; height:2px; background:${c.accent}; margin-bottom:16px; }
+  .kicker { font-size:13px; letter-spacing:0.22em; text-transform:uppercase; font-weight:700; opacity:0.85; margin-bottom:10px; }
+  .editorial .serif { font-family:'Georgia','Times New Roman',serif; font-weight:700; font-size:56px; line-height:1.04; letter-spacing:-0.015em; }
+  .cta-arrow { margin-top:22px; font-size:15px; letter-spacing:0.14em; text-transform:uppercase; font-weight:700;
+    border-bottom:2px solid ${c.cream}; display:inline-block; padding-bottom:6px; }
 </style></head>
 <body><div class="stage">
   <img class="bg" src="${opts.imageSrc}" />

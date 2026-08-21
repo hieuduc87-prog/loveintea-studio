@@ -1276,6 +1276,10 @@ function initSchema(db: Database.Database, opts?: { tenant?: boolean }) {
   try { db.exec(`ALTER TABLE brand_dna ADD COLUMN target_audience TEXT DEFAULT ''`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE brand_dna ADD COLUMN insight TEXT DEFAULT ''`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE brand_dna ADD COLUMN behavior TEXT DEFAULT ''`); } catch { /* already exists */ }
+  // FIX HỆ THỐNG (card hoa-lang-thang "moodboard reference tone/mood cho ảnh gen"):
+  // moodboard_json = JSON array [{url, note?}] — ảnh khách upload làm reference tone/mood
+  // cho image generation (feed vào prompt describe mood/palette/lighting).
+  try { db.exec(`ALTER TABLE brand_dna ADD COLUMN moodboard_json TEXT DEFAULT '[]'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE brand_dna ADD COLUMN brand_rules TEXT DEFAULT ''`); } catch { /* already exists */ }
   // Content templates: single vs collection (ordered multi-image)
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN kind TEXT DEFAULT 'single'`); } catch { /* already exists */ }

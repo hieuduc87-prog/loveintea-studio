@@ -46,17 +46,37 @@ export interface TemplateGenResult {
  * Sinh ảnh cho 1 template + (tùy chọn) sản phẩm. Trả images[] theo thứ tự + caption.
  * Throw nếu template không tồn tại / không có ảnh / không sinh được ảnh nào.
  */
+/**
+ * FIX HỆ THỐNG (card hoa-lang-thang "không điều chỉnh được ratio trong template"):
+ * gpt-image-2 support 3 size — 1024x1024 (1:1 square), 1024x1536 (2:3 portrait),
+ * 1536x1024 (3:2 landscape). Trước hardcode 2:3 → user không đổi được.
+ * Map ratio "friendly" (khách quen) → size thực gpt-image-2 nhận.
+ */
+export type ImageRatio = '1:1' | '4:5' | '9:16' | '16:9' | '3:2';
+export function ratioToGptSize(r?: ImageRatio | string): '1024x1024' | '1024x1536' | '1536x1024' {
+  switch (r) {
+    case '1:1':   return '1024x1024';                     // square (feed)
+    case '4:5':                                            // 4:5 = 1080x1350 → gần nhất gpt-image-2 hỗ trợ = 2:3 portrait
+    case '9:16':  return '1024x1536';                      // portrait (Reel/Story)
+    case '16:9':
+    case '3:2':   return '1536x1024';                      // landscape
+    default:      return '1024x1536';                      // mặc định portrait (2:3 = post FB tối ưu)
+  }
+}
+
 export async function generateTemplateImages(opts: {
   templateId: string;
   productId?: string;
   brandId?: string;
   withCaption?: boolean;           // true = sinh caption bám structure (mặc định true)
   customPrompt?: string;           // yêu cầu thêm của người dùng (làm rõ scene/đạo cụ...)
+  ratio?: ImageRatio | string;     // 1:1 / 4:5 / 9:16 / 16:9 / 3:2 (default 2:3 portrait)
   onLog?: (msg: string) => void;
   onProgress?: (pct: number) => void;
 }): Promise<TemplateGenResult> {
   const { templateId, productId, customPrompt, onLog, onProgress } = opts;
   const bid = opts.brandId || '';
+  const gptSize = ratioToGptSize(opts.ratio);
   const db = getDb();
 
   const tpl = db.prepare('SELECT name, image_url, slides_json, analysis, tags, color_palette FROM content_templates WHERE id=?')
@@ -277,11 +297,11 @@ export async function generateTemplateImages(opts: {
           styleBits && !userSetsColor ? `Aesthetic: ${styleBits}.` : '',
           customPrompt ? `USER INSTRUCTION — HIGHEST PRIORITY: ${customPrompt}.` : '',
         ].filter(Boolean).join(' ');
-        raw = await editWithProductLock({ productImagePath: productImg, prompt: scene, size: '1024x1536', brandId: opts.brandId });
+        raw = await editWithProductLock({ productImagePath: productImg, prompt: scene, size: gptSize, brandId: opts.brandId });
       } else {
         raw = base
-          ? await editProductImage({ productImagePath: base, prompt, size: '1024x1536', brandId: opts.brandId, extraImagePaths })
-          : await generateImage({ prompt, size: '1024x1536', brandId: opts.brandId });
+          ? await editProductImage({ productImagePath: base, prompt, size: gptSize, brandId: opts.brandId, extraImagePaths })
+          : await generateImage({ prompt, size: gptSize, brandId: opts.brandId });
       }
 
       // GATE TRUNG THỰC SẢN PHẨM (founder 30/07): slide có sản phẩm → máy tự so
@@ -297,7 +317,7 @@ export async function generateTemplateImages(opts: {
           if (v.checked && !v.ok) {
             onLog?.(`slide ${i + 1}: QA sản phẩm FAIL (${v.textMismatch ? `chữ "${v.generatedText}" ≠ "${v.expectedText}"` : ''}${v.inventedPackaging ? ' bịa bao bì' : ''}) — gen lại…`);
             const raw2 = base
-              ? await editProductImage({ productImagePath: base, prompt: `${prompt} ${fidelityRetryClause(v)}`, size: '1024x1536', brandId: opts.brandId, extraImagePaths })
+              ? await editProductImage({ productImagePath: base, prompt: `${prompt} ${fidelityRetryClause(v)}`, size: gptSize, brandId: opts.brandId, extraImagePaths })
               : raw;
             if (raw2.startsWith('data:')) {
               const v2 = await verifyProductFidelity(refBuf, Buffer.from(raw2.slice(raw2.indexOf(',') + 1), 'base64'), { refHasPackaging: productHasBox });

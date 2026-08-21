@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { KnowledgeHubView } from './KnowledgeHubView';
 import { RulesEngineView } from './RulesEngineView';
 import { KnowledgeMindmapView } from './KnowledgeMindmapView';
@@ -321,6 +321,9 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
       {/* Font chữ thương hiệu — dùng khi render "Chữ lên ảnh" (card ce0d8091) */}
       <BrandFontsSection brandId={bid} />
 
+      {/* Moodboard — FIX HỆ THỐNG kanban hoa-lang-thang "reference tone/mood" */}
+      <MoodboardSection brandId={bid} />
+
       {/* Voice Traits */}
       {voiceTraits.length > 0 && (
         <Section title="Voice Traits (NON-NEGOTIABLE)">
@@ -580,6 +583,93 @@ function BrandFontsSection({ brandId }: { brandId: string }) {
           ))}
         </div>
         {msg && <p className={`text-xs mt-3 ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</p>}
+      </Card>
+    </Section>
+  );
+}
+
+/** Moodboard section — upload ảnh reference tone/mood cho image gen (FIX HỆ THỐNG hlt). */
+function MoodboardSection({ brandId }: { brandId: string }) {
+  const [items, setItems] = useState<Array<{ url: string; addedAt?: string }>>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/brands/${brandId}/moodboard`);
+      const d = await r.json();
+      setItems(d.moodboard ?? []);
+    } catch { /* ignore */ }
+  }, [brandId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function upload(files: FileList | null) {
+    if (!files || !files.length) return;
+    setBusy(true); setMsg('⟳ Đang tải…');
+    try {
+      const fd = new FormData();
+      Array.from(files).forEach(f => fd.append('files', f));
+      const r = await fetch(`/api/brands/${brandId}/moodboard`, { method: 'POST', body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Lỗi upload');
+      setItems(d.moodboard ?? []);
+      setMsg(`✓ Đã thêm ${files.length} ảnh moodboard`);
+    } catch (e) { setMsg('✗ ' + (e as Error).message); }
+    finally { setBusy(false); setTimeout(() => setMsg(''), 4000); }
+  }
+
+  async function removeItem(url: string) {
+    if (!confirm('Xoá ảnh này khỏi moodboard?')) return;
+    try {
+      const r = await fetch(`/api/brands/${brandId}/moodboard`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const d = await r.json();
+      if (r.ok) setItems(d.moodboard ?? []);
+    } catch { /* ignore */ }
+  }
+
+  return (
+    <Section title="🎨 Moodboard — ảnh tham chiếu tone / mood">
+      <Card>
+        <p className="text-xs text-gray-400 mb-3">
+          Upload các ảnh mà bạn <b>muốn ảnh AI của bạn nhìn giống như thế</b> — tone màu, ánh sáng, không khí,
+          cách bố cục. Có thể tải lên nhiều ảnh (tối đa 24), AI sẽ dùng chúng làm reference tone/mood khi gen ảnh sản phẩm.
+        </p>
+
+        <div className="flex items-center gap-3 mb-4">
+          <button onClick={() => fileRef.current?.click()} disabled={busy}
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm rounded-lg font-semibold">
+            {busy ? '⟳ Đang tải…' : '⬆ Upload ảnh moodboard'}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
+            onChange={e => { upload(e.target.files); if (e.target) e.target.value = ''; }} />
+          <span className="text-xs text-gray-500">{items.length}/24 ảnh</span>
+        </div>
+
+        {msg && <p className={`text-xs mb-3 ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</p>}
+
+        {items.length > 0 ? (
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {items.map(it => (
+              <div key={it.url} className="relative group aspect-square bg-gray-800 rounded-lg overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`${it.url}?w=400`} alt="moodboard" className="w-full h-full object-cover" />
+                <button onClick={() => removeItem(it.url)}
+                  className="absolute top-1 right-1 bg-red-600/80 hover:bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition">
+                  🗑
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center text-xs text-gray-500 py-8 border-2 border-dashed border-gray-800 rounded-lg">
+            Chưa có ảnh moodboard nào. Tải ảnh lên để AI tham chiếu tone/mood khi gen ảnh sản phẩm.
+          </div>
+        )}
       </Card>
     </Section>
   );

@@ -17,7 +17,7 @@ import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   getBrandId(req); // P3: vào ngữ cảnh brand TRƯỚC mọi query — route query-rồi-assert đọc nhầm DB global rỗng → 404 oan (card 52672e19)
   const { id } = params;
-  const { productId, customPrompt } = await req.json().catch(() => ({})) as { productId?: string; customPrompt?: string };
+  const { productId, customPrompt, ratio } = await req.json().catch(() => ({})) as { productId?: string; customPrompt?: string; ratio?: string };
   const db = getDb();
   // The brand is the TEMPLATE's brand — never body.brandId. Verify membership.
   const tpl = db.prepare('SELECT name, brand_id, analysis, slides_json FROM content_templates WHERE id=?').get(id) as { name?: string; brand_id: string; analysis?: string; slides_json?: string } | undefined;
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   void (async () => {
     try {
       const { images, caption, hashtags, warnings } = await generateTemplateImages({
-        templateId: id, productId, brandId: bid, customPrompt,
+        templateId: id, productId, brandId: bid, customPrompt, ratio,
         onLog: m => logJob(jobId, m), onProgress: p => progressJob(jobId, p),
       });
       const fullCaption = caption + (hashtags ? `\n\n${hashtags}` : '');
