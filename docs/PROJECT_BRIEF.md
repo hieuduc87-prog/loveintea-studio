@@ -76,6 +76,8 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 
 
 
+
+- [session 2026-08-21] 3 commit — docs(brief) · fix(kanban-hlt+lit-6)
 - [session 2026-08-21b] `46aa3cb` (docs + fixResult rewrite, LIVE prod) **[LIT-DOC-0821B]**: User lệnh "mỗi lần fix gì đều ghi chú THÂN THIỆN để nhân viên đọc hiểu, cái nào fix được cái nào không giải pháp sao, push git lưu memory cập nhật know-how". **Ship**: (1) Rewrite 11 kanban fixResult format chuẩn `✅/⚠️/❌ Trạng thái` → `🔍 Vấn đề` (đời thường) → `🎯 Cách dùng` (click ở đâu trong app) → `⚠️ Lưu ý` / `📚 Vì sao partial` — nhân viên hiểu ngay không cần biết code. Phân biệt 3 mức fix rõ ràng. (2) New topic file [memory/saas-know-how-aug-2026.md] — 15 luật hệ thống tổng hợp 22+ fix Aug 20-21 (Gemini alias, gpt-image-2 hard limit, PDF parser async, Backend↔Frontend luật số 1, panel history load API, DB ALTER + allowlist, Docker buildx --load, rate-limit SHA1, multi-tenant global vs per-brand, kanban fixResult format, USP, FB OAuth, paywall, auto-fix TẮT, session workflow). (3) Compact MEMORY.md 20.8KB→12.2KB (thu gọn Jul 31 5 sub-sessions thành 1 pointer, chuyển detail sang topic file). **Bài học**: kanban fixResult toàn jargon technical trước đây → nhân viên đọc không hiểu, gọi hỏi lại founder. Format thân thiện giảm câu hỏi lặp ~30-50%. Know-how tách file khi >10 luật để không phình MEMORY. CHRONICLE #41.
 - [session 2026-08-21a] 2 commit — docs(brief) · fix(kanban-hlt+lit-6)
 - [session 2026-08-20] 24 commit — docs(brief) · fix(deps) · fix(build) · fix(kanban-hlt-5) · feat(paywall-plans-v1) · feat(fb-connect-2ways) · feat(onboard) · feat(onboard-progress) · feat(welcome-full)
@@ -87,5 +89,3 @@ Domain: **`<slug>.easycreativehub.com` = domain riêng TỪNG STORE** (middlewar
 - [session 2026-08-19a] `6d59b22` fix(gemini) → aliases -latest + Lite primary tiết kiệm chi phí [LIT-FIX-0819]
 - [session 2026-08-12] `de478f5` FIX GỐC P3: getDb() proxy bind lúc EXECUTE thay vì .prepare [LIT-FIX-0812A] — diệt lớp INSERT-mồ-côi-global
 - [session 2026-08-10] 6 commit — hotfix DB binding + backup 3-2-1 + audit bảo mật 6 CRITICAL + 8 HIGH vá+verify-live
-- [session 2026-07-30] 14 commit — fix(o3-engine) · fix(product-ref) · fix(template-gen) · fix(types) · perf(cost) · docs(brief) · feat(domain)
-- [session 2026-07-30b] fix(o3-engine) L4: gỡ HẾT danh tính LoveinTea viết cứng trong caption/image/brief prompt — brand name+voice+compliance+hashtags+palette bơm từ brands/brand_dna, sản phẩm resolve DB-first theo brand_id; ma trận O3 tĩnh (SEGMENTS/RTBS/USP/NARRATIVES hook + bev lock + tag trắng) gate riêng loveintea, brand khác thay bằng dữ liệu sản phẩm; route generate lấy brand từ getBrandId, route image nhận sản phẩm DB (hết 400 Invalid SKU cho brand khác). Test tsx 12/12: gossby (mũ chó) ra đúng nội dung pet-gift, loveintea giữ nguyên bev lock/tag/palette [LIT-FIX-0730G]

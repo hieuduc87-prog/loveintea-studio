@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { getDb } from '@/lib/db';
+import { runWithBrand } from '@/lib/tenant-context';
 import { overlayImageHtml, DEFAULT_COLORS, OverlayColors, OverlayLayout, OverlayFields, OverlayFonts } from '@/lib/text-overlay';
 
 // Server-only render helper cho "Chữ lên ảnh" — dùng chung giữa route render tay
@@ -61,25 +62,39 @@ export function brandColors(brandId: string): OverlayColors {
   } catch { return DEFAULT_COLORS; }
 }
 
-/** Font brand đã upload (card ce0d8091) → data: URI cho @font-face trong Puppeteer. */
+/**
+ * Font brand đã upload (card ce0d8091) → data: URI cho @font-face trong Puppeteer.
+ *
+ * FIX HỆ THỐNG (card 0a13845f hoa-lang-thang "Chữ trên ảnh không dùng font đã tải lên"):
+ * `brand_fonts` là PER-TENANT (nằm trong data/tenants/<brand>/studio.db, không phải
+ * global). Nếu `brandFonts()` chạy khi request context KHÔNG có brand → getDb() trả
+ * global DB → query brand_fonts trên global rỗng → fonts empty → render dùng font
+ * mặc định. Xảy ra khi route handler chạy trong microtask/lambda mất context AsyncLocalStorage.
+ * Fix: bọc `runWithBrand(brandId, …)` để ép resolve tenant DB đúng brand, KHÔNG phụ thuộc
+ * context caller. Áp cho MỌI brand.
+ */
 export function brandFonts(brandId: string): OverlayFonts {
   const FORMAT: Record<string, string> = { ttf: 'truetype', otf: 'opentype', woff: 'woff', woff2: 'woff2' };
   const fonts: OverlayFonts = {};
+  if (!brandId) return fonts;
   try {
-    const rows = getDb().prepare('SELECT role, filename FROM brand_fonts WHERE brand_id=?')
-      .all(brandId) as Array<{ role: string; filename: string }>;
-    for (const r of rows) {
-      const fp = path.join(DATA_DIR, 'fonts', brandId.replace(/[^a-z0-9_-]/gi, ''), r.filename);
-      if (!fs.existsSync(fp)) continue;
-      const ext = path.extname(fp).slice(1).toLowerCase();
-      const format = FORMAT[ext];
-      if (!format) continue;
-      const dataUri = `data:font/${ext};base64,${fs.readFileSync(fp).toString('base64')}`;
-      if (r.role === 'headline') fonts.headline = { dataUri, format };
-      if (r.role === 'sub') fonts.sub = { dataUri, format };
-    }
-  } catch { /* fonts best-effort — thiếu bảng/file thì dùng font mặc định */ }
-  return fonts;
+    return runWithBrand(brandId, () => {
+      const rows = getDb().prepare('SELECT role, filename FROM brand_fonts WHERE brand_id=?')
+        .all(brandId) as Array<{ role: string; filename: string }>;
+      const out: OverlayFonts = {};
+      for (const r of rows) {
+        const fp = path.join(DATA_DIR, 'fonts', brandId.replace(/[^a-z0-9_-]/gi, ''), r.filename);
+        if (!fs.existsSync(fp)) continue;
+        const ext = path.extname(fp).slice(1).toLowerCase();
+        const format = FORMAT[ext];
+        if (!format) continue;
+        const dataUri = `data:font/${ext};base64,${fs.readFileSync(fp).toString('base64')}`;
+        if (r.role === 'headline') out.headline = { dataUri, format };
+        if (r.role === 'sub') out.sub = { dataUri, format };
+      }
+      return out;
+    });
+  } catch { return fonts; /* fonts best-effort — thiếu bảng/file thì dùng font mặc định */ }
 }
 
 async function renderHtmlToPng(html: string): Promise<Buffer> {

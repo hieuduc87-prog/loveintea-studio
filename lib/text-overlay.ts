@@ -39,6 +39,17 @@ export type OverlayLayout =
 
 export interface LayoutMeta { id: OverlayLayout; name: string; desc: string; }
 
+/**
+ * FIX HỆ THỐNG: single source of truth cho danh sách layout hợp lệ.
+ * Trước đây 3 route (carousel/suggest/references) HARDCODE mảng string 5 layout cũ.
+ * Thêm layout mới ở đây quên update 3 route = layout mới silent fall back về default,
+ * user chọn "Chia chéo" ra "Headline đáy" mà không biết vì sao. Từ nay chỉ 1 nguồn.
+ */
+export const LAYOUT_IDS: readonly OverlayLayout[] = [
+  'bottom-headline', 'top-banner', 'center-quote', 'benefit-list', 'promo-badge',
+  'script-hero', 'split-diagonal', 'editorial-caption',
+];
+
 export const LAYOUTS: LayoutMeta[] = [
   { id: 'bottom-headline', name: 'Headline đáy', desc: 'Tiêu đề lớn + phụ đề ở đáy, nền tối gradient. Kiểu phổ biến nhất.' },
   { id: 'top-banner',      name: 'Banner đỉnh',  desc: 'Dải màu thương hiệu ở đỉnh mang tiêu đề, ảnh lộ bên dưới.' },

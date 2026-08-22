@@ -12,7 +12,8 @@ import { getBrandId, assertResourceBrand } from '@/lib/brand-guard';
  * POST (multipart: file, layout, note?) -> upload ảnh mẫu, lưu vào data/images
  * DELETE ?id=    -> xoá 1 reference (chỉ trong brand mình)
  */
-const LAYOUTS = ['bottom-headline', 'top-banner', 'center-quote', 'benefit-list', 'promo-badge'];
+import { LAYOUT_IDS } from '@/lib/text-overlay';
+const LAYOUTS = LAYOUT_IDS;
 
 export async function GET(req: NextRequest) {
   const brandId = getBrandId(req);
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   let sql = 'SELECT * FROM overlay_references WHERE brand_id=?';
   const params: string[] = [brandId];
-  if (layout && LAYOUTS.includes(layout)) { sql += ' AND layout=?'; params.push(layout); }
+  if (layout && (LAYOUTS as readonly string[]).includes(layout)) { sql += ' AND layout=?'; params.push(layout); }
   sql += ' ORDER BY created_at DESC LIMIT 100';
   return NextResponse.json({ references: db.prepare(sql).all(...params) });
 }
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
     const note = String(fd.get('note') || '');
     if (!file) return NextResponse.json({ error: 'Thiếu file ảnh' }, { status: 400 });
     if (!file.type.startsWith('image/')) return NextResponse.json({ error: 'File phải là ảnh' }, { status: 400 });
-    if (!LAYOUTS.includes(layout)) return NextResponse.json({ error: 'Layout không hợp lệ' }, { status: 400 });
+    if (!(LAYOUTS as readonly string[]).includes(layout)) return NextResponse.json({ error: 'Layout không hợp lệ' }, { status: 400 });
 
     const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
     const imagesDir = path.join(dataDir, 'images');

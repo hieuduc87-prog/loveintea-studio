@@ -272,9 +272,12 @@ export async function generateTemplateImages(opts: {
       customPrompt ? `USER INSTRUCTION — HIGHEST PRIORITY, overrides the layout reference above (including its colours and any product it mentions): ${customPrompt}.` : '',
       // Tỉ lệ THỰC TẾ: mọi vật thể/nguyên liệu tự nhiên, không phóng to bất thường.
       `Keep realistic real-world proportions and believable scale between all objects (ingredients, cups, hands, props${showProduct && productHasBox ? ', and the product box' : ''}); nothing oversized, floating, giant or shrunken.${sizeHint && showProduct ? ` Real product size ≈ ${sizeHint} — respect this physical scale.` : ''}`,
+      // FIX HỆ THỐNG (card 25fa0c19 "chữ bị cắt ngang khi gen theo template"):
+      // Cấm text mạnh hơn ("STRICTLY NO text...") + safe margin để nếu gpt-image-2 vẫn vẽ
+      // text (từ layout ref ép buộc) thì cũng nằm trong khung, không tràn ra biên.
       showProduct
-        ? 'Photorealistic, premium, on-brand. Do NOT add any extra overlay text, captions, headings, watermarks or new logos beyond what is already printed on the product packaging. The ONLY brand name allowed anywhere in the image is the one printed on the reference product — never invent or borrow another brand name.'
-        : 'Photorealistic, premium, on-brand. NO product packaging, NO box, NO sachet, NO added text, NO letters, NO logos in the image (if any text is unavoidable, ENGLISH only — never Vietnamese).',
+        ? 'Photorealistic, premium, on-brand. STRICTLY NO added overlay text, captions, headings, watermarks, subtitles, badges, price tags, or new logos beyond what is ALREADY printed on the product packaging in the reference photo. The ONLY brand name allowed anywhere in the image is the one printed on the reference product — never invent or borrow another brand name. If ANY text must appear, keep it INSIDE a 12% safe margin from every edge (never touching or extending past frame borders), single line, maximum 5 words.'
+        : 'Photorealistic, premium, on-brand. NO product packaging, NO box, NO sachet, NO added text, NO letters, NO numbers, NO logos anywhere in the image. If any text is unavoidable, ENGLISH only (never Vietnamese), maximum 3 words, single line, centered with 12% safe margin from every edge (never clipping frame).',
     ].filter(Boolean).join(' ');
 
     try {
@@ -336,7 +339,7 @@ export async function generateTemplateImages(opts: {
         } catch { /* gate không bao giờ chặn việc thật */ }
       }
 
-      const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
+      const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`, opts.ratio) : raw;
       if (url) images.push(url);
       onLog?.(`slide ${i + 1}/${slideUrls.length} ✓`);
     } catch (e) {

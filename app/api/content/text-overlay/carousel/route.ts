@@ -15,7 +15,8 @@ import { enforceRateLimit } from '@/lib/rate-limit';
  * ảnh 2..n mỗi ảnh 1 ý theo mạch), rồi render từng ảnh với cùng 1 layout.
  * body: { imageUrls: string[], topic?, productId?, layout?, brandName? }
  */
-const LAYOUTS = ['bottom-headline', 'top-banner', 'center-quote', 'benefit-list', 'promo-badge'];
+import { LAYOUT_IDS } from '@/lib/text-overlay';
+const LAYOUTS = LAYOUT_IDS;
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,13 +36,17 @@ export async function POST(req: NextRequest) {
     const n = imageUrls.length;
 
     // Layout do NGƯỜI DÙNG chọn quyết định (card cafd98b7) — KHÔNG để AI đổi.
-    const layout = (body.layout && LAYOUTS.includes(body.layout) ? body.layout : 'bottom-headline') as OverlayLayout;
+    const layout = (body.layout && (LAYOUTS as readonly string[]).includes(body.layout) ? body.layout : 'bottom-headline') as OverlayLayout;
     const LAYOUT_DESC: Record<string, string> = {
       'bottom-headline': 'tiêu đề lớn ở đáy + phụ đề',
       'top-banner': 'banner màu ở đỉnh, headline + phụ đề, có thể có CTA',
       'center-quote': 'TRÍCH DẪN căn giữa như 1 câu quote — headline là câu quote ngắn, sub là nguồn/tên người nói (có thể rỗng), KHÔNG cta/badge',
       'benefit-list': 'liệt kê lợi ích — headline là tiêu đề, sub là 2-3 lợi ích NGĂN BẰNG DẤU | , có thể có cta',
       'promo-badge': 'khuyến mãi — headline + sub + cta + badge tròn (vd "MỚI","-20%")',
+      // 3 layout mới (LIT-FIX-0822A):
+      'script-hero': 'chữ ký cursive lớn giữa ảnh — headline NGẮN & ẤN TƯỢNG (2-4 từ, kiểu khẩu hiệu thủ công), sub là 1 câu ngắn cảm xúc, cta rỗng hoặc pill nhỏ',
+      'split-diagonal': 'tam giác màu brand che góc trên-trái, chữ IN HOA đậm bên trong tam giác — headline mạnh, ngắn (3-5 từ), sub 1 câu, cta là hành động mạnh',
+      'editorial-caption': 'phong cách tạp chí góc trái dưới — kicker (sub) chữ nhỏ UPPERCASE letterspacing rộng làm nhãn (vd "GUIDE","STORY","TIP"), headline SERIF to xuống dưới, cta mũi tên gạch chân',
     };
 
     const prompt = `Bạn là art director. Viết BỘ CHỮ NỐI TIẾP cho carousel ${n} ảnh (chữ sẽ được PHỦ LÊN từng ảnh — không phải caption dài). Nội dung ${n} slide phải là MỘT MẠCH liền: slide 1 = tiêu đề/hook của cả carousel, các slide sau mỗi slide 1 ý triển khai (vd công dụng 1, công dụng 2, ...), slide cuối có thể chốt CTA.

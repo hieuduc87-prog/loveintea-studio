@@ -321,22 +321,14 @@ export function BrandDnaView({ brandId }: { brandId?: string } = {}) {
       {/* Font chữ thương hiệu — dùng khi render "Chữ lên ảnh" (card ce0d8091) */}
       <BrandFontsSection brandId={bid} />
 
+      {/* Color Palette — FIX HỆ THỐNG kanban hlt 2cb5c1f7 "thiếu update color palette" */}
+      <ColorPaletteSection brandId={bid} colorsJson={dna?.colors_json || '{}'} onSaved={reload} />
+
       {/* Moodboard — FIX HỆ THỐNG kanban hoa-lang-thang "reference tone/mood" */}
       <MoodboardSection brandId={bid} />
 
-      {/* Voice Traits */}
-      {voiceTraits.length > 0 && (
-        <Section title="Voice Traits (NON-NEGOTIABLE)">
-          <div className="grid grid-cols-3 gap-3">
-            {voiceTraits.map((t, i) => (
-              <Card key={i}>
-                <p className="text-sm text-white font-medium">{t.split(' — ')[0]}</p>
-                <p className="text-xs text-gray-400 mt-1">{t.split(' — ')[1] || ''}</p>
-              </Card>
-            ))}
-          </div>
-        </Section>
-      )}
+      {/* Voice Traits — FIX HỆ THỐNG kanban hlt 0c0ae8b2 "chỉnh Voice Traits": trước read-only */}
+      <VoiceTraitsSection brandId={bid} traits={voiceTraits} onSaved={reload} />
 
       {/* Audience & Strategy — editable, feeds every AI prompt */}
       <Section title="Đối tượng & Chiến lược (đưa vào mọi prompt AI)">
@@ -670,6 +662,171 @@ function MoodboardSection({ brandId }: { brandId: string }) {
             Chưa có ảnh moodboard nào. Tải ảnh lên để AI tham chiếu tone/mood khi gen ảnh sản phẩm.
           </div>
         )}
+      </Card>
+    </Section>
+  );
+}
+
+/** Voice Traits editor — FIX HỆ THỐNG kanban hlt 0c0ae8b2 (trước read-only, chỉ AI extract). */
+function VoiceTraitsSection({ brandId, traits, onSaved }: {
+  brandId: string; traits: string[]; onSaved: () => void | Promise<void>;
+}) {
+  const [items, setItems] = useState<string[]>(traits);
+  const [newItem, setNewItem] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => { setItems(traits); }, [traits]);
+
+  async function save(next: string[]) {
+    setSaving(true); setMsg('');
+    try {
+      const r = await fetch(`/api/brands/${brandId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dna: { voice_traits: next } }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Lỗi lưu');
+      setMsg('✓ Đã lưu');
+      setTimeout(() => setMsg(''), 2000);
+      await onSaved();
+    } catch (e) { setMsg('✗ ' + (e as Error).message); }
+    finally { setSaving(false); }
+  }
+
+  function add() {
+    const v = newItem.trim();
+    if (!v) return;
+    const next = [...items, v];
+    setItems(next);
+    setNewItem('');
+    save(next);
+  }
+
+  function removeAt(i: number) {
+    const next = items.filter((_, idx) => idx !== i);
+    setItems(next);
+    save(next);
+  }
+
+  function editAt(i: number, v: string) {
+    const next = items.map((x, idx) => idx === i ? v : x);
+    setItems(next);
+  }
+
+  return (
+    <Section title="🎙 Voice Traits — Tính cách giọng nói (chỉnh trực tiếp)">
+      <Card>
+        <p className="text-xs text-gray-400 mb-3">
+          Các tính từ mô tả giọng nói brand (vd &ldquo;ấm áp — như người bạn thân&rdquo;). AI dùng để viết caption đúng chất.
+          Format: <code className="bg-gray-800 px-1">tên trait — mô tả</code>. Bấm 🗑 để xoá.
+        </p>
+        <div className="space-y-2 mb-3">
+          {items.map((t, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input value={t} onChange={e => editAt(i, e.target.value)} onBlur={() => save(items)}
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+              <button onClick={() => removeAt(i)} disabled={saving}
+                className="text-xs px-2 py-2 bg-red-900/40 hover:bg-red-800/60 text-red-300 rounded">🗑</button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input value={newItem} onChange={e => setNewItem(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            placeholder="vd: chân thật — không hô khẩu hiệu"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+          <button onClick={add} disabled={saving || !newItem.trim()}
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm rounded-lg font-semibold">
+            + Thêm
+          </button>
+        </div>
+        {msg && <p className={`text-xs mt-2 ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</p>}
+      </Card>
+    </Section>
+  );
+}
+
+/** Color Palette editor — FIX HỆ THỐNG kanban hlt 2cb5c1f7 (thiếu UI update color palette). */
+function ColorPaletteSection({ brandId, colorsJson, onSaved }: {
+  brandId: string; colorsJson: string; onSaved: () => void | Promise<void>;
+}) {
+  interface Palette { primary?: string; accent?: string; cream?: string; dark?: string }
+  const initial: Palette = (() => { try { return JSON.parse(colorsJson || '{}'); } catch { return {}; } })();
+  const [colors, setColors] = useState<Palette>({
+    primary: initial.primary || '#1A5632',
+    accent: initial.accent || '#E04854',
+    cream: initial.cream || '#FFF8F0',
+    dark: initial.dark || '#2D2D2D',
+  });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    try {
+      const p = JSON.parse(colorsJson || '{}');
+      setColors({
+        primary: p.primary || '#1A5632',
+        accent: p.accent || '#E04854',
+        cream: p.cream || '#FFF8F0',
+        dark: p.dark || '#2D2D2D',
+      });
+    } catch { /* keep */ }
+  }, [colorsJson]);
+
+  async function save() {
+    setSaving(true); setMsg('');
+    try {
+      const r = await fetch(`/api/brands/${brandId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dna: { colors_json: colors } }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Lỗi lưu');
+      setMsg('✓ Đã lưu — áp dụng ngay cho mọi nơi dùng màu brand');
+      setTimeout(() => setMsg(''), 3000);
+      await onSaved();
+    } catch (e) { setMsg('✗ ' + (e as Error).message); }
+    finally { setSaving(false); }
+  }
+
+  const roles: Array<[keyof Palette, string, string]> = [
+    ['primary', 'Chính (Primary)', 'Màu chủ đạo — hero button, background badge, đường viền quan trọng'],
+    ['accent', 'Nhấn (Accent)', 'Màu phụ để tạo tương phản — badge tròn khuyến mãi, CTA phụ'],
+    ['cream', 'Nền sáng (Cream)', 'Màu chữ sáng trên nền tối / background nhẹ / pill CTA'],
+    ['dark', 'Chữ tối (Dark)', 'Màu chữ chính trên nền sáng / footer / khối tối'],
+  ];
+
+  return (
+    <Section title="🎨 Color Palette — Bảng màu thương hiệu">
+      <Card>
+        <p className="text-xs text-gray-400 mb-4">
+          Bảng 4 màu dùng khắp app: text overlay, badge, CTA, end-card video. Đổi ở đây → mọi ảnh gen sau đều theo màu mới.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {roles.map(([key, label, desc]) => (
+            <div key={key} className="bg-gray-800 border border-gray-700 rounded-lg p-3">
+              <div className="flex items-center gap-3 mb-1">
+                <input type="color" value={colors[key] || '#000000'}
+                  onChange={e => setColors({ ...colors, [key]: e.target.value })}
+                  className="w-12 h-12 rounded cursor-pointer" />
+                <div className="flex-1">
+                  <div className="text-sm text-white font-semibold">{label}</div>
+                  <input value={colors[key] || ''} onChange={e => setColors({ ...colors, [key]: e.target.value })}
+                    className="w-full mt-1 bg-gray-950 border border-gray-700 rounded px-2 py-1 text-xs text-white font-mono" />
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-500 mt-2">{desc}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <button onClick={save} disabled={saving}
+            className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm rounded-lg font-semibold">
+            {saving ? '⟳ Đang lưu…' : '💾 Lưu palette'}
+          </button>
+          {msg && <span className={`text-xs ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</span>}
+        </div>
       </Card>
     </Section>
   );

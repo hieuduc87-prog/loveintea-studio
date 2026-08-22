@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { SKUS, SEGMENTS, RTBS, USP_ANCHORS, NARRATIVES, CONTEXTS, CTA_OPTIONS, FORMATS } from '@/lib/brand-dna';
 import { useBrandProducts } from './useBrandProducts';
@@ -91,7 +91,26 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
   const products = useBrandProducts(brandId);
   // Admin trên app. domain: brand phải đi kèm query — host không pin brand ở đó.
   const bq = brandId ? `?brand=${encodeURIComponent(brandId)}` : '';
-  const ctaOptions = isLit ? [...CTA_OPTIONS] : CTA_OPTIONS.filter(c => !/LoveinTea|#TimelessRemedies/i.test(c));
+  /**
+   * FIX HỆ THỐNG (card 68d98897 hoa-lang-thang "Không xoá/sửa CTA Content Workshop"):
+   * CTA_OPTIONS trong lib/brand-dna.ts là hardcode, brand khác không sửa được. Thêm
+   * lớp CTA CUSTOM per-brand (localStorage) — user thêm/xoá tuỳ ý, hiện trong picker
+   * cạnh CTA mặc định. Persist offline không cần DB migration. Áp cho MỌI brand.
+   */
+  const [customCtas, setCustomCtas] = useState<string[]>([]);
+  const [newCta, setNewCta] = useState('');
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`ech.customCta.${brandId || 'default'}`);
+      if (raw) setCustomCtas(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, [brandId]);
+  function saveCustomCtas(next: string[]) {
+    setCustomCtas(next);
+    try { localStorage.setItem(`ech.customCta.${brandId || 'default'}`, JSON.stringify(next)); } catch { /* ignore */ }
+  }
+  const defaultCtas = isLit ? [...CTA_OPTIONS] : CTA_OPTIONS.filter(c => !/LoveinTea|#TimelessRemedies/i.test(c));
+  const ctaOptions = [...defaultCtas, ...customCtas];
   const selectedSku = isLit ? SKUS.find(s => s.id === config.skuId) : undefined;
 
   // SKU-aware variable filtering
@@ -475,6 +494,28 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
                 </>)}
                 <Select label="CTA" value={config.cta} onChange={v => setConfig(c => ({ ...c, cta: v }))}
                   options={ctaOptions.map(c => ({ value: c, label: c }))} />
+                {/* Custom CTA manager (FIX kanban 68d98897) — thêm/xoá CTA riêng brand */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">CTA tuỳ chỉnh của brand ({customCtas.length})</label>
+                  <div className="space-y-1 mb-2">
+                    {customCtas.map((c, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs bg-gray-800/50 border border-gray-700 rounded px-2 py-1.5">
+                        <span className="flex-1 text-gray-300">{c}</span>
+                        <button onClick={() => saveCustomCtas(customCtas.filter((_, idx) => idx !== i))}
+                          className="text-red-400 hover:text-red-300 text-[11px]">🗑 Xoá</button>
+                      </div>
+                    ))}
+                    {customCtas.length === 0 && <p className="text-[10px] text-gray-600 italic">Chưa có CTA riêng — thêm ở bên dưới</p>}
+                  </div>
+                  <div className="flex gap-2">
+                    <input value={newCta} onChange={e => setNewCta(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && newCta.trim()) { e.preventDefault(); saveCustomCtas([...customCtas, newCta.trim()]); setNewCta(''); } }}
+                      placeholder="Thêm CTA riêng, vd: Nhắn ngay để nhận ưu đãi 💌"
+                      className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white" />
+                    <button onClick={() => { if (newCta.trim()) { saveCustomCtas([...customCtas, newCta.trim()]); setNewCta(''); } }}
+                      className="text-xs px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded font-semibold">+ Thêm</button>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">Extra Notes (optional)</label>
                   <textarea value={config.extraNotes} onChange={e => setConfig(c => ({ ...c, extraNotes: e.target.value }))}

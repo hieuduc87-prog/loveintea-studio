@@ -13,7 +13,8 @@ import { resolveLangName } from '@/lib/brand-lang';
  * chữ mà template đó dùng (typography / text_on_image từ phân tích template).
  * body: { productId?, templateId?, topic?, layout? }
  */
-const LAYOUTS = ['bottom-headline', 'top-banner', 'center-quote', 'benefit-list', 'promo-badge'];
+import { LAYOUT_IDS } from '@/lib/text-overlay';
+const LAYOUTS = LAYOUT_IDS;
 
 export async function POST(req: NextRequest) {
   const _rl = enforceRateLimit(req, { scope: 'ai:overlay-suggest', limit: 20, windowMs: 60_000 }); // SEC (vbsec H3): chống spam đốt tiền Gemini
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     const langName = resolveLangName(undefined, brandId);
-    const userLayout = body.layout && LAYOUTS.includes(body.layout) ? body.layout : '';
+    const userLayout = body.layout && (LAYOUTS as readonly string[]).includes(body.layout) ? body.layout : '';
     const prompt = `Bạn là art director. Đề xuất PHƯƠNG ÁN CHỮ để PHỦ LÊN ẢNH quảng cáo (không viết caption dài), đúng chất thương hiệu.
 
 BRAND: ${brandId}
@@ -70,7 +71,7 @@ Trả ONLY JSON: {"layout":"...","headline":"...","sub":"...","cta":"...","badge
 
     const o = await generateJSON<{ layout?: string; headline?: string; sub?: string; cta?: string; badge?: string }>(prompt);
     // Layout người dùng chọn thắng (card cafd98b7); chỉ dùng AI-chọn khi user chưa chỉ định.
-    const layout = userLayout || (LAYOUTS.includes(String(o.layout)) ? String(o.layout) : 'bottom-headline');
+    const layout = userLayout || ((LAYOUTS as readonly string[]).includes(String(o.layout)) ? String(o.layout) : 'bottom-headline');
     return NextResponse.json({
       ok: true,
       layout,

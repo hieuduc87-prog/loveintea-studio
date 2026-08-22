@@ -99,6 +99,37 @@ export type ImageQuality = 'low' | 'medium' | 'high';
  * Product packaging stays 100% intact.
  * Uses gpt-image-1 (GPT-image-2 edit API).
  */
+/**
+ * FIX HỆ THỐNG (card 9dac76b1 hoa-lang-thang "Ảnh gen không dựa trên moodboard"):
+ * Trước đây moodboard chỉ được lưu DB, không inject vào image gen prompt/ref.
+ * Fix: đọc brand_dna.moodboard_json → lấy tối đa 2 ảnh đầu → convert URL /api/images/<f>
+ * → local path data/images/<f> → append vào editProductImage.extraImagePaths cùng
+ * ảnh SP. gpt-image-2 nhìn moodboard + SP → sinh ảnh match tone/mood brand.
+ * Cap 2 ảnh để tiết kiệm token/cost. Áp cho MỌI brand có moodboard.
+ */
+function getMoodboardPaths(brandId?: string): string[] {
+  if (!brandId) return [];
+  try {
+    const { runWithBrand: rwb } = require('./tenant-context');
+    const rows = rwb(brandId, () => {
+      const db = require('./db').getDb();
+      return db.prepare('SELECT moodboard_json FROM brand_dna WHERE brand_id=?').get(brandId) as { moodboard_json?: string } | undefined;
+    });
+    if (!rows?.moodboard_json) return [];
+    const items = JSON.parse(rows.moodboard_json) as Array<{ url: string }>;
+    if (!Array.isArray(items) || items.length === 0) return [];
+    const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+    const paths: string[] = [];
+    for (const it of items.slice(0, 2)) { // cap 2 ảnh moodboard đầu
+      if (!it?.url?.startsWith('/api/images/')) continue;
+      const filename = it.url.replace(/^\/api\/images\//, '').split('?')[0];
+      const fp = path.join(dataDir, 'images', filename);
+      if (fs.existsSync(fp)) paths.push(fp);
+    }
+    return paths;
+  } catch { return []; }
+}
+
 export async function editProductImage(opts: {
   productImagePath: string;
   prompt: string;
@@ -111,7 +142,12 @@ export async function editProductImage(opts: {
   extraImagePaths?: string[];
 }): Promise<string> {
   const { productImagePath, prompt: rawPrompt, size = '1024x1536', quality = 'medium', brandId } = opts;
-  const prompt = withPhotoreal(rawPrompt, getModelLook(brandId));
+  // Inject moodboard làm reference tone/mood
+  const moodPaths = getMoodboardPaths(brandId);
+  const moodHint = moodPaths.length > 0
+    ? ' Match the tone, mood, colour palette, lighting and overall aesthetic of the brand moodboard reference images provided.'
+    : '';
+  const prompt = withPhotoreal(rawPrompt + moodHint, getModelLook(brandId));
 
   if (!fs.existsSync(productImagePath)) {
     throw new Error(`Product image not found: ${productImagePath}`);
@@ -126,7 +162,9 @@ export async function editProductImage(opts: {
       : 'image/png';
     return new File([buf], path.basename(p), { type: mime });
   };
-  const files = [productImagePath, ...(opts.extraImagePaths ?? []).filter(p => p && fs.existsSync(p))]
+  // productImagePath = SP chính (nguồn pixel), extraImagePaths = ref bố cục caller đưa,
+  // moodPaths = ref tone/mood từ brand moodboard (cap 2 ảnh).
+  const files = [productImagePath, ...(opts.extraImagePaths ?? []).filter(p => p && fs.existsSync(p)), ...moodPaths]
     .map(toFile);
 
   const response = await withQuotaFallback(client => client.images.edit({
@@ -159,7 +197,12 @@ export async function generateImage(opts: {
   brandId?: string;
 }): Promise<string> {
   const { prompt: rawPrompt, size = '1024x1536', quality = 'medium', brandId } = opts;
-  const prompt = withPhotoreal(rawPrompt, getModelLook(brandId));
+  // Moodboard hint text (generateImage KHÔNG nhận extraImagePaths được — text-only prompt).
+  const moodPaths = getMoodboardPaths(brandId);
+  const moodHint = moodPaths.length > 0
+    ? ' Match the brand tone, mood, colour palette and lighting aesthetic (as previously set by the brand moodboard).'
+    : '';
+  const prompt = withPhotoreal(rawPrompt + moodHint, getModelLook(brandId));
 
   const response = await withQuotaFallback(client => client.images.generate({
     model: 'gpt-image-2',
@@ -183,9 +226,26 @@ export async function generateImage(opts: {
  * Save base64 image to local file in data/images/
  * Returns the public URL path.
  */
+/**
+ * FIX HỆ THỐNG (card 2689f41d + 9963089f "Không generate ratio cụ thể"):
+ * gpt-image-2 chỉ hỗ trợ 3 size: 1024x1024 (1:1), 1024x1536 (2:3), 1536x1024 (3:2).
+ * Trước đây saveImageToFile HARDCODE center-crop 4:5 → user chọn 1:1 hay 9:16 đều
+ * ra 4:5. Fix: nhận optional `ratio` param, map sang target aspect number, sharp crop
+ * đúng tỉ lệ user chọn.
+ */
+const RATIO_TARGETS: Record<string, number> = {
+  '1:1': 1,
+  '4:5': 4 / 5,
+  '9:16': 9 / 16,
+  '16:9': 16 / 9,
+  '3:2': 3 / 2,
+  '2:3': 2 / 3,
+};
+
 export async function saveImageToFile(
   base64DataUrl: string,
-  filename: string
+  filename: string,
+  ratio?: string,
 ): Promise<string> {
   // Save to DATA_DIR/images/ — persists across next build
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
@@ -196,15 +256,15 @@ export async function saveImageToFile(
   const buffer = Buffer.from(base64, 'base64');
   const filePath = path.join(imagesDir, filename);
 
-  // CHUẨN 4:5 (1080×1350) — hợp cả Instagram feed lẫn Facebook. gpt-image xuất 2:3 (cao hơn)
-  // → center-crop về 4:5 trước khi upscale. Lỗi sharp thì giữ ảnh gốc.
+  // Target aspect: theo `ratio` user chọn, mặc định 4:5 (feed FB/IG).
+  const target = RATIO_TARGETS[ratio || '4:5'] ?? (4 / 5);
+
   let outBuf: Uint8Array = buffer;
   try {
     const sharp = (await import('sharp')).default;
     const meta = await sharp(buffer).metadata();
     const w = meta.width ?? 0, h = meta.height ?? 0;
     if (w && h) {
-      const target = 4 / 5;
       let cw = w, ch = h;
       if (w / h > target) cw = Math.round(h * target); else ch = Math.round(w / target);
       if (cw !== w || ch !== h) {
