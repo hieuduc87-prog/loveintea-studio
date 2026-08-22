@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
+import { ratioToGptSize } from '@/lib/template-generate';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { reserveQuota } from '@/lib/quota';
 import { generateProductImageGated, USAGE_LOCK } from '@/lib/product-image-gen';
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
   const db = getDb();
   const brandId = getBrandId(req);
-  const { skuId, uspId, contextId, customPrompt, useEdit = true } = await req.json();
+  const { skuId, uspId, contextId, customPrompt, useEdit = true, ratio } = await req.json();
 
   // Đa-brand (L4): sản phẩm nằm trong bảng products theo brand — SKUS tĩnh chỉ là
   // legacy loveintea. Có 1 trong 2 là hợp lệ.
@@ -64,14 +65,14 @@ export async function POST(req: NextRequest) {
       });
       imageUrl = g.dataUri;
     } else {
-      imageUrl = await generateImage({ prompt: `${prompt} ${USAGE_LOCK}`, size: '1024x1536', brandId });
+      imageUrl = await generateImage({ prompt: `${prompt} ${USAGE_LOCK}`, size: ratioToGptSize(ratio), brandId });
     }
 
     // Save to file if base64
     let savedUrl = imageUrl;
     if (imageUrl.startsWith('data:')) {
       const filename = `${jobId}.png`;
-      savedUrl = await saveImageToFile(imageUrl, filename);
+      savedUrl = await saveImageToFile(imageUrl, filename, ratio);
     }
 
     const durationMs = Date.now() - start;

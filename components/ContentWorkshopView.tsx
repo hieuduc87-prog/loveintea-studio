@@ -99,15 +99,47 @@ export function ContentWorkshopView({ brandId }: { brandId?: string } = {}) {
    */
   const [customCtas, setCustomCtas] = useState<string[]>([]);
   const [newCta, setNewCta] = useState('');
+  // Load từ DB brand_dna.custom_ctas_json; migrate localStorage cũ nếu có (1 lần).
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`ech.customCta.${brandId || 'default'}`);
-      if (raw) setCustomCtas(JSON.parse(raw));
-    } catch { /* ignore */ }
+    if (!brandId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/brands/${brandId}`);
+        const d = await r.json();
+        if (cancelled) return;
+        let ctas: string[] = [];
+        try { ctas = JSON.parse(d.dna?.custom_ctas_json || '[]'); } catch { ctas = []; }
+        // Migrate localStorage 1 lần → DB
+        const lsKey = `ech.customCta.${brandId}`;
+        const lsRaw = localStorage.getItem(lsKey);
+        if (lsRaw && ctas.length === 0) {
+          try {
+            const legacy = JSON.parse(lsRaw) as string[];
+            if (Array.isArray(legacy) && legacy.length) {
+              await fetch(`/api/brands/${brandId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dna: { custom_ctas_json: legacy } }),
+              });
+              ctas = legacy;
+              localStorage.removeItem(lsKey); // dọn sau khi migrate
+            }
+          } catch { /* ignore */ }
+        }
+        setCustomCtas(ctas);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
   }, [brandId]);
-  function saveCustomCtas(next: string[]) {
+  async function saveCustomCtas(next: string[]) {
     setCustomCtas(next);
-    try { localStorage.setItem(`ech.customCta.${brandId || 'default'}`, JSON.stringify(next)); } catch { /* ignore */ }
+    if (!brandId) return;
+    try {
+      await fetch(`/api/brands/${brandId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dna: { custom_ctas_json: next } }),
+      });
+    } catch { /* ignore */ }
   }
   const defaultCtas = isLit ? [...CTA_OPTIONS] : CTA_OPTIONS.filter(c => !/LoveinTea|#TimelessRemedies/i.test(c));
   const ctaOptions = [...defaultCtas, ...customCtas];

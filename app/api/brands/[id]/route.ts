@@ -20,7 +20,9 @@ const DNA_COLUMNS = ['tagline', 'archetype', 'through_line', 'voice_traits', 'co
   'hashtags', 'colors_json', 'typography_json', 'target_audience', 'insight', 'behavior', 'brand_rules',
   'content_language', 'model_look',
   // Moodboard — ảnh khách upload làm reference tone/mood cho image gen (JSON array).
-  'moodboard_json'];
+  'moodboard_json',
+  // CTA tuỳ chỉnh per-brand (LIT-FIX-0822B) — thay localStorage để cross-device.
+  'custom_ctas_json'];
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

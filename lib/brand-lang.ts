@@ -1,4 +1,5 @@
 import { getDb } from './db';
+import { runWithBrand } from './tenant-context';
 
 /**
  * Per-brand default content language. A Vietnamese brand generates Vietnamese
@@ -8,8 +9,11 @@ import { getDb } from './db';
 export function getBrandLanguage(brandId?: string): 'vi' | 'en' {
   if (!brandId) return 'en';
   try {
-    const r = getDb().prepare('SELECT content_language FROM brand_dna WHERE brand_id=?')
-      .get(brandId) as { content_language?: string } | undefined;
+    // AUDIT #H-nợ: brand_dna là tenant table — ép tenant context, không phụ thuộc caller.
+    const r = runWithBrand(brandId, () =>
+      getDb().prepare('SELECT content_language FROM brand_dna WHERE brand_id=?')
+        .get(brandId) as { content_language?: string } | undefined,
+    );
     return (r?.content_language || '').toLowerCase().startsWith('vi') ? 'vi' : 'en';
   } catch { return 'en'; }
 }
@@ -33,8 +37,10 @@ export function getModelLook(brandId?: string): string {
   if (!brandId) return '';
   let look = 'auto';
   try {
-    const r = getDb().prepare('SELECT model_look FROM brand_dna WHERE brand_id=?')
-      .get(brandId) as { model_look?: string } | undefined;
+    const r = runWithBrand(brandId, () =>
+      getDb().prepare('SELECT model_look FROM brand_dna WHERE brand_id=?')
+        .get(brandId) as { model_look?: string } | undefined,
+    );
     look = (r?.model_look || 'auto').toLowerCase();
   } catch { /* default */ }
   if (look === 'western') return WESTERN_LOOK;

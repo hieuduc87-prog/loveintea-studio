@@ -1280,6 +1280,9 @@ function initSchema(db: Database.Database, opts?: { tenant?: boolean }) {
   // moodboard_json = JSON array [{url, note?}] — ảnh khách upload làm reference tone/mood
   // cho image generation (feed vào prompt describe mood/palette/lighting).
   try { db.exec(`ALTER TABLE brand_dna ADD COLUMN moodboard_json TEXT DEFAULT '[]'`); } catch { /* already exists */ }
+  // FIX HỆ THỐNG #F-nợ (LIT-FIX-0822B): CTA tuỳ chỉnh per-brand — migrate từ
+  // localStorage (mất khi đổi máy) sang DB để cross-device. JSON array of strings.
+  try { db.exec(`ALTER TABLE brand_dna ADD COLUMN custom_ctas_json TEXT DEFAULT '[]'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE brand_dna ADD COLUMN brand_rules TEXT DEFAULT ''`); } catch { /* already exists */ }
   // Content templates: single vs collection (ordered multi-image)
   try { db.exec(`ALTER TABLE content_templates ADD COLUMN kind TEXT DEFAULT 'single'`); } catch { /* already exists */ }

@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/db';
 import { editProductImage, generateImage, saveImageToFile } from '@/lib/openai-image';
+import { ratioToGptSize } from '@/lib/template-generate';
 import { resolveProductImagePath } from '@/lib/plan-generate';
 import { createJob, logJob, finishJob, failJob } from '@/lib/jobs';
 import { enforceRateLimit } from '@/lib/rate-limit';
@@ -21,8 +22,8 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
   let jobId = '';
   try {
-    const { prompt, productId, brandId: bodyBrandId, refImageUrl, templateId } = await req.json() as {
-      prompt?: string; productId?: string; brandId?: string; refImageUrl?: string; templateId?: string;
+    const { prompt, productId, brandId: bodyBrandId, refImageUrl, templateId, ratio } = await req.json() as {
+      prompt?: string; productId?: string; brandId?: string; refImageUrl?: string; templateId?: string; ratio?: string;
     };
     if (!prompt?.trim()) return NextResponse.json({ error: 'prompt required' }, { status: 400 });
     // TENANT ISOLATION: brandId từ body là client-supplied — phải nằm trong quyền
@@ -102,10 +103,10 @@ export async function POST(req: NextRequest) {
       for (const w of g.warnings) logJob(jobId, w);
     } else {
       raw = basePath
-        ? await editProductImage({ productImagePath: basePath, prompt: `${finalPrompt} ${USAGE_LOCK}`, size: '1024x1536', brandId })
-        : await generateImage({ prompt: productId ? `${finalPrompt} ${USAGE_LOCK}` : finalPrompt, size: '1024x1536', brandId });
+        ? await editProductImage({ productImagePath: basePath, prompt: `${finalPrompt} ${USAGE_LOCK}`, size: ratioToGptSize(ratio), brandId })
+        : await generateImage({ prompt: productId ? `${finalPrompt} ${USAGE_LOCK}` : finalPrompt, size: ratioToGptSize(ratio), brandId });
     }
-    const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`) : raw;
+    const url = raw.startsWith('data:') ? await saveImageToFile(raw, `${uuid()}.png`, ratio) : raw;
     finishJob(jobId, { url });
     return NextResponse.json({ ok: true, url });
   } catch (e) {

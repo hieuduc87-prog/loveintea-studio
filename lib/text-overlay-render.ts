@@ -49,8 +49,13 @@ export function imageRefToBuffer(ref: string): { buffer: Buffer; mimeType: strin
 }
 
 export function brandColors(brandId: string): OverlayColors {
+  if (!brandId) return DEFAULT_COLORS;
   try {
-    const row = getDb().prepare('SELECT colors_json FROM brand_dna WHERE brand_id=?').get(brandId) as { colors_json: string } | undefined;
+    // AUDIT #H-nợ (LIT-FIX-0822B): brand_dna là TENANT table. Wrap runWithBrand để ép
+    // tenant DB đúng brand, KHÔNG dựa async context caller (đã fix brandFonts cùng file).
+    const row = runWithBrand(brandId, () =>
+      getDb().prepare('SELECT colors_json FROM brand_dna WHERE brand_id=?').get(brandId) as { colors_json: string } | undefined,
+    );
     const j = row?.colors_json ? JSON.parse(row.colors_json) as Record<string, string> : {};
     const vals = Object.values(j);
     return {
