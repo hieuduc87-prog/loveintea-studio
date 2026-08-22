@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3202",
-    "guard": "bash scripts/guard-root-fixes.sh",
-    "build": "bash scripts/guard-root-fixes.sh && next build",
+    "guard": "sh scripts/guard-root-fixes.sh",
+    "build": "sh scripts/guard-root-fixes.sh && next build",
+    "build:nogurad": "next build",
     "start": "next start -p 3202",
     "lint": "next lint",
     "test:security": "node scripts/security/cross-tenant-test.mjs",

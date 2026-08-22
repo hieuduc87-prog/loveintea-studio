@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # GUARD > GIẤY: chặn tái phát 2 lớp bug đã fix root (LIT-FIX-0822B).
 # Fail build nếu vi phạm. Chạy trong npm run build hoặc pre-commit hook.
 set -euo pipefail

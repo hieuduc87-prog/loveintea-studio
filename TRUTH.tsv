@@ -1,0 +1,10 @@
+key	value	probe	last_ok	note
+port.dev	3202	port:3202		npm run dev
+port.start	3202	port:3202		npm run start
+cmd.build	npm run build	cmd:test -f package.json	2026-07-29	
+url.nextauth_url	https://loveintea.wealthpsy.com	http:https://loveintea.wealthpsy.com	2026-07-29	.env.local
+file.deploy.sh	deploy.sh	file:deploy.sh	2026-07-29	co trong repo
+file.Dockerfile	Dockerfile	file:Dockerfile	2026-07-29	co trong repo
+file.docker-compose.yml	docker-compose.yml	file:docker-compose.yml	2026-07-29	co trong repo
+git.origin	https://github.com/hieuduc87-prog/loveintea-studio.git	cmd:git remote get-url origin	2026-07-29	
+git.branch	main	cmd:test "$(git branch --show-current)" = "main"	2026-07-29	

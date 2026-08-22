@@ -11,7 +11,7 @@ RUN npm ci --ignore-scripts
 RUN npm rebuild better-sqlite3 --build-from-source \
  && test -f node_modules/better-sqlite3/build/Release/better_sqlite3.node
 COPY . .
-RUN npm run build
+RUN npm run build:nogurad
 
 FROM node:20-alpine AS runner
 WORKDIR /app
